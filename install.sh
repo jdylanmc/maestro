@@ -39,7 +39,7 @@ if [[ "$use_brew" -eq 1 ]]; then
   brew bundle --file "$ROOT/Brewfile"
 fi
 
-for command in herdr; do
+for command in herdr node cargo; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "Missing required command: $command" >&2
     exit 1
@@ -74,6 +74,8 @@ sed "s/@MAESTRO_AGENT@/$escaped_agent/g" \
   "$ROOT/config/herdr/config.toml.in" > "$herdr_config"
 
 "$ROOT/scripts/build-app.sh"
+"$ROOT/scripts/install-herdr-plugins.sh"
+herdr server reload-config
 
 if command -v copilot >/dev/null 2>&1 || [[ -d "$HOME/.copilot" ]]; then
   "$ROOT/scripts/install-copilot-integration.sh"

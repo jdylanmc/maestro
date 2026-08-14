@@ -29,6 +29,7 @@ cat > "$staged_app/Contents/MacOS/wezterm-gui" <<'WRAPPER'
 #!/bin/sh
 set -eu
 export WEZTERM_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/maestro/wezterm.lua"
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 exec "$(dirname "$0")/wezterm-gui-bin" "$@"
 WRAPPER
 chmod 755 "$staged_app/Contents/MacOS/wezterm-gui"

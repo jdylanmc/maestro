@@ -21,7 +21,6 @@ copilot = [
 claude = [["state_icon", "workspace", "tab"], ["agent"]]
 codex = [["state_icon", "workspace", "tab"], ["agent"]]
 gemini = [["state_icon", "workspace", "tab"], ["agent"]]
-shell = [["state_icon", "workspace", "tab"], ["agent"]]
 
 [terminal]
 default_shell = "@MAESTRO_AGENT@"
@@ -39,3 +38,21 @@ surface_dim = "#434c5e"
 
 [ui.toast]
 delivery = "system"
+
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer"
+description = "open file viewer in split"
+
+[[keys.command]]
+key = "prefix+shift+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer-tab"
+description = "open file viewer in tab"
+
+[[keys.command]]
+key = "prefix+e"
+type = "plugin_action"
+command = "herdr-sidebar.open-sidebar"
+description = "toggle project sidebar"

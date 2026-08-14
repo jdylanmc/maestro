@@ -1,2 +1,7 @@
+brew "bat"
+brew "git-delta"
+brew "glow"
 brew "herdr"
+brew "node"
+brew "rust"
 cask "wezterm"

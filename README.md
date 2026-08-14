@@ -10,6 +10,7 @@ It installs:
 - `maestro` and `ai` launch commands
 - adapters for GitHub Copilot CLI, Claude Code, Codex, Gemini CLI, and a plain shell
 - an optional GitHub Copilot fleet-status integration for Herdr
+- session-aware Herdr tab and pane names
 
 No coding agent, authentication state, or credential is bundled.
 
@@ -80,6 +81,56 @@ tooling.
 When GitHub Copilot CLI is installed, `install.sh` installs an additive hook
 that shows active task agents as child rows in Herdr. It does not replace
 Copilot settings or authentication. The hook no-ops outside Herdr.
+
+## Session-aware tabs
+
+Maestro installs
+[`itayo-m/herdr-tab-session-name-sync`](https://github.com/itayo-m/herdr-tab-session-name-sync)
+at the reviewed commit recorded in `config/herdr/plugins.lock`. It derives session names
+from agent terminal titles and keeps Herdr pane, agent, and focused-tab labels synchronized.
+Manual tab renames are respected.
+
+The plugin requires Node.js 18 or newer. Maestro's Brewfile supplies Node.js for fresh
+installs. Inspect or manually re-run synchronization with:
+
+```sh
+herdr plugin list
+herdr plugin action invoke copilot.session-tabs.sync
+herdr plugin log list --plugin copilot.session-tabs
+```
+
+The default plugin configuration manages Copilot and OpenCode. Add other detected agent
+kinds through the plugin's local `config.json`; installer upgrades preserve that file.
+
+## File viewer
+
+Maestro also installs the read-only
+[`smarzban/herdr-file-viewer`](https://github.com/smarzban/herdr-file-viewer)
+at its reviewed v1.15.0 release commit. Its prebuilt binary is checksum-verified by the
+plugin installer. Maestro supplies Bat, Delta, and Glow for syntax, diff, and Markdown
+rendering.
+
+Inside Herdr:
+
+- `Ctrl+B`, then `F` opens or toggles the viewer as a right-hand split.
+- `Ctrl+B`, then `Shift+F` opens or toggles it in a dedicated tab.
+
+The viewer does not run automatically and does not modify the repository it browses.
+
+## Docked project sidebar
+
+Maestro installs
+[`alexarthurs/herdr-sidebar`](https://github.com/alexarthurs/herdr-sidebar)
+at the commit recorded in `config/herdr/plugins.lock`. It supplies an automatically docked
+project explorer and source-control panel. `Ctrl+B`, then `E` toggles or focuses it.
+
+Unlike the file viewer, the sidebar is an interactive write-capable tool. Its explicit UI
+actions can create, rename, and delete files; stage, unstage, discard, and commit changes;
+and pull or push Git branches. Its optional commit-message action sends a bounded diff to
+the locally installed Claude CLI. Review changes before invoking destructive or remote
+actions.
+
+The sidebar is built from its locked Rust sources during installation.
 
 ## Dotfiles
 
