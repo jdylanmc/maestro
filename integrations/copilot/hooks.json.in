@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "python3 '@FLEET_SCRIPT@' || true",
+        "env": { "HERDR_FLEET_EVENT": "reset" },
+        "timeoutSec": 3
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "python3 '@FLEET_SCRIPT@' || true",
+        "env": { "HERDR_FLEET_EVENT": "reset" },
+        "timeoutSec": 3
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 '@FLEET_SCRIPT@' || true",
+        "env": { "HERDR_FLEET_EVENT": "start" },
+        "matcher": "^task$",
+        "timeoutSec": 3
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 '@FLEET_SCRIPT@' || true",
+        "env": { "HERDR_FLEET_EVENT": "stop" },
+        "matcher": "^task$",
+        "timeoutSec": 3
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "command",
+        "bash": "python3 '@FLEET_SCRIPT@' || true",
+        "env": { "HERDR_FLEET_EVENT": "stop" },
+        "matcher": "^task$",
+        "timeoutSec": 3
+      }
+    ]
+  }
+}

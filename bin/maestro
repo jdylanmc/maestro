@@ -1,0 +1,79 @@
+#!/bin/sh
+set -eu
+
+app="/Applications/Maestro.app"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+maestro_home="$config_home/maestro"
+
+list_agents() {
+  {
+    if [ -d "$maestro_home/agents" ]; then
+      for adapter in "$maestro_home/agents"/*; do
+        [ -f "$adapter" ] && [ -x "$adapter" ] && printf '%s\n' "$adapter"
+      done
+    fi
+    if [ -d "$maestro_home/agents-local" ]; then
+      for adapter in "$maestro_home/agents-local"/*; do
+        [ -f "$adapter" ] && [ -x "$adapter" ] && printf '%s\n' "$adapter"
+      done
+    fi
+  } | awk -F/ '{ print $NF }' | sort -u
+}
+
+case "${1:-}" in
+  --help|-h)
+    printf '%s\n' \
+      'usage: maestro [agent]' \
+      '       maestro --default <agent>' \
+      '       maestro --list'
+    exit 0
+    ;;
+  --list)
+    list_agents
+    exit 0
+    ;;
+  --default)
+    [ "$#" -eq 2 ] || {
+      printf 'usage: maestro --default <agent>\n' >&2
+      exit 2
+    }
+    if ! list_agents | grep -Fxq "$2"; then
+      printf 'No Maestro adapter named %s.\n' "$2" >&2
+      exit 2
+    fi
+    printf '%s\n' "$2" > "$maestro_home/default-agent"
+    printf 'Default Maestro agent: %s\n' "$2"
+    exit 0
+    ;;
+esac
+
+if [ ! -d "$app" ]; then
+  printf 'Maestro is not installed at %s. Run install.sh.\n' "$app" >&2
+  exit 1
+fi
+
+agent="${1:-}"
+if [ -z "$agent" ] && [ -f "$maestro_home/default-agent" ]; then
+  IFS= read -r agent < "$maestro_home/default-agent"
+fi
+agent="${agent:-copilot}"
+
+if ! list_agents | grep -Fxq "$agent"; then
+  printf 'No Maestro adapter named %s. Run `maestro --list`.\n' "$agent" >&2
+  exit 2
+fi
+
+herdr="$(command -v herdr 2>/dev/null || true)"
+if [ -z "$herdr" ] && [ -x /opt/homebrew/bin/herdr ]; then
+  herdr=/opt/homebrew/bin/herdr
+fi
+if [ -z "$herdr" ] && [ -x /usr/local/bin/herdr ]; then
+  herdr=/usr/local/bin/herdr
+fi
+if [ -z "$herdr" ]; then
+  printf 'Maestro requires Herdr. Run install.sh.\n' >&2
+  exit 127
+fi
+
+exec /usr/bin/open -na "$app" --args start --cwd "$PWD" -- \
+  /usr/bin/env "MAESTRO_AGENT=$agent" "$herdr"

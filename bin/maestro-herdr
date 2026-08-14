@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+if command -v herdr >/dev/null 2>&1; then
+  exec herdr "$@"
+fi
+if [ -x /opt/homebrew/bin/herdr ]; then
+  exec /opt/homebrew/bin/herdr "$@"
+fi
+if [ -x /usr/local/bin/herdr ]; then
+  exec /usr/local/bin/herdr "$@"
+fi
+
+printf 'Maestro requires Herdr. Run the Maestro installer first.\n' >&2
+exit 127

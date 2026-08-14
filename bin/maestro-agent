@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+maestro_home="$config_home/maestro"
+agent="${MAESTRO_AGENT:-}"
+
+if [ -z "$agent" ] && [ -f "$maestro_home/default-agent" ]; then
+  IFS= read -r agent < "$maestro_home/default-agent"
+fi
+agent="${agent:-copilot}"
+
+case "$agent" in
+  *[!A-Za-z0-9._-]*|'')
+    printf 'Invalid Maestro agent name: %s\n' "$agent" >&2
+    exit 2
+    ;;
+esac
+
+adapter="$maestro_home/agents-local/$agent"
+if [ ! -x "$adapter" ]; then
+  adapter="$maestro_home/agents/$agent"
+fi
+if [ ! -x "$adapter" ]; then
+  printf 'No Maestro adapter named %s. Run `maestro --list`.\n' "$agent" >&2
+  exit 127
+fi
+
+if [ "${HERDR_ENV:-}" = "1" ] && [ -n "${HERDR_PANE_ID:-}" ]; then
+  herdr_bin="${HERDR_BIN_PATH:-}"
+  if [ -z "$herdr_bin" ]; then
+    herdr_bin="$(command -v herdr 2>/dev/null || true)"
+  fi
+  if [ -n "$herdr_bin" ]; then
+    pane_id="$HERDR_PANE_ID"
+    (
+      attempts=0
+      while [ "$attempts" -lt 120 ]; do
+        if "$herdr_bin" agent rename "$pane_id" "$agent" >/dev/null 2>&1; then
+          exit 0
+        fi
+        attempts=$((attempts + 1))
+        sleep 1
+      done
+    ) >/dev/null 2>&1 &
+  fi
+fi
+
+exec "$adapter" "$@"

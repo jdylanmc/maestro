@@ -1,0 +1,2 @@
+brew "herdr"
+cask "wezterm"

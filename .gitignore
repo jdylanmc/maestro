@@ -1,0 +1,23 @@
+.DS_Store
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+.idea/
+.vscode/
+build/
+dist/
+
+# Runtime and credential-bearing files never belong here.
+**/credentials*
+**/secrets*
+**/session.json
+**/*history*
+**/.npmrc
+**/.netrc
+**/.ssh/
+**/.aws/
+**/.azure/
+**/.copilot/
+**/.claude/
