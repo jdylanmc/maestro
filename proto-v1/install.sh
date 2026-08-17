@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+REPO_ROOT="$(cd "$ROOT/.." && pwd -P)"
 use_brew=1
 default_agent=""
 
@@ -81,7 +82,7 @@ if command -v copilot >/dev/null 2>&1 || [[ -d "$HOME/.copilot" ]]; then
   "$ROOT/scripts/install-copilot-integration.sh"
 fi
 
-git -C "$ROOT" config core.hooksPath .githooks
-"$ROOT/scripts/check-public.sh"
+git -C "$REPO_ROOT" config core.hooksPath .githooks
+"$REPO_ROOT/scripts/check-public.sh"
 echo
 echo "Maestro is installed. Ensure $bin_home is on PATH, then run: maestro"
