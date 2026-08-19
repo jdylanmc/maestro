@@ -308,3 +308,44 @@ roll-up and cancellation requirements.
 `skill`, `tool`, `MCP`, `mode`, `compaction`, `rewind`, `hook`. Session state
 also carries an `inbox_entries` table with sender, recipient session, unread,
 and read-at columns, implying inter-session messaging no cycle has considered.
+
+### c-0008 - Domain confirmation published
+
+`/domain-mapping` ran the c-0007 handoff and wrote two artifacts, committed as
+`6158b48`:
+
+- `CONTEXT.md` at the repository root, the single-context glossary named by
+  `docs/agents/domain.md`, holding 11 confirmed terms grouped as units of work,
+  participants, condition, and place.
+- `docs/adr/0001-adopt-fleet-as-the-structural-unit.md`, the repository's first
+  Architecture Decision Record.
+
+Two c-0007 definitions failed the skill's stress test and were corrected before
+confirmation. A Fleet no longer requires a Worktree, because making it
+constitutive contradicted the settled strong-default-not-a-rule requirement.
+`Task` and `subagent` are nested rather than equivalent, because `/tasks`
+manages "tasks (subagents and shell commands)", so a shell-command Task is not a
+tree node.
+
+Two decisions were assessed against the Architecture Decision Record gate and
+**rejected** for failing it: worktree-per-Fleet, which is reversible per Fleet
+by design and so is not costly to reverse; and the fully-generic display model,
+which is additive to reverse.
+
+### c-0008 - Tracker reconciled to remote
+
+`tracker-mode` moved from `markdown-only` to `remote` under the exact approval
+string, and the GitHub tracker was reconciled through the `/discovery` contract.
+
+The map body was rewritten in confirmed vocabulary with every prior decision
+entry preserved. Correcting comments were added to #5, #6, #12, #14, and #17.
+Two titles containing retired vocabulary were changed.
+
+**A structural defect was found and fixed.** The v3 and v4 branches had **no
+dependency edges at all**, so their prototype tickets sat on the unblocked
+frontier ahead of their own research. #25, which asks which of four working MVPs
+should become the durable implementation, was also unblocked while none of the
+four exists.
+
+Frontier before: 9 tickets. Frontier after: #27, #22, #21, #13, plus the map and
+two specifications. Only the v2 branch had been wired correctly.

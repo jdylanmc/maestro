@@ -2,16 +2,34 @@
 
 ## Confirmed Domain Model
 
-No terms have been confirmed through `/domain-mapping` yet.
+**Confirmed in c-0008.** `/domain-mapping` ran the c-0007 handoff and published
+the canonical glossary at the repository root, [`CONTEXT.md`](../../../../CONTEXT.md),
+the single-context location named by `docs/agents/domain.md`. Eleven terms are
+confirmed there: `Fleet`, `Session`, `Task`, `Primary Agent`, `Agent`,
+`subagent`, `subagent tree`, `Parked`, `Interrupted`, `Liveness`, and
+`Worktree`.
 
-The blocker that previously prevented confirmation is **cleared**. Earlier
-revisions of this file stated that `docs/agents/domain.md` did not exist and
-that no confirmed row could cite a canonical artifact location. That file now
-exists, alongside `docs/agents/issue-tracker.md` and
-`docs/agents/triage-labels.md`. Confirmation is therefore possible, and the
-staged handoff is the next action rather than a blocked one.
+The first Architecture Decision Record was also published,
+[`docs/adr/0001-adopt-fleet-as-the-structural-unit.md`](../../../../docs/adr/0001-adopt-fleet-as-the-structural-unit.md),
+recording the naming decision, the rejected alternatives, and the fact that it
+partially reverses c-0005 deliberately rather than by oversight.
 
-Every term below remains `candidate` until that handoff completes.
+`CONTEXT.md` is authoritative over this file. Where they differ, this file is
+stale.
+
+### Two c-0007 definitions were corrected during confirmation
+
+`/domain-mapping` stress-tested the staged definitions and rejected two.
+
+1. **A Fleet does not require a Worktree.** c-0007 defined a Fleet as "one
+   feature, one Worktree, one Copilot Session..." while the same cycle settled
+   that worktree-per-Fleet is a strong default rather than a rule. A Fleet
+   pointed at an existing checkout would have failed its own definition. The
+   Worktree moved from the identity into a relationship.
+2. **`Task` and `subagent` are nested, not equivalent.** c-0007 called `Task`
+   "a tree node's underlying runtime handle", assuming every Task is a tree
+   node. The runtime treats shell commands as tasks too, so every subagent is a
+   Task while not every Task is a subagent.
 
 ## Decided but Unconfirmed
 
@@ -100,10 +118,11 @@ durable ticket state in a ledger and deriving worker health from heartbeats.
 
 ## Candidate and Unconfirmed
 
-`Fleet`, `Worktree`, `subagent`, `subagent tree`, `Task`, `Parked`,
-`Interrupted`, `Alive`, `Dead`, and `Ambiguous` are candidate terms.
+The eleven terms above are **confirmed** in `CONTEXT.md`. `Alive`, `Dead`, and
+`Ambiguous` are confirmed as the values of `Liveness` rather than as standalone
+terms.
 
-`Session` is candidate **with a borrowed definition**: it means what the Copilot
+`Session` is confirmed **with a borrowed definition**: it means what the Copilot
 runtime means, and this model does not redefine it.
 
 The boundary between runtime authority, durable orchestration state, and

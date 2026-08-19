@@ -1,5 +1,11 @@
 # Requirements - Maestro Graphical Agent Orchestrator
 
+> **Terminology confirmed in c-0008.** The canonical glossary is the repository
+> root [`CONTEXT.md`](../../../../CONTEXT.md), published by `/domain-mapping`.
+> It is authoritative over any wording below. Two c-0007 definitions were
+> corrected there: a Fleet does **not** require a Worktree, and every subagent is
+> a Task while not every Task is a subagent.
+>
 > **Terminology changed in c-0007.** The structural unit formerly called
 > `Session` is now a **Fleet**: one feature, one Worktree, one Copilot Session,
 > its subagent tree, and its durable state. `Session` now means only what the
@@ -22,6 +28,7 @@
 - Exactly one Primary Agent per Session, a strict 1:1 binding. [c-0005](./cycles/c-0005.md)
 - The 1:1 binding is enforced by a lock rather than by convention: a second primary for the same Session is refused, and a lock-refused Session degrades to read-only. Modelled on the firstmate primary-harness home lock. [firstmate-arch.md](../../../../v2/docs/reference/firstmate-arch.md), [c-0005](./cycles/c-0005.md)
 - **No Agent process may outlive the application.** Closing Maestro terminates every Agent and Sub-agent it started, leaving no orphan, no daemon, and no background helper. **Observed violated in c-0006**: a detached `herdr server` daemon kept two Copilot Sessions and five Model Context Protocol servers alive for two days after the graphical host exited. [c-0005](./cycles/c-0005.md), [c-0006](./cycles/c-0006.md)
+- **Closing Maestro auto-Parks every Fleet** - state persisted, processes terminated, uncommitted work preserved - behind a pre-close summary naming any Fleet with in-flight work or uncommitted changes, acknowledged to proceed. Silent termination would make every Fleet `Interrupted` on next launch, rendering the confirmed Parked/Interrupted distinction decorative. Blocking the close was rejected because `Ambiguous` is a real liveness verdict and could trap the user in the application. [c-0008](./cycles/c-0008.md)
 - Persistence is of durable state, never of live processes. Data survives; processes do not. [c-0005](./cycles/c-0005.md)
 - **Ownership extends to the whole descendant tree, not to direct children.** The observed orphans were grandchildren - Model Context Protocol servers under Copilot Sessions under a daemon. Teardown operates on the process group, and correctness is judged by the tree, not by the processes Maestro spawned directly. [c-0006](./cycles/c-0006.md)
 - **Termination is verified and escalated, never fired and forgotten.** `SIGTERM` was observed to be ignored by wrapper processes that exited only after their children died. Teardown sends the signal, re-reads the process table, escalates to `SIGKILL` on timeout, and reports any survivor rather than assuming success. [c-0006](./cycles/c-0006.md)
@@ -51,6 +58,8 @@
 - Delegation is shown as a live tree of names, states, and current activity, with full output read on demand by drilling into one node. Concurrent scrollback for every subagent is explicitly rejected. [c-0005](./cycles/c-0005.md)
 - **Selecting a Fleet always presents that Fleet's primary agent window, bound 1:1 to it.** The binding is structural - one Fleet, one Copilot Session, one primary agent window - so the window is never absent, never shared between Fleets, and never ambiguous about which Fleet it belongs to. This specifies the main context window's default content, where c-0005 specified only its scoping. [c-0007](./cycles/c-0007.md)
 - **`Primary Agent` is the interface term for that window.** The word `Session` need not appear in the interface at all, which keeps the Copilot naming collision out of the user's view entirely. [c-0007](./cycles/c-0007.md)
+
+- **File panes are read-only viewers with an "open in Visual Studio Code" action.** No in-app editor is built for the MVP. This closes the contradiction between Issue #12's deferral and the c-0005 wireframe, which specified a basic editor. [c-0008](./cycles/c-0008.md)
 
 ### Adoption
 
@@ -86,7 +95,7 @@
 - **Whether the tree renders arbitrary depth or a bounded depth.** Copilot emits `subagent.started` and `subagent.completed` generically, but the observed orchestration shape is three tiers with typed roles. [c-0007](./cycles/c-0007.md)
 - **Whether `inbox_entries` inter-session messaging is in scope.** Copilot session state carries a table with sender, recipient session, unread, and read-at columns. No cycle has considered cross-Fleet messaging. [c-0007](./cycles/c-0007.md)
 - **Whether the 8-Fleet ceiling survives worktree-per-Fleet in a large monorepo**, given duplicated build artifacts and editor indexes. [c-0007](./cycles/c-0007.md)
-- **In-app editing is contradicted.** [Issue #12](https://github.com/jdylanmc/maestro/issues/12) explicitly defers in-app editing, while the c-0005 wireframe specifies "secondary windows are basic file viewer/editor". Until reconciled, file panes are treated as read-only viewers.
+- ~~**In-app editing is contradicted.**~~ **Resolved in c-0008:** read-only viewers plus an "open in Visual Studio Code" action. No editor is built.
 - Whether the Sessions ceiling of 8 and the host-capacity guardrail need distinct user-facing treatment when the guardrail binds first.
 - **Whether `herdr` remains in the architecture at all.** Its detached-daemon lifetime directly contradicts the process-ownership requirement. Either Maestro replaces it with directly owned child processes, or it must prove `herdr` can be run in a non-detaching mode it fully controls. [c-0006](./cycles/c-0006.md)
-- **What happens to long-running Agent work when the user closes the application.** Termination is required, but whether the application blocks on close, warns, parks automatically, or terminates silently is undecided, and the answer determines whether the requirement is tolerable in daily use. [c-0006](./cycles/c-0006.md)
+- ~~**What happens to long-running Agent work when the user closes the application.**~~ **Resolved in c-0008:** auto-Park behind an acknowledged pre-close summary.
