@@ -10,3 +10,24 @@ prototype, not the target architecture for v2.
 - Run `./scripts/check-public.sh` before every commit and push.
 - Generated app bundles and build output are not committed. Source assets and the portable `.icns` resource are committed.
 - macOS is the only supported platform for now. Do not block a future Windows implementation with needless assumptions outside macOS-specific scripts.
+
+## Agent skills
+
+### Private instructions
+
+Read and follow the machine-local instructions at `.user/instructions.md` when
+present. That path is git-ignored and never committed.
+
+### Issue tracker
+
+Issues, specifications, and Discovery maps are tracked in GitHub Issues for
+`jdylanmc/maestro`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single domain context: root `CONTEXT.md` and root
+`docs/adr/`. See `docs/agents/domain.md`.

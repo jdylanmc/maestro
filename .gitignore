@@ -21,3 +21,6 @@ dist/
 **/.azure/
 **/.copilot/
 **/.claude/
+
+# Machine-local agent instructions; never committed.
+.user/
