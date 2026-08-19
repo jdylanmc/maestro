@@ -349,3 +349,57 @@ four exists.
 
 Frontier before: 9 tickets. Frontier after: #27, #22, #21, #13, plus the map and
 two specifications. Only the v2 branch had been wired correctly.
+
+### c-0009 - Prototype: supervisor teardown, measured
+
+Disposable prototype run under approval in
+`.discovery-prototypes/maestro-graphical-agent-orchestrator/n-0000-c-0009/`,
+since removed. Ground truth measured with `ps` against a unique process marker,
+not through any handle the supervisor held.
+
+Two spawn strategies against three teardown scenarios, each spawning
+three-level trees mirroring the c-0006 failure shape:
+
+| Scenario | `detached` | Distinct process groups | Survivors | Verdict |
+| --- | --- | --- | --- | --- |
+| A1 graceful quit | `false` | 1 | 6 | FAIL |
+| A2 SIGKILL, no reaper | `false` | 1 | 6 | FAIL |
+| B1 graceful quit | `true` | 2 | 0 | PASS |
+| B2 SIGKILL, no reaper | `true` | 2 | 6 | FAIL, expected |
+| B3 SIGKILL then reap-on-launch | `true` | 2 | 0 | PASS |
+
+**This falsifies the c-0006 requirement that Maestro spawn agents
+non-detached.** That requirement came from research, not experiment. With
+`detached: false` the child is not a process-group leader, so it shares the
+supervisor's group and `process.kill(-pid)` returns `ESRCH`: there is no group
+at that address to signal. Teardown cannot be addressed at all, and every
+descendant survived even a graceful quit.
+
+`detached: true` is **required**. It gives each Fleet its own process group,
+which is what makes complete, targeted teardown of a three-level tree possible
+with a single signal - and targeted per-Fleet cancellation possible at all.
+
+The correct statement of the c-0006 lesson is narrower than what was recorded:
+detachment *without* durable ownership and a reaper causes orphans. B2 and B3
+are the same scenario differing only by the reaper, and they differ by six
+surviving processes.
+
+### c-0009 - Prototype: Electron lifecycle confirmation
+
+Electron installed inside the isolation path in **8 seconds**, contradicting the
+c-0001 and c-0005 premise that the Electron download was a meaningful cost or a
+reason to sequence routes.
+
+Live run against Electron's real main process and lifecycle:
+
+- `BrowserWindow` created and rendered a three-column layout at 1200x700.
+- Three Fleets started as three distinct process groups, nine processes total.
+- `before-quit` tore down all three groups; `will-quit` verified **0 survivors**.
+- Reap-on-launch executed first and correctly found nothing on a clean start.
+- Zero stray processes after the run.
+
+Limitations: the trees were synthetic `sh` and `sleep` processes rather than
+live Copilot sessions, which may install their own signal handlers; packaging
+was not tested, only the development-run lifecycle; and macOS Force Quit was
+simulated with `SIGKILL`, which is the signal it sends, rather than triggered
+through the operating system interface.
