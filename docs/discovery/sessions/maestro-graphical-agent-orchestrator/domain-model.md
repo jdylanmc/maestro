@@ -2,58 +2,135 @@
 
 ## Confirmed Domain Model
 
-No material domain meanings have been confirmed through `/domain-mapping`.
+No terms have been confirmed through `/domain-mapping` yet.
 
-`docs/agents/domain.md` does not exist in this repository - `docs/agents/` is
-absent entirely - so the canonical artifact locations a confirmed row must cite
-are undefined. Until that contract exists, every term below stays `candidate`
-however firmly it has been decided.
+The blocker that previously prevented confirmation is **cleared**. Earlier
+revisions of this file stated that `docs/agents/domain.md` did not exist and
+that no confirmed row could cite a canonical artifact location. That file now
+exists, alongside `docs/agents/issue-tracker.md` and
+`docs/agents/triage-labels.md`. Confirmation is therefore possible, and the
+staged handoff is the next action rather than a blocked one.
+
+Every term below remains `candidate` until that handoff completes.
 
 ## Decided but Unconfirmed
 
-- **Naming system: plain literal nouns.** Decided by the user in c-0005. The
-  structural vocabulary uses Session, Agent, Sub-agent, Worktree, Parked, and
-  Interrupted. "Maestro" is retained only as the product name and interface
-  chrome. The rationale is the recorded input-model-continuity constraint:
-  literal nouns cost nothing to learn, and the user has stated that learning new
-  vocabulary and new keymaps is expensive.
-- **Retired to discouraged aliases:** `Squadron`, `Squad Mate`, and `Swarm`.
-  These were three labels for two concepts, drawn from military and biological
-  metaphors that collided with the musical metaphor in the product name. The
-  entries are kept with pointers to their replacements rather than deleted.
-- **A fully orchestral vocabulary was considered and rejected.** Concertmaster,
-  Section, Rest, and Cue map unusually well onto the domain - Rest in particular
-  captures the deliberate-silence sense of Parked that this cycle first got
-  wrong. It was rejected because it is a vocabulary the user would have to learn
-  and re-teach indefinitely, which contradicts the adoption constraint.
-- **1:1 Session to Primary Agent**, enforced by a lock rather than convention.
+### The unit is a Fleet (c-0007)
+
+A **Fleet** is one feature, one Worktree, one Copilot Session, its subagent
+tree, and its durable state. It replaces `Session` as the structural unit.
+
+Three independent reasons converged:
+
+1. It is the user's own spontaneous word, so it costs nothing to learn under the
+   recorded adoption constraint.
+2. The Copilot CLI already uses `/fleet` for "fleet mode for parallel subagent
+   execution" - the runtime's term for approximately the same idea.
+3. It releases `Session` to mean exactly what Copilot means by it, eliminating
+   the collision rather than relocating it.
+
+This **partially reverses the c-0005 decision** to retire military metaphors in
+favour of plain literal nouns. The reversal was put to the user explicitly and
+accepted. The distinction that justifies it: c-0005 was rejecting *invented*
+vocabulary carrying an indefinite teaching cost, whereas `Fleet` is vocabulary
+the user and the runtime already use. `Squadron` and `Squad Mate` stay
+deprecated and are not revived.
+
+### `Workspace` is retired as a structural term (c-0007)
+
+It is triple-booked: Copilot owns it through per-session `workspace.yaml` files
+and `~/.copilot/workspaces/`; Visual Studio Code owns it; and this model had its
+own conflicting meaning. Renaming the unit to `Workspace` was considered and
+rejected for that reason.
+
+### `Agent` and `Primary Agent` are not domain entities (c-0007)
+
+Copilot's `--agent` and `/agent` select a persona or configuration. Our former
+meaning - a running actor - is not needed, because a Fleet contains exactly one
+Copilot Session and that Session **is** the actor. The runtime confirms this
+shape: `assistant.turn_start`, `assistant.turn_end`, and `assistant.message` are
+session-level events with no agent identifier, while delegates emit their own
+`subagent.started` and `subagent.completed`.
+
+Consequence: the lock-enforced 1:1 binding borrowed from firstmate is no longer
+a requirement to satisfy. One Session per Fleet makes the binding structural, so
+it cannot be violated.
+
+**`Primary Agent` survives as an interface term** for a Fleet's chat surface,
+because the user speaks that way. The word `Session` need not appear in the
+interface at all.
+
+This was decided by the loop under a `delegated-to-loop` answer in c-0007, then
+**revised within the same cycle** when the user spontaneously used the phrase
+"primary agent window". The loop had deleted a term the user actively speaks,
+which contradicts the reasoning it had just used to adopt `Fleet`. The
+inconsistency is recorded rather than quietly corrected.
+
+### Other alignments with the runtime (c-0007)
+
+- `Sub-agent` is respelled **`subagent`**, matching the event stream and
+  `/subagents`.
+- **`Task`** is adopted for a tree node's underlying runtime handle. `/tasks`
+  manages "tasks (subagents and shell commands)" and `--resume` accepts a task
+  ID, so Maestro uses the runtime's handle rather than inventing one.
+- Maestro sets the runtime's session name with `-n, --name` rather than keeping
+  a private name.
+
+### Lifecycle is two axes, not one (c-0007)
+
+- **Fleet state**, durable, expressing intent: `Active`, `Parked`,
+  `Interrupted`, `Failed`.
+- **Liveness**, observed per launch from process evidence, never persisted as
+  truth: `Alive`, `Dead`, `Ambiguous`.
+
+Decided by the loop under a `delegated-to-loop` answer. c-0006 observed a Fleet
+that was durably Active while its processes were orphaned and its host was gone;
+a flat state set cannot express that combination, and the combination is the
+defect. `/ship-with-squadron` reaches the same separation independently, holding
+durable ticket state in a ledger and deriving worker health from heartbeats.
+
+### Retained from earlier cycles
+
+- **Parked** is a deliberate stop: state persisted, processes terminated,
+  uncommitted work preserved. It is not teardown and not process suspension.
+- **Interrupted** is the unintended counterpart and must be distinguishable from
+  Parked in the store.
+- A fully orchestral vocabulary - Concertmaster, Section, Rest, Cue - was
+  considered in c-0005 and rejected as invented vocabulary.
 
 ## Candidate and Unconfirmed
 
-- `Session`, `Primary Agent`, `Sub-agent`, `Sub-agent tree`, `Workspace`,
-  `Worktree`, `Agent`, `Parked`, and `Interrupted` are candidate terms.
-- The boundary between runtime authority, durable orchestration state, and
-  presentation state remains unresolved.
+`Fleet`, `Worktree`, `subagent`, `subagent tree`, `Task`, `Parked`,
+`Interrupted`, `Alive`, `Dead`, and `Ambiguous` are candidate terms.
+
+`Session` is candidate **with a borrowed definition**: it means what the Copilot
+runtime means, and this model does not redefine it.
+
+The boundary between runtime authority, durable orchestration state, and
+presentation state remains unresolved.
 
 ## Known Gaps in the Vocabulary
 
-Concepts used throughout the discussion that have no term yet:
+Concepts in use that still have no term:
 
-- **Lifecycle** - the full Session state set. `Parked` and `Interrupted` are
-  named, but the complete set and its transitions are not. This gap caused a
-  concrete error in c-0005, where park was modelled as process survival and the
-  wrong architecture was briefly recommended as a result.
-- **Attention** - the actionable-versus-absorbable distinction that decides
-  which of up to 8 Sessions should pull the user's eye.
-- **Liveness** - the alive, dead, or `ambiguous` classification that determines
-  whether orphaned processes can be ruled out.
-- **Activity** - the "what it is doing right now" line shown per Sub-agent.
+- **Attention** - the actionable-versus-absorbable distinction deciding which of
+  up to 8 Fleets should pull the user's eye. `/ship-with-squadron` defines
+  `AT_RISK` as stale heartbeat, or under 15 minutes to a milestone with an
+  unresolved blocker; the c-0007 decision to stay fully generic puts that
+  definition out of reach, so a replacement must be derived from generic runtime
+  events.
+- **Activity** - the "what it is doing right now" line shown per subagent.
 - **Capacity** and **admission** - the host-resource guardrail.
 - **Focus** - the global selection that re-scopes every panel.
-- **Supervisor** - the process that owns and reaps children.
-- **Transcript** - used inside the `Session` definition but never defined.
+- **Supervisor** - the process that owns and reaps children. c-0006 gave this
+  observed behavior to define against.
+- **Transcript** - used inside the unit definition but never defined.
 - **Teardown** - distinct from park and from close, gated on landed-work proof.
 
-`Workspace` versus `Worktree` is an open conflict, not merely a gap: the
-wireframe pairs Sessions with worktrees, but whether a Session is 1:1 with a git
-worktree or merely contains one is undecided.
+Terms the runtime owns that this model has no row for, and may need: `turn`,
+`checkpoint`, `plan`, `skill`, `tool`, `MCP`, `mode`, `compaction`, `rewind`,
+and `hook`.
+
+**Unconsidered surface:** Copilot session state carries an `inbox_entries` table
+with sender, recipient session, unread, and read-at columns, implying
+inter-session messaging that no cycle has examined.

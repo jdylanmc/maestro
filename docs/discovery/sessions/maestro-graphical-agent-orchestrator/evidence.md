@@ -198,3 +198,113 @@ user's machine, in the product's own name, for two days.
 It also demonstrates that adopting a process-supervision dependency silently
 imports that dependency's lifetime model. `herdr` was adopted for convenience;
 its detachment behavior became the product's observable behavior.
+
+### c-0007 - Git worktree concurrency, verified by experiment
+
+Run in `/tmp` scratch repositories by a read-only research subagent.
+
+- Concurrent git operations in one worktree fail on lock files with explicit
+  errors: `fatal: Unable to create '.../index.lock': File exists`,
+  `fatal: cannot lock ref 'HEAD'`, `error: could not lock config file`, and the
+  equivalent for `packed-refs.lock`.
+- **Two worktrees cannot check out the same branch.**
+  `fatal: '<branch>' is already used by worktree at '<path>'`. A hard git
+  constraint, so worktree-per-unit implies branch-per-unit.
+- **The stash is shared across worktrees**, not isolated. A stash created in one
+  worktree is visible from the repository root.
+- Per-worktree state is `HEAD`, `index`, `ORIG_HEAD`, and logs under
+  `.git/worktrees/<name>/`. The object store and most refs are shared.
+
+Local repository findings:
+
+- `v2/docs/reference/firstmate-arch.md:17-19,46-48` gives each `crewmate` an
+  endpoint and a worktree, but never states unit-to-worktree cardinality.
+- **No worktree management code exists** in `proto-v1/`, `scripts/`, or `bin/`,
+  although `README.md:3-7` states that Maestro launches workers in "isolated
+  worktrees". The README documents a capability the code does not implement.
+- `v2/docs/reference/orbit-arch.md:13-17` - Orbit isolates agents by Copilot
+  session but **not** by worktree: "all Agents use the configured workspace and
+  can act concurrently in it", and it "does not create a worktree".
+- `v2/docs/reference/superset-arch.md:19-21` - Superset defines a workspace as
+  "an isolated Git worktree", with per-worktree port allocation.
+
+Two endorsed references sit on opposite sides of the isolation question.
+
+Costs of worktree-per-unit, medium confidence: duplicated `node_modules` and
+build artifacts, `.env` and untracked files that do not carry over, per-worktree
+port allocation, and editor indexing and dev servers that must be re-pointed.
+
+### c-0007 - ship-with-squadron as a visualization target
+
+`.github/skills/ship-with-squadron/` read as a specification, not run. It
+requires an installed `/handoff` entry point, which does not exist at
+`.github/skills/handoff`, and it requires an approved implementation backlog,
+which does not exist either.
+
+- **Fixed three-tier topology:** Primary, one Coordinator, up to six Workers.
+  Typed roles with different authority and a known depth, contradicting the
+  working assumption of an arbitrarily deep homogeneous tree.
+- **Nineteen ticket states**, from `BLOCKED` through `MERGED`, `TIMED_OUT`,
+  `SUPERSEDED`, `HUMAN_DECISION_REQUIRED`, and `EXTERNAL_BLOCKER`.
+- **Independent confirmation of the two-axis lifecycle decision.** Ticket state
+  is durable in a ledger; worker health is `ACTIVE`, `AT_RISK`, `TIMED_OUT`, or
+  `TERMINAL`, derived from heartbeat freshness; Coordinator health is a third
+  classification. A separately authored package reached the same separation on
+  different evidence.
+- **`AT_RISK` operationalizes the unnamed Attention concept:** stale heartbeat,
+  or under 15 minutes to a milestone with an unresolved blocker.
+- **Durable state outside the worktree.** The ledger lives at
+  `<git-common-dir>/ship-with-squadron/<run-id>/` as `ledger.json`, append-only
+  `events.jsonl`, `handoffs/`, and `snapshots/`, written atomically by
+  temporary-file rename with a reread and schema check. `git rev-parse
+  --git-common-dir` is chosen so state is shared across worktrees rather than
+  trapped in one.
+- Recovery rebuilds from the append-only event log plus live provider state.
+- Concurrency limit is six, against the ceiling of 8 recorded in c-0005.
+- The one-minute executive report specifies both what to show and what **not**
+  to show: no logs, no code detail, no full review findings, no speculative
+  completion percentages.
+
+### c-0007 - Copilot CLI domain vocabulary
+
+From the installed binary `/Users/dylan/.copilot-cli/1.0.80/copilot`, from
+`~/.copilot/`, and from event logs across 40 local sessions.
+
+**Sessions can be named, and a recorded decision is falsified.** The binary
+exposes `-n, --name <name>`, `/rename` to rename or auto-generate a name from
+the conversation, and `--resume[=value]` resolving by session ID, task ID, ID
+prefix, **or name**, matched exactly and case-insensitively. Issue #5's recorded
+decision that "Maestro owns naming" is wrong. Maestro should set the runtime's
+name, which also means a Maestro-named unit remains addressable outside Maestro.
+
+**Event vocabulary observed:** `session.start`, `session.shutdown`,
+`session.resume`, `session.error`, `session.warning`, `session.info`,
+`session.mode_changed`, `session.model_change`, `session.plan_changed`,
+`session.permissions_changed`, `session.context_changed`,
+`session.compaction_start`, `session.compaction_complete`,
+`session.binary_asset`, `assistant.turn_start`, `assistant.turn_end`,
+`assistant.message`, `user.message`, `system.message`, `system.notification`,
+`tool.execution_start`, `tool.execution_complete`, `external_tool.requested`,
+`external_tool.completed`, `permission.requested`, `permission.completed`,
+`hook.start`, `hook.end`, `skill.invoked`, `subagent.started`,
+`subagent.completed`, `abort`.
+
+`subagent.completed` exists, so terminal subagent events are available to the
+roll-up and cancellation requirements.
+
+**Collisions with our vocabulary, in severity order:**
+
+1. `Agent` - Copilot means a selectable persona or configuration; we meant a
+   running actor.
+2. `Workspace` - Copilot owns it through per-session `workspace.yaml` and
+   `~/.copilot/workspaces/`; Visual Studio Code owns it too.
+3. `Sub-agent` - Copilot spells it `subagent`.
+4. `Task` - a first-class resumable unit; `/tasks` manages "tasks (subagents and
+   shell commands)". We had no term.
+5. `Fleet` - `/fleet` enables "fleet mode for parallel subagent execution". The
+   user's spontaneous word is already the runtime's term.
+
+**Terms Copilot owns that we have no row for:** `turn`, `checkpoint`, `plan`,
+`skill`, `tool`, `MCP`, `mode`, `compaction`, `rewind`, `hook`. Session state
+also carries an `inbox_entries` table with sender, recipient session, unread,
+and read-at columns, implying inter-session messaging no cycle has considered.
