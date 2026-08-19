@@ -20,7 +20,25 @@
 - The product is visualization-first: named Sessions, one workspace and Primary Agent per Session, recursively nested Squadron visibility, structured activity, attention, outcomes, and targeted cancellation where supported. [Issue #12](https://github.com/jdylanmc/maestro/issues/12), [Issue #6](https://github.com/jdylanmc/maestro/issues/6)
 - macOS is the supported platform for current prototypes. [AGENTS.md](../../../AGENTS.md)
 - The first proving MVP is one complete real flow on one platform; cross-platform prototypes share the same functionality specification, while implementation tasks vary by platform. [c-0001](./cycles/c-0001.md)
-- The first acceptance slice includes Session creation or resume, real Primary Agent chat, one structured delegated Squad Mate, Workspace and file context, targeted cancellation where supported, restart, and accurate reconciliation. [c-0001](./cycles/c-0001.md)
+- ~~The first acceptance slice includes Session creation or resume, real Primary Agent chat, one structured delegated Squad Mate, Workspace and file context, targeted cancellation where supported, restart, and accurate reconciliation.~~ **Superseded in c-0011** by the scripted Acceptance Slice below. The c-0001 wording predates the Fleet vocabulary, names a `Squad Mate`, and is a list of capabilities rather than an executable flow, so it could never say whether a route had finished. [c-0001](./cycles/c-0001.md), [c-0011](./cycles/c-0011.md)
+
+### Acceptance slice and route sequencing
+
+**Confirmed in c-0011.**
+
+- **All four routes are driven to a complete MVP.** v1.1 WezTerm, v2 Electron, v3 Tauri/Rust, and v4 native macOS Swift are each held to the whole [Issue #18](https://github.com/jdylanmc/maestro/issues/18) contract. They are explicitly **not** reduced to bounded feasibility probes; the loop recommended reduction and the user rejected it.
+- **Routes execute strictly one at a time**, in **evidence order rather than version order**: v2 Electron, then v1.1 WezTerm, then v3 Tauri/Rust, then v4 native macOS Swift. Electron leads because it is the only route carrying measured evidence ([c-0009](./cycles/c-0009.md)); starting elsewhere would strand it and reopen process ownership on an unproven route.
+- **One Acceptance Slice, identical across every route**, so the comparison is like-for-like. A route is complete when this flow runs end to end:
+  1. Create two named Fleets; each gets its own Worktree and branch, enforced.
+  2. Each Fleet presents its primary agent window, bound 1:1.
+  3. Prompt Fleet A; it delegates at least one subagent; the subagent tree renders live with correct parentage.
+  4. Select Fleet B; every panel re-scopes to it.
+  5. Fleet A hits a permission request; Attention surfaces on that Fleet.
+  6. Quit through the pre-close summary; both Fleets auto-Park; **zero surviving processes**. Relaunch; both Fleets return with identity, history, Worktree, and recomputed Liveness; Fleet A's Session resumes by name.
+- Every step of the slice restates an already-confirmed requirement. The slice adds no scope; it makes the existing contract executable.
+- **Each route produces an executive report** of that stack's pros and cons as a first-class deliverable, not a by-product.
+- **A stack that cannot build the app is rejected.** Rejection is a legitimate terminal verdict for a route, not a loop failure: the route still produces its report, is marked rejected, and the sequence advances.
+- **The comparative technology evaluation is a deliverable in its own right**, consuming the four executive reports rather than re-deriving the comparison. A rejected stack is an input to it - the reason it could not build the app is itself a finding.
 - The Electron route must preserve a main-process authority boundary, a preload-mediated renderer API, durable Session state, structured delegated-Agent state, restart reconciliation, and targeted cancellation. [c-0003](./cycles/c-0003.md)
 
 ### Lifecycle and process ownership
@@ -97,18 +115,20 @@
 
 ## Unresolved requirements
 
-- The minimum end-to-end acceptance slice that every prototype must prove.
-- Which deferred capabilities are truly outside the MVP once a working shell exists.
+- ~~The minimum end-to-end acceptance slice that every prototype must prove.~~ **Resolved in c-0011:** the six-step scripted Acceptance Slice above, identical across all four routes, plus a per-stack executive report.
+- Which deferred capabilities are truly outside the MVP once a working shell exists. Narrowed in c-0011: anything not exercised by the six-step Acceptance Slice is outside the MVP by construction, so this reduces to whether the slice itself is right.
 - The required fidelity of restart reconciliation for active or interrupted work.
 - The acceptable provider-specific degradation when runtime controls are experimental.
-- Whether the Electron route's real BrowserWindow and packaging seams hold once the external Electron dependency is available.
+- Whether the Electron route's real BrowserWindow and packaging seams hold once the external Electron dependency is available. **Owned by n-0003 from c-0011.**
 - ~~**Workspace versus Worktree.**~~ **Resolved in c-0007.** A Fleet prefers its own Worktree, not as a hard rule. `Workspace` is retired as a structural term because Copilot and Visual Studio Code both own it.
 - ~~**How a Fleet is made aware of its siblings.**~~ **Resolved in c-0010:** it is not. Fleets are fully isolated; the human is the only integration point.
 - ~~**What Maestro uses for Attention now that the ledger is excluded.**~~ **Resolved in c-0010:** an unmatched `permission.requested`, plus `session.error` and `abort`. Unproven in the blocking case, because no unresolved request was found in local evidence.
 - ~~**Whether the tree renders arbitrary depth or a bounded depth.**~~ **Resolved in c-0010:** arbitrary depth, optimised for breadth. Measured real depth was 2, with fan-out dominating.
 - ~~**Whether `inbox_entries` inter-session messaging is in scope.**~~ **Resolved in c-0010:** out of scope, and misread. It is the subagent-to-owning-session channel, not a peer channel.
-- **Whether the 8-Fleet ceiling survives worktree-per-Fleet in a large monorepo.** Narrowed in c-0010: git cost is negligible and file descriptors are not a risk, so the question reduces to duplicated untracked and build state. Still unmeasured against the actual target monorepo, and now sharper because worktrees are mandatory.
+- **Whether the 8-Fleet ceiling survives worktree-per-Fleet in a large monorepo.** Narrowed in c-0010 to duplicated untracked and build state; git cost is negligible and file descriptors are not a risk. **Accepted as a known unknown in c-0011** because no target monorepo exists to measure against. *Risk:* admission control and the resource meter are being specified against a ceiling never measured against a repository large enough to bind it, so a wrong calibration would surface only under load on a user's real repository. *Trigger to revisit:* the first time a real Fleet count exceeds 3 on a repository with heavy dependency or build state, or the moment sparse checkout is adopted, since c-0010 identified it as the strongest mitigation.
 - ~~**In-app editing is contradicted.**~~ **Resolved in c-0008:** read-only viewers plus an "open in Visual Studio Code" action. No editor is built.
 - Whether the Sessions ceiling of 8 and the host-capacity guardrail need distinct user-facing treatment when the guardrail binds first.
 - **Whether `herdr` remains in the architecture at all.** Its detached-daemon lifetime directly contradicts the process-ownership requirement. Either Maestro replaces it with directly owned child processes, or it must prove `herdr` can be run in a non-detaching mode it fully controls. [c-0006](./cycles/c-0006.md)
 - ~~**What happens to long-running Agent work when the user closes the application.**~~ **Resolved in c-0008:** auto-Park behind an acknowledged pre-close summary.
+- **Whether the comparative evaluation's rubric is fixed before the first route ships or derived after the fact.** Raised in c-0011 and owned by n-0007. Fixing it early risks measuring the wrong things; deriving it late risks a rubric shaped by the outcome it is supposed to judge.
+- **Whether the Attention predicate fires against a genuine block.** Owned by n-0002. It has never been observed firing, because no unresolved `permission.requested` exists anywhere in local evidence, so it must be tested against a deliberately constructed block rather than found in history.

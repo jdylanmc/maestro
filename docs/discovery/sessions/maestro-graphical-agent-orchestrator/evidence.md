@@ -474,3 +474,66 @@ which reflects how this operator works and is not a bound on what Copilot can
 produce. The Attention predicate remains unproven against a genuinely blocked
 session. Worktree cost was measured against a small repository, not the target
 monorepo.
+
+## c-0011 - Decomposition, route sequencing, and the acceptance slice
+
+No new measurement was taken this cycle. The evidence recorded here is structural and decisional.
+
+### The tree was degenerate, and that was hiding work
+
+After ten completed cycles the session tree still contained exactly **one node**. Every open question - packaging
+lifecycle, live Copilot signal handling, the Attention predicate, the worktree ceiling, and the status of three
+unexplored routes - was held inside `n-0000`'s prose. The consequence was concrete rather than cosmetic:
+
+- nothing below map tier could ever be promoted, because there was nothing below map tier;
+- no question could carry its own priority, maturity, or dependency, so "what is left" had to be re-derived from prose
+  every cycle;
+- the fog scan had a single row and therefore could not discriminate, which made the deterministic selection rules
+  inert - rule 6 was the only rule that could ever fire.
+
+The step 11 instruction to "add newly visible fog as new nodes rather than hiding it inside an existing one" had been
+under-applied for the whole session. Recorded here because the failure was invisible from inside any single cycle:
+each cycle individually looked productive, and the checkpoints are accurate. Only the cumulative shape shows it.
+
+### The anchor drifted behind durable state, not ahead of it
+
+Issue #1's `updatedAt` had moved past the recorded `anchor-revision`, which normally signals that the anchor moved
+underneath settled understanding. Reading the body showed the opposite: its "Isolation" section still records
+worktree-per-Fleet as "reinforced but not enforced" and still requires that "A Fleet must know that other Fleets may
+be working concurrently." **Both were reversed by confirmed decisions in c-0010.**
+
+This is a distinct failure mode from anchor revision and is classified separately. Durable discovery state is *ahead*
+of the anchor, so nothing is invalidated - but the anchor is the first thing every cycle reads, and an anchor that
+contradicts confirmed state will eventually be read as authority by a cycle that has forgotten why it is stale. It is
+recorded as a tracker divergence on n-0000 and needs `/discovery` to reconcile; this loop's `execute` may not run a
+tracker command.
+
+### Route scope: the loop recommended reduction and was overruled
+
+The loop recommended driving Electron alone to a complete MVP and reducing v1.1, v3, and v4 to bounded feasibility
+probes, on the argument that the MVP contract exists to select an implementation rather than to ship four. The user
+rejected it: all four routes go to completion, one at a time, followed by a comparative evaluation.
+
+Recorded as an overruled recommendation rather than as a decision, because the loop's argument was not refuted - it
+was outranked. The cost the loop identified is real and unmitigated: four complete MVPs is roughly four times the work
+and three are discarded. What the user's answer buys is a genuine side-by-side and a defensible final selection, and
+the user owns that tradeoff. If schedule pressure later forces a reversal, this entry is the reason to revisit rather
+than a reason to have decided differently now.
+
+### The sequencing is structurally enforced, not merely documented
+
+"One at a time" is encoded as a `depends-on` chain n-0003 -> n-0004 -> n-0005 -> n-0006, not as a note. This has a
+measurable consequence through the priority-maturity invariant: n-0003 enters at maturity `researched`, which is
+exactly at the invariant's floor, so the P1 nodes depending on it generate **no** priority debt and the table stays
+empty. If n-0003 is ever weakened below `researched`, both n-0004 and n-0007 immediately become debt rows and the loop
+is required to stop deepening them until Electron recovers. The sequencing therefore defends itself.
+
+### Limitations
+
+- Nothing here is a measurement. The one measurable question this cycle touched - the 8-Fleet ceiling under mandatory
+  worktrees - was explicitly accepted as unknown, because no target repository exists to measure against.
+- The Acceptance Slice is asserted to add no new scope on the grounds that every step restates a confirmed
+  requirement. That mapping was done by reading, not by tooling, and has not been independently checked.
+- Two of the slice's steps have never been observed working anywhere: step 5 depends on the Attention predicate, which
+  has never been seen firing, and step 6's restart path has been proven only for teardown (c-0009), not for
+  reconciliation on relaunch.

@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0008
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0011
 ---
 
 # Primary Discovery Map - Maestro
@@ -18,7 +18,7 @@ restart behavior.
 
 | Session | Kind | Priority | Maturity | Active fog | Major blockers | Package |
 | --- | --- | --- | --- | --- | --- | --- |
-| maestro-graphical-agent-orchestrator | vertical | P0 | researched | Prove one shared end-to-end flow on Electron, judged on lifecycle ownership and the three-column layout, then compare equivalent functionality across platform routes. | Unbuilt Electron probe | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
+| maestro-graphical-agent-orchestrator | vertical | P0 | researched | Drive all four routes to a complete MVP one at a time - v2 Electron, then v1.1 WezTerm, v3 Tauri/Rust, and v4 native macOS Swift - each executing one identical six-step acceptance slice and producing a per-stack executive report, then select the durable technology in a terminal comparative evaluation. | The Attention predicate has never been observed firing; packaging-versus-development supervision is unproven | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
 
 ## Typed Session Links
 
@@ -33,8 +33,9 @@ restart behavior.
 - subagent - a delegated unit of work with observable lifecycle, activity, outcome, and control state.
 - macOS is the supported platform for current prototypes.
 - No process may outlive the application; durable state persists, processes do not.
-- Fleets are isolated by default, preferring one Worktree each, which implies one branch each.
+- Fleets are **fully isolated**: exactly one Worktree each, enforced, which implies one branch each, and no cross-Fleet awareness of any kind. The human is the only integration point. (c-0010; this bullet still carried the superseded "preferring" wording until c-0011.)
 - Vocabulary is reconciled against the Copilot runtime rather than competing with it, and is **confirmed** in the repository root `CONTEXT.md` with `docs/adr/0001` recording the `Fleet` naming decision.
 - File surfaces are read-only viewers with an "open in Visual Studio Code" action; no in-app editor is built.
 - Closing the application auto-Parks every Fleet behind an acknowledged pre-close summary.
 - Credentials, authentication state, employer configuration, and runtime state stay outside the repository.
+- A route that cannot build the app is **rejected**, and the reason is an input to the comparative evaluation rather than an absence from it.
