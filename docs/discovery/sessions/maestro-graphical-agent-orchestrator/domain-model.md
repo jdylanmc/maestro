@@ -137,7 +137,13 @@ Concepts in use that still have no term:
   `AT_RISK` as stale heartbeat, or under 15 minutes to a milestone with an
   unresolved blocker; the c-0007 decision to stay fully generic puts that
   definition out of reach, so a replacement must be derived from generic runtime
-  events.
+  events. **c-0012 gives it a measurable definition:** a `permission.requested`
+  whose `data.requestId` has no matching `permission.completed`, plus
+  `session.error` and `abort` as terminal states - observed firing on a genuinely
+  blocked live Session and clearing on human approval. The term stays a
+  **candidate**: a `/domain-mapping` packet was staged in c-0012 and left
+  `pending`, because that skill's confirmation and Architecture Decision Record
+  gates need a live user turn and the user was absent. It is the next handoff.
 - **Activity** - the "what it is doing right now" line shown per subagent.
 - **Capacity** and **admission** - the host-resource guardrail.
 - **Focus** - the global selection that re-scopes every panel.

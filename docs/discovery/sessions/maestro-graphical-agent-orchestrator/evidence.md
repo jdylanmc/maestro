@@ -537,3 +537,146 @@ is required to stop deepening them until Electron recovers. The sequencing there
 - Two of the slice's steps have never been observed working anywhere: step 5 depends on the Attention predicate, which
   has never been seen firing, and step 6's restart path has been proven only for teardown (c-0009), not for
   reconciliation on relaunch.
+
+## c-0012 - Packaging measured, and the Attention predicate finally fired
+
+Two approved prototypes ran and were cleaned up. Both measured **external
+ground truth** - `ps` against recorded process-group identifiers, and
+`events.jsonl` joined by `requestId` - rather than asking the program under test
+whether it had succeeded. That discipline is what makes the two falsifications
+below trustworthy.
+
+### Prototype 1 - packaging preserves supervision (n-0003)
+
+`electron-builder --dir`, Electron 33.4.11, unsigned (`identity: null`), bundle
+`com.jdylanmc.maestro.proto.n0003c0012`, launched through LaunchServices with
+`open -a`.
+
+| Scenario | Teardown | Fleet processes | Survivors |
+| --- | --- | --- | --- |
+| P1 packaged graceful quit | `before-quit` group `SIGTERM`, verify, escalate | 9 | **0** |
+| P2 packaged Force-Quit simulation | none | 9 | **9** |
+| P3 packaged relaunch, reap-on-launch | reaper on `whenReady` | 9 recorded | **0** |
+
+The three packaged scenarios reproduce c-0009's B1, B2, and B3 exactly. The
+supervision design is not an artifact of the development lifecycle.
+
+**The packaged application's own parent process identifier is 1.** It is a child
+of `launchd`, which is the identical reparenting shape that made v1.0's detached
+`herdr server` dangerous in c-0006 - and it is harmless here. The application is
+its own process-group leader, each detached Fleet receives a distinct group, and
+`process.kill(-pgid)` addresses it exactly as under a development run. The
+c-0006 defect was never reparenting; it was **unowned** reparented processes.
+This sharpens the requirement rather than adding one.
+
+`app.setPath('userData', ...)` called before `whenReady` redirected every
+Electron-authored write into the isolation path, so a packaged build does not
+force durable state into `~/Library/Application Support`.
+
+Build cost: `npm install` of Electron plus electron-builder took 1 minute, the
+Electron binary downloaded in 7.06 s, and packaging to `.app` took under a
+minute.
+
+Limitations: synthetic `sh`/`sleep` Fleet trees, unchanged from c-0009; unsigned
+with no hardened runtime, so a notarized build is untested; Force Quit was
+simulated with `SIGKILL`, the signal macOS sends, rather than triggered through
+the operating system interface; the `--dir` target only, no DMG or zip. macOS
+LaunchServices retains a registration record for the deleted bundle - operating
+system metadata, not a file the prototype authored.
+
+### Prototype 2 - the Attention predicate, measured on live Sessions (n-0002)
+
+Real `copilot` 1.0.80 Sessions driven interactively through an `expect`
+pseudo-terminal.
+
+**It fires, and it clears.** Session `225cda11`:
+
+| Event | Timestamp | requestId | Result |
+| --- | --- | --- | --- |
+| `permission.requested` | 23:45:08.603Z | `c4b94311-...` | - |
+| `permission.completed` | 23:45:09.728Z | `c4b94311-...` | `{"kind": "approved"}` |
+
+**A sustained unmatched request was observed on a genuinely blocked Session.**
+Session `c8f382bc`, request `dd7f6347-...` raised at 23:46:59.608Z and left
+unanswered: sampled twice about 25 seconds apart, `requested 1 / completed 0 /
+UNMATCHED 1` both times. This is the first observation anywhere in this project
+of the predicate the c-0010 research proposed. It was called sound in shape but
+unproven in the blocking case; it is now proven in the blocking case.
+
+Three implementation facts fell out of it:
+
+- the join key is `data.requestId`, not `toolCallId` - the request carries
+  `data.permissionRequest.toolCallId` as a separate field;
+- `permission.completed.data.result.kind` discriminates the outcome, so a human
+  approval and a policy denial are distinguishable rather than merely paired;
+- events live in `events.jsonl`, **not** in `session.db`, which holds only
+  `inbox_entries`, `todos`, and `todo_deps`.
+
+**Non-interactive invocation can never surface Attention.** Without
+`--allow-all-tools`, a `-p` run completes the request immediately as
+`denied-no-approval-rule-and-could-not-request-from-user` - measured in session
+`0e840075` as 1 requested, 1 completed, 0 unmatched. A Fleet driven that way
+never blocks and never raises Attention, so acceptance-slice step 5 is
+unreachable through it. The integration mode is therefore a requirement-level
+constraint, and `copilot --acp` - the Agent Client Protocol server the binary
+already exposes - is the seam to evaluate first. This became n-0008.
+
+**A live Copilot Session does not tear down like a synthetic tree.** The blocked
+Session held **eight processes in one process group**: `copilot`, two `npm exec`
+wrappers, an `agency mcp kusto` server and its native child, two Node Model
+Context Protocol servers, and `OsgWikiMcp` - the same binary that raised the
+orphan permission prompt in c-0006.
+
+| t after `SIGTERM` to the group | Survivors |
+| --- | --- |
+| before | 8 |
+| +0.5 s | 6 |
+| +1.0 s | 6 |
+| +1.5 s through +3.0 s | **5, stalled** |
+| after `SIGKILL` escalation | **0** |
+
+c-0009's synthetic trees reached zero on `SIGTERM` alone. The real runtime does
+not. **The synthetic result overstated how well graceful teardown works**, and
+escalation is the load-bearing step rather than a safety net. Total elapsed
+teardown 4.35 seconds.
+
+`copilot` also **self-assigns its own process group**: spawned from `expect`
+with no detach flag it still appeared with `pgid == pid`, distinct from its
+parent's group, with every Model Context Protocol server inheriting it. A
+supervisor gets a clean per-Session boundary for free, but must still record the
+group durably, because a group it does not record is a group it cannot reap.
+
+Limitations: the identity of the five `SIGTERM` survivors was not captured, only
+the count, so the c-0006 wrapper-process explanation is inferred rather than
+shown; four pseudo-terminal attempts were needed before the terminal user
+interface accepted input, because `setsid` does not exist on macOS and an
+`expect` script that `sleep`s rather than draining the pseudo-terminal stalls the
+child - evidence about pseudo-terminal driving, not about the runtime; one
+Session shape on one machine with this operator's Model Context Protocol server
+set, where a Session with no such servers would tear down more easily; and
+teardown was measured against a Session blocked on a permission request, a
+plausible worst case but only one case.
+
+### The recorded state digest was not the digest the schema specifies
+
+The `state-digest` written by every cycle up to c-0011 reproduces exactly as the
+normalized per-file digest of `discovery.md` **alone**, not as the five-line
+manifest digest defined in the session-state schema. `domain-model.md`,
+`requirements.md`, and `evidence.md` were never inputs to it, so drift in any of
+those three would not have been detected.
+
+This is a loop bookkeeping defect, not third-party drift: the entry comparison
+still reproduced bit for bit under the previous convention, both root digests
+matched, and the working tree was clean at the c-0011 commit. c-0012 computes and
+records the specification-conformant manifest digest, so c-0013's entry
+comparison is against a corrected value and must not read the change as drift.
+
+### Limitations of this cycle
+
+- Nothing was measured about the acceptance slice's steps 2 and 4, which are
+  visual, and nothing was measured about restart reconciliation - only teardown.
+- Both prototypes ran on one machine, one macOS version, one Electron version,
+  and one Copilot version.
+- The Q4 verification-seam decision was taken by the loop with the user absent,
+  under the standing `delegated-to-loop` policy. It is the only decision in this
+  cycle not made in a live user turn.
