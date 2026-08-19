@@ -98,3 +98,103 @@ vocabulary is deliberately not adopted.
 The Electron probe proposed in c-0005 was presented three times and never
 received the exact approval string, so nothing was built and no isolation
 directory was created. The user redirected to domain-language work instead.
+
+### c-0006 - Orphaned process tree observed live
+
+At 13:07:38 on 2026-08-19 a macOS dialog appeared reading "Maestro would like to
+access data from other apps." The system log was queried directly with
+`log show --last 30m --predicate 'subsystem == "com.apple.TCC"'`, which named
+every party in the request.
+
+The service requested was `kTCCServiceSystemPolicyAppData`, the control that
+governs one application reading another application's data container. The
+attribution record separates two roles. The *accessing* process was
+`OsgWikiMcp`, a .NET Model Context Protocol server built from an unrelated
+repository. The *responsible* process was `com.jdylanmc.maestro`, with
+`responsible_path` `/Applications/Maestro.app/Contents/MacOS/wezterm-gui-bin`.
+
+The full ancestry was then reconstructed with `ps -o pid,ppid,pgid,lstart,command`:
+
+```text
+herdr server            1642  PPID 1      /opt/homebrew/bin/herdr server
+  agency copilot        1820              Aug 17 14:47
+    copilot             7829              Aug 17 14:49, session 3b8da88c
+      OsgWikiMcp        8279              Aug 17 14:50
+```
+
+A second identical branch ran under process group 1648, session 73be3e62.
+
+Three facts follow, each verified rather than inferred.
+
+**No graphical host was running.** `pgrep -fl 'wezterm-gui-bin'` returned
+nothing. The application that macOS held responsible had already exited, yet its
+descendants were still making permission requests.
+
+**The processes had survived two days and at least one reboot.** They started
+Aug 17 at 14:47 and were observed Aug 19 at 13:07.
+
+**The daemon is reparented to init.** `herdr server` carried a parent process
+identifier of 1, the signature of a deliberate detachment rather than an
+accident of scheduling.
+
+### c-0006 - Mechanism: inherited responsibility
+
+macOS binds a *responsible process* at launch and every descendant inherits it
+for the lifetime of that descendant, independent of whether the responsible
+process is still alive. Because the launcher opens the rebranded bundle, and the
+bundle identifier is `com.jdylanmc.maestro`, every process in the tree presents
+itself to the permission system as Maestro forever.
+
+Two consequences matter for the product.
+
+The application is **accountable for permission prompts it did not issue and
+cannot see**, including prompts from third-party binaries it never authored. A
+user reading the dialog has no way to learn that the real requester was
+`OsgWikiMcp`; the dialog names Maestro and offers only Allow or Don't Allow.
+
+The behavior is **not reset by application exit or by reboot**, so it presents
+to the user as the application misbehaving while closed.
+
+### c-0006 - Mechanism: detached daemon
+
+The persistence is supplied by `herdr`, an external dependency the launcher
+shells out to, not by code authored in this repository. This is why the c-0005
+source search found nothing and reached the wrong conclusion.
+
+`herdr server` runs as a long-lived daemon. Copilot Sessions are its children
+rather than children of the terminal pane the user perceives as owning them, so
+closing the window severs only the display attachment. The Session, its
+Sub-agents, and their Model Context Protocol servers continue to run, hold
+memory, retain credentials, and make privileged requests.
+
+At the moment of observation five `OsgWikiMcp` processes were resident, of which
+two belonged to the orphaned Aug-17 tree.
+
+### c-0006 - Termination behavior
+
+The Aug-17 tree was terminated at the user's explicit instruction. The escalation
+is itself evidence for the teardown design.
+
+`SIGTERM` to the Model Context Protocol servers and to the Copilot processes
+succeeded. `SIGTERM` to the two `agency copilot` wrapper processes did **not**;
+both were still resident after three seconds. They exited only once their
+children were gone.
+
+A teardown implementation that sends `SIGTERM` and assumes success will
+therefore leave residue. Termination must be verified against the process table
+and escalated, not fired and forgotten.
+
+The `herdr server` daemon at 1642 was deliberately left running, because live
+Sessions started Aug-18 and Aug-19 were its children and killing it would have
+destroyed active user work.
+
+### c-0006 - Bearing on the requirements
+
+This is direct evidence for the requirement recorded in c-0005 as a user
+preference: "I don't want agents to persist after the app is closed." The
+failure mode is not hypothetical and not future-tense. It was running on the
+user's machine, in the product's own name, for two days.
+
+It also demonstrates that adopting a process-supervision dependency silently
+imports that dependency's lifetime model. `herdr` was adopted for convenience;
+its detachment behavior became the product's observable behavior.
