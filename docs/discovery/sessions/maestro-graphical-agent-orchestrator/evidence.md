@@ -403,3 +403,74 @@ live Copilot sessions, which may install their own signal handlers; packaging
 was not tested, only the development-run lifecycle; and macOS Force Quit was
 simulated with `SIGKILL`, which is the signal it sends, rather than triggered
 through the operating system interface.
+
+## c-0010 - Runtime evidence measured, and two research claims falsified
+
+Four bounded read-only subagents researched Attention signals, subagent tree
+depth, worktree cost, and the messaging surface. Their reports were treated as
+untrusted. The two claims that would have changed the architecture were
+re-measured in the parent loop, and **both failed**.
+
+### The subagent tree is not what `parentId` suggests
+
+The `tree-depth` agent reported `parentId` as the child-to-parent link and a
+maximum nesting depth of 16. Measured directly against the largest local
+session, `57300d77-3904-439d-8ee9-acdbafe47543` (41,928 events, 132 subagents):
+
+| Property | Measurement |
+| --- | --- |
+| Distinct `parentId` values | 41,927 across 41,928 events |
+| `parentId` values resolving to an event id | 41,927 |
+| `parentId` values resolving to an `agentId` | **0** |
+
+`parentId` is a linear event-chain pointer. Two `subagent.started` events
+emitted consecutively in the same parallel batch are *siblings*, yet one carries
+the other's id as its parent. The depth-16 figure is an artifact of that chain.
+
+Reconstructing instead by joining `subagent.started.data.toolCallId` to the
+`agentId` on the spawning agent's `tool.*` event, the same session gives:
+
+| Real depth | Subagents |
+| --- | --- |
+| 0 (root-spawned) | 51 |
+| 1 | 72 |
+| 2 | 9 |
+
+**Real maximum depth is 2.** Nesting exists but is shallow, and one agent
+spawned 72 of the 132, so breadth dominates depth. Separately confirmed: the 132
+`agentId` values on `subagent.started` are exactly the 132 appearing on other
+events, so `agentId` is a sound identity for attributing any event to its agent.
+
+The near-miss is the point. A tree built on `parentId` would have rendered
+without error, looked convincing, and been fiction.
+
+### The messaging table is used, and it is not a peer channel
+
+The `inbox-surface` agent found `inbox_entries` empty in sampled databases and
+concluded the surface was inert. Scanning **all 674** local session databases
+found **27 rows**, so the sample was too small and the "unused" reading was
+wrong.
+
+The corrected data strengthens the agent's conclusion rather than reversing it.
+Every one of the 27 senders is a `background-agent` or `sidekick-agent`
+reporting to its owning session; none is a peer session. `inbox_entries` is the
+**intra-Fleet** subagent reporting channel, and there is no inter-Fleet channel
+to inherit. All 27 rows also carry `unread = 1`, so the flag is never cleared in
+persisted state and cannot mean "the human has seen this."
+
+### Accepted without re-measurement
+
+- **Attention.** An unmatched `permission.requested` is the only signal that
+  directly encodes a human block. The agent reported honestly that it could find
+  no *unresolved* instance locally, so the predicate is sound in shape but
+  unproven in the blocking case. `assistant.turn_end` means the assistant
+  yielded, not that a human is needed.
+- **Worktree cost.** ~2.6 MiB and ~50 ms per worktree of a clean checkout, with
+  the object store shared and unchanged. Git is not the constraint; duplicated
+  untracked and build state is. File descriptor limits are far from binding.
+
+Limitations: depth and breadth are measured from one machine's session history,
+which reflects how this operator works and is not a bound on what Copilot can
+produce. The Attention predicate remains unproven against a genuinely blocked
+session. Worktree cost was measured against a small repository, not the target
+monorepo.

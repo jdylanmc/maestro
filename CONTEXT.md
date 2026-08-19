@@ -75,5 +75,5 @@ Independent of whether the Fleet is Parked or Interrupted, and never assumed.
 
 **Worktree**
 
-The isolated checkout a Fleet works in. A Fleet normally has its own, which
-implies its own branch, but may instead share an existing checkout.
+The isolated checkout a Fleet works in. Every Fleet has exactly one of its own,
+which implies its own branch. Fleets never share a checkout.

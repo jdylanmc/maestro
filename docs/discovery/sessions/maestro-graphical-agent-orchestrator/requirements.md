@@ -71,11 +71,14 @@
 ### Isolation and concurrency
 
 - **Fleets are isolated by default.** Concurrent Fleets work different features in the same large monorepo, so they must not share a working checkout by default. [c-0007](./cycles/c-0007.md)
-- **Worktree-per-Fleet is the strong default**, reinforced by the product where it can be, but not enforced as a hard rule. A Fleet may be pointed at an existing checkout. [c-0007](./cycles/c-0007.md)
+- ~~**Worktree-per-Fleet is the strong default**, not enforced as a hard rule; a Fleet may be pointed at an existing checkout.~~ **Superseded in c-0010.** **Worktree-per-Fleet is a hard rule.** Every Fleet has exactly one worktree of its own and Fleets never share a checkout. The user: "fleets are isolated to worktrees." [c-0010](./cycles/c-0010.md)
 - **Worktree-per-Fleet implies branch-per-Fleet.** Two worktrees cannot check out the same branch; this is a verified hard git constraint, not a policy choice. Fleet creation therefore implies branch creation or selection. [c-0007](./cycles/c-0007.md)
-- **A Fleet must know it is not alone.** Each Fleet is aware that other Fleets may be working concurrently, rather than behaving as if it had exclusive use of the repository. [c-0007](./cycles/c-0007.md)
+- ~~**A Fleet must know it is not alone.**~~ **Reversed in c-0010.** **Fleets are fully isolated and unaware of each other.** No cross-Fleet awareness or messaging is built for the MVP; the human is the only integration point. This overturns the c-0007 requirement rather than refining it: research established that the runtime provides no peer channel to inherit, so awareness would have had to be invented, and the user declined. [c-0010](./cycles/c-0010.md)
+- **Isolation holds on both axes at once.** A Fleet shares neither a working checkout nor a message channel with any other Fleet. A consequence is that no cross-Fleet conflict resolution is needed, because two Fleets cannot touch the same working files. [c-0010](./cycles/c-0010.md)
 - Isolation is not total: the git stash and the object store are shared across worktrees. Any feature that uses the stash is a cross-Fleet interaction and must be treated as such. [c-0007](./cycles/c-0007.md)
 - The target repository is a large monorepo, so per-worktree duplication of build artifacts and editor indexes is a real cost that bears on the ceiling of concurrent Fleets. [c-0007](./cycles/c-0007.md)
+- **Git is not the constraint; duplicated working state is.** Measured: a worktree of a clean checkout costs ~2.6 MiB and ~50 ms to create, with the object store shared and unchanged. What scales badly is per-worktree untracked and build state - `node_modules`, build output, caches. File descriptors are not a risk at this scale. Because worktrees are now mandatory rather than optional, this is the load-bearing limit on concurrent Fleets. [c-0010](./cycles/c-0010.md)
+- **Maestro must not duplicate build state per Fleet where it can avoid it.** Sparse checkout is settable per worktree and is the strongest available mitigation for a monorepo. [c-0010](./cycles/c-0010.md)
 
 ### Runtime integration
 
@@ -83,6 +86,14 @@
 - Maestro's vocabulary aligns with the runtime's where they overlap: `subagent` rather than `Sub-agent`, and `Task` for a tree node's underlying runtime handle. [c-0007](./cycles/c-0007.md)
 - **Maestro reads only generic runtime evidence.** It does not special-case any orchestration skill, and does not read the `ship-with-squadron` run ledger. Skill-specific state such as deadlines, merge gates, ticket states, and the `AT_RISK` classification is therefore unavailable to the interface. [c-0007](./cycles/c-0007.md)
 - Durable Maestro state belongs outside any single worktree, so that it is shared across the worktrees of one repository rather than trapped in one. [c-0007](./cycles/c-0007.md)
+- **The subagent tree is reconstructed by joining `subagent.started.data.toolCallId` to the `agentId` on the spawning agent's own `tool.*` event.** A root-spawned subagent's tool event carries a null `agentId`. [c-0010](./cycles/c-0010.md)
+- **`parentId` must never be used to build the tree.** It is a linear event-chain pointer, not a parent-agent link: in a measured 41,928-event session it held 41,927 distinct values, every one resolving to an event id and none to an `agentId`. Consecutive parallel *siblings* therefore appear as parent and child, and building on it yields a plausible but wholly fictional tree. [c-0010](./cycles/c-0010.md)
+- **`agentId` is a reliable identity for attribution.** In the same session the 132 ids appearing on `subagent.started` were exactly the 132 appearing on other events, so every event is attributable to the agent that produced it. [c-0010](./cycles/c-0010.md)
+- **The tree renders arbitrary depth, but must be optimised for breadth.** Measured real depth in the largest local session was 2, not the 16 a `parentId` reading suggests: 51 subagents root-spawned, 72 at depth 1, 9 at depth 2 - and 72 of 132 spawned by a single agent. Nesting is genuine but shallow; fan-out dominates. [c-0010](./cycles/c-0010.md)
+- **Attention is an unmatched `permission.requested`**, plus `session.error` and `abort` as terminal states. This replaces `AT_RISK`, which is not computable from generic events. [c-0010](./cycles/c-0010.md)
+- **`assistant.turn_end` must not be read as Attention.** It means the assistant yielded control, not that a human is required. [c-0010](./cycles/c-0010.md)
+- **`inbox_entries` is an intra-Fleet path, not an inter-Fleet one.** Across all 674 local session databases it holds 27 rows, every sender a `background-agent` or `sidekick-agent` reporting to its owning session - never a peer session. It is the subagent reporting channel and offers nothing for cross-Fleet messaging. [c-0010](./cycles/c-0010.md)
+- **`unread` must not be read as "the human has seen this."** All 27 observed rows carry `unread = 1`; the flag is never cleared in persisted state. [c-0010](./cycles/c-0010.md)
 
 ## Unresolved requirements
 
@@ -92,11 +103,11 @@
 - The acceptable provider-specific degradation when runtime controls are experimental.
 - Whether the Electron route's real BrowserWindow and packaging seams hold once the external Electron dependency is available.
 - ~~**Workspace versus Worktree.**~~ **Resolved in c-0007.** A Fleet prefers its own Worktree, not as a hard rule. `Workspace` is retired as a structural term because Copilot and Visual Studio Code both own it.
-- **How a Fleet is made aware of its siblings.** The requirement that a Fleet knows other Fleets may be working is confirmed, but the mechanism - injected instructions, a shared state file, a tool, or runtime context - is undecided. [c-0007](./cycles/c-0007.md)
-- **What Maestro uses for Attention now that the ledger is excluded.** `AT_RISK` was the only computable actionable-versus-absorbable rule found, and the fully generic decision puts it out of reach. A replacement must be derivable from generic runtime events. [c-0007](./cycles/c-0007.md)
-- **Whether the tree renders arbitrary depth or a bounded depth.** Copilot emits `subagent.started` and `subagent.completed` generically, but the observed orchestration shape is three tiers with typed roles. [c-0007](./cycles/c-0007.md)
-- **Whether `inbox_entries` inter-session messaging is in scope.** Copilot session state carries a table with sender, recipient session, unread, and read-at columns. No cycle has considered cross-Fleet messaging. [c-0007](./cycles/c-0007.md)
-- **Whether the 8-Fleet ceiling survives worktree-per-Fleet in a large monorepo**, given duplicated build artifacts and editor indexes. [c-0007](./cycles/c-0007.md)
+- ~~**How a Fleet is made aware of its siblings.**~~ **Resolved in c-0010:** it is not. Fleets are fully isolated; the human is the only integration point.
+- ~~**What Maestro uses for Attention now that the ledger is excluded.**~~ **Resolved in c-0010:** an unmatched `permission.requested`, plus `session.error` and `abort`. Unproven in the blocking case, because no unresolved request was found in local evidence.
+- ~~**Whether the tree renders arbitrary depth or a bounded depth.**~~ **Resolved in c-0010:** arbitrary depth, optimised for breadth. Measured real depth was 2, with fan-out dominating.
+- ~~**Whether `inbox_entries` inter-session messaging is in scope.**~~ **Resolved in c-0010:** out of scope, and misread. It is the subagent-to-owning-session channel, not a peer channel.
+- **Whether the 8-Fleet ceiling survives worktree-per-Fleet in a large monorepo.** Narrowed in c-0010: git cost is negligible and file descriptors are not a risk, so the question reduces to duplicated untracked and build state. Still unmeasured against the actual target monorepo, and now sharper because worktrees are mandatory.
 - ~~**In-app editing is contradicted.**~~ **Resolved in c-0008:** read-only viewers plus an "open in Visual Studio Code" action. No editor is built.
 - Whether the Sessions ceiling of 8 and the host-capacity guardrail need distinct user-facing treatment when the guardrail binds first.
 - **Whether `herdr` remains in the architecture at all.** Its detached-daemon lifetime directly contradicts the process-ownership requirement. Either Maestro replaces it with directly owned child processes, or it must prove `herdr` can be run in a non-detaching mode it fully controls. [c-0006](./cycles/c-0006.md)

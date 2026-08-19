@@ -2,17 +2,17 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 10
+revision: 11
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-19T08:47:53-04:00
 anchor-status: unchanged
 question-group-size: 12
-last-question-group-size: 7
-last-cycle: c-0009
+last-question-group-size: 2
+last-cycle: c-0010
 cycle-state: complete
-state-digest: b1fa9ebff5fa9388266729b0a978f003a513b0dd0381f4f75e2996813b62a314
+state-digest: 9f45f872c9250e1e51591d07cc486d3b47dc14e8d653eaa5f944af693b564cfc
 root-map-digest: d3619f69cbe739cbf5c24bacb53c809a060a32a1980f21830bd8d6f072e6bb2d
-root-lexicon-digest: 1315c0623a502cd61b8b0ec1a93a4979fb1c61b7d904be0e9d79dca3466bdba6
+root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
 state-scope: full
@@ -50,7 +50,7 @@ isolation, and restart reconciliation.
 | subagent | confirmed | A delegated unit of work under a Fleet's Session, emitting `subagent.started` and `subagent.completed`. Spelled as the runtime spells it. | Copilot runtime | Sub-agent (superseded spelling); Squad Mate (deprecated) | Copilot event stream; Issue #6; c-0007 | c-0001 | c-0007 | subagent tree, Task | session:maestro-graphical-agent-orchestrator |
 | subagent tree | confirmed | The nested visible hierarchy of a Fleet's subagents. | Maestro orchestration | Sub-agent tree (superseded spelling); Squadron (deprecated); Swarm (deprecated) | Issue #6; c-0005; c-0007 | c-0001 | c-0008 | Fleet, subagent | session:maestro-graphical-agent-orchestrator |
 | Task | confirmed | The runtime's handle for a unit of delegated or background work; `/tasks` manages "tasks (subagents and shell commands)" and `--resume` accepts a task ID. A tree node's underlying handle. | Copilot runtime | none | Copilot CLI `--help`; c-0007 | c-0007 | c-0007 | subagent, Session | session:maestro-graphical-agent-orchestrator |
-| Worktree | confirmed | The git worktree a Fleet operates in. **Strong default: one per Fleet**, reinforced but not enforced. Implies branch-per-Fleet, since two worktrees cannot share a branch. | Maestro product | none | c-0007 experiment; firstmate-arch.md | c-0005 | c-0008 | Fleet | session:maestro-graphical-agent-orchestrator |
+| Worktree | confirmed | The git worktree a Fleet operates in. **Exactly one per Fleet, enforced**; Fleets never share a checkout (c-0010). Implies branch-per-Fleet, since two worktrees cannot share a branch. | Maestro product | none | c-0007 experiment; c-0010 measurement; firstmate-arch.md | c-0005 | c-0010 | Fleet | session:maestro-graphical-agent-orchestrator |
 | Workspace | deprecated | Retired as a structural term in c-0007: triple-booked across Copilot (`workspace.yaml`, `~/.copilot/workspaces/`), Visual Studio Code, and this model. | Maestro product | none | c-0007 | c-0001 | c-0008 | Fleet, Worktree | session:maestro-graphical-agent-orchestrator |
 | Parked | confirmed | A Fleet deliberately stopped by the user: durable state persisted, processes terminated, uncommitted work preserved. Not teardown. A **Fleet state**, on the intent axis. | Maestro Fleet | none | c-0005 | c-0005 | c-0007 | Interrupted, Fleet | session:maestro-graphical-agent-orchestrator |
 | Interrupted | confirmed | A Fleet stopped unintentionally, leaving in-flight work dangling. The opposite of `Parked` and distinguishable from it in the store. A **Fleet state**. | Maestro Fleet | none | Issue #9; c-0005 | c-0005 | c-0007 | Parked, Fleet | session:maestro-graphical-agent-orchestrator |
@@ -67,7 +67,7 @@ isolation, and restart reconciliation.
 - Maturity: researched
 - Priority: P0
 - Outcome: Prove the shared Maestro MVP contract through one complete real flow on Electron, judged primarily on lifecycle ownership - durable Fleet state with strictly ephemeral processes and verified-zero orphans on quit - and on a three-column Visual Studio Code-shaped layout where selecting a Fleet re-scopes every panel and always presents that Fleet's primary agent window.
-- Open questions: Does packaging, as opposed to the development-run lifecycle, preserve the supervision property? Do live Copilot sessions with their own signal handlers tear down like the synthetic trees? How is a Fleet made aware of its siblings? What replaces `AT_RISK` as the Attention rule now that skill-specific ledgers are excluded? Does the tree render arbitrary depth or bounded depth? Does the 8-Fleet ceiling survive worktree-per-Fleet in a large monorepo? What bounded feasibility probes should run for WezTerm, Tauri/Rust, and native macOS?
+- Open questions: Does packaging, as opposed to the development-run lifecycle, preserve the supervision property? Do live Copilot sessions with their own signal handlers tear down like the synthetic trees? Does the Attention predicate hold against a genuinely blocked session, which local evidence never contained? Does the 8-Fleet ceiling survive mandatory worktree-per-Fleet in the actual target monorepo? What bounded feasibility probes should run for WezTerm, Tauri/Rust, and native macOS? (Sibling awareness, the Attention rule, tree depth, and the messaging surface were resolved in c-0010.)
 - Evidence: [Issue #1](https://github.com/jdylanmc/maestro/issues/1); [Issue #18](https://github.com/jdylanmc/maestro/issues/18); [Issue #12](https://github.com/jdylanmc/maestro/issues/12); [Issue #6](https://github.com/jdylanmc/maestro/issues/6); [Issue #9](https://github.com/jdylanmc/maestro/issues/9); [c-0005 wireframe and firstmate research](./cycles/c-0005.md); [c-0006 live orphan-process forensics](./cycles/c-0006.md); [c-0007 worktree experiment, ship-with-squadron specification, and Copilot vocabulary extraction](./cycles/c-0007.md)
 - Links: none
 - First seen: c-0001
@@ -82,7 +82,7 @@ isolation, and restart reconciliation.
 
 | Node | Fog | Maturity | Priority | Blocked by | Open questions |
 | --- | --- | --- | --- | --- | --- |
-| n-0000 | decision-ready | researched | P0 | none | Packaging versus development-run lifecycle; live Copilot signal handling; sibling awareness; the Attention rule; tree depth; the 8-Fleet ceiling under worktree isolation |
+| n-0000 | decision-ready | researched | P0 | none | Packaging versus development-run lifecycle; live Copilot signal handling; the Attention predicate under a real block; the 8-Fleet ceiling in the target monorepo |
 
 ## Priority Debt
 
