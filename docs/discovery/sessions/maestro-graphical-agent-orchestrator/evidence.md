@@ -680,3 +680,94 @@ comparison is against a corrected value and must not read the change as drift.
 - The Q4 verification-seam decision was taken by the loop with the user absent,
   under the standing `delegated-to-loop` policy. It is the only decision in this
   cycle not made in a live user turn.
+
+## c-0013 - The ACP seam, probed
+
+One approved prototype, run in
+`.discovery-prototypes/maestro-graphical-agent-orchestrator/n-0008-c-0013/` and
+cleaned up: a minimal Node JSON-RPC-over-stdio client speaking to
+`copilot --acp`. Selected by rule 2 - **the first cycle in which priority debt
+has ever driven selection**.
+
+### The protocol works, and it is richer than the event log
+
+`initialize` -> `session/new` -> `session/prompt` completed with
+`stopReason: end_turn`. The agent advertises
+`agentCapabilities {loadSession: true, sessionCapabilities: {close, list},
+promptCapabilities: {image, embeddedContext}}` and reports itself as Copilot
+`1.0.81-5` - a different build than the invoking binary, 1.0.80.
+
+Streaming arrives as `session/update` notifications:
+
+| Update | Carries |
+| --- | --- |
+| `agent_message_chunk` | streamed assistant text |
+| `tool_call` | `toolCallId`, `title`, `kind`, `status: pending`, `rawInput` |
+| `tool_call_update` | `status: completed`, `content`, `rawOutput` |
+| `available_commands_update`, `usage_update`, `config_option_update` | session metadata |
+
+`tool_call` and `tool_call_update` are exactly the per-node Activity line the
+interface requirements ask for, delivered as structured data rather than scraped
+text.
+
+### It never asks permission
+
+No `session/request_permission` arrived, and the ACP sessions' `events.jsonl`
+recorded **zero** permission events - `tool.execution_start` straight to
+`tool.execution_complete`, with the shell command executed and the file created.
+
+Run twice, once declaring `clientCapabilities {fs, terminal}` and once declaring
+`{}`; identical. **Control:** the c-0012 pseudo-terminal session ran with the
+same environment, same working directory, and same binary and **did** prompt,
+and `env` carries no `COPILOT_ALLOW_ALL`. The difference is the mode.
+
+This is a negative result, so it is evidence of absence only for this build and
+this invocation. The Agent Client Protocol itself defines
+`session/request_permission`; this implementation did not send it.
+
+### It will not name a session, but it will list and resume them
+
+`session/new` accepted a `name` parameter and ignored it: the created session's
+`workspace.yaml` shows `user_named:` empty. That file does carry `cwd`,
+`git_root`, `branch`, and `client_name: github/acp`.
+
+`session/list` returned 50 sessions with `sessionId`, `cwd`, `title`, and
+`updatedAt`. Pseudo-terminal sessions show their `-n` name as the title; ACP
+sessions show an auto-derived title.
+
+`session/load` resumed a prior session **with history intact** - asked what
+command it had been given, the resumed session answered "You asked me to run
+`touch blocked.txt`." Restart reconciliation therefore has a working mechanism,
+which no cycle had demonstrated before.
+
+### The decision, and why the recommendation was dropped
+
+The loop recommended that Maestro own the permission boundary by denying
+sensitive tools at the process level and exposing gated equivalents through its
+own Model Context Protocol server. The user delegated the decision and supplied
+the context that killed it: "I usually run in yolo mode with many permissions."
+
+A mediation layer sized for a user who lives behind permission prompts would
+have been built to service a slice step rather than a user, and it would have
+contradicted the confirmed decision that Maestro reads only generic runtime
+evidence. It was dropped. Attention is derived from what the seam provides -
+`session.error`, `abort`, and the tool-call status stream - with unmatched
+`permission.requested` retained wherever a mode surfaces it, and ACP permission
+support recorded as an upstream dependency with a re-test trigger on every CLI
+upgrade.
+
+Two confirmed requirements were changed by this, both under delegation rather
+than user confirmation, and both flagged revisitable: acceptance-slice step 5
+now reads "a state that requires the human" rather than naming the permission
+signal, and the runtime-naming requirement narrows to binding by `sessionId`
+with a Maestro-owned display name.
+
+### Limitations
+
+- No subagent was spawned, so `subagent.started` was never exercised through
+  ACP. The subagent tree's live path is confirmed only for the shared
+  `events.jsonl`.
+- One CLI build, and the ACP server reported a different version than the
+  invoking binary, so the permission behavior may not be stable across releases.
+- The probe answered a permission-free path only; nothing was measured about
+  what an ACP client should render while a tool call is `pending`.

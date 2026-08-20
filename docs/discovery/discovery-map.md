@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0012
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0013
 ---
 
 # Primary Discovery Map - Maestro
@@ -18,7 +18,7 @@ restart behavior.
 
 | Session | Kind | Priority | Maturity | Active fog | Major blockers | Package |
 | --- | --- | --- | --- | --- | --- | --- |
-| maestro-graphical-agent-orchestrator | vertical | P0 | researched | Drive all four routes to a complete MVP one at a time - v2 Electron, then v1.1 WezTerm, v3 Tauri/Rust, and v4 native macOS Swift - each executing one identical six-step acceptance slice verified by one shared route-agnostic Acceptance Harness and producing a per-stack executive report, then select the durable technology in a terminal comparative evaluation. | Two P0 blockers inherited by every route: the Copilot integration mode, because a non-interactive Session can never surface Attention; and the unbuilt Acceptance Harness. Both are open priority debt against the three later routes. | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
+| maestro-graphical-agent-orchestrator | vertical | P0 | researched | Drive all four routes to a complete MVP one at a time - v2 Electron, then v1.1 WezTerm, v3 Tauri/Rust, and v4 native macOS Swift - each executing one identical six-step acceptance slice verified by one shared route-agnostic Acceptance Harness and producing a per-stack executive report, then select the durable technology in a terminal comparative evaluation. | One P0 blocker inherited by every route: the unbuilt Acceptance Harness, still open priority debt against the three later routes. The integration mode was settled in c-0013 - ACP - leaving one upstream assumption, that some Copilot release will surface permission requests over that protocol. | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
 
 ## Typed Session Links
 
@@ -39,5 +39,5 @@ restart behavior.
 - Closing the application auto-Parks every Fleet behind an acknowledged pre-close summary.
 - Credentials, authentication state, employer configuration, and runtime state stay outside the repository.
 - A route that cannot build the app is **rejected**, and the reason is an input to the comparative evaluation rather than an absence from it.
-- A Fleet must run an **interactive** Copilot Session. Measured in c-0012: a non-interactive Session auto-denies every permission request, so Attention can never fire and the acceptance slice cannot complete.
+- A Fleet is driven through `copilot --acp`, settled in c-0013: it streams tool-call status, lists sessions, and resumes them with history. It does not ask permission and does not accept a session name, so Attention is mode-dependent and a Fleet is bound by `sessionId` with a Maestro-owned display name. Non-interactive `-p` mode is excluded outright - it auto-denies.
 - Route completion is judged by one shared Acceptance Harness asserting external ground truth, never by a route reporting on itself.
