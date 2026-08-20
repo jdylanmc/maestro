@@ -9,6 +9,27 @@ confirmed there: `Fleet`, `Session`, `Task`, `Primary Agent`, `Agent`,
 `subagent`, `subagent tree`, `Parked`, `Interrupted`, `Liveness`, and
 `Worktree`.
 
+**A thirteenth was confirmed in c-0019: `Recap`.** `/domain-mapping` ran the
+c-0019 handoff and added a new `Account` group to
+[`CONTEXT.md`](../../../../CONTEXT.md):
+
+> **Recap** - A short account of what a Fleet was doing and where it got to,
+> produced for a human returning to it without context. Derived from the Fleet's
+> durable state and history rather than reported by its processes.
+> Discouraged aliases: `Orientation`, `status`, `summary`.
+
+Two findings are worth keeping. First, the term the user proposed - `Orientation` -
+was **rejected on evidence**: it was already triple-booked across the
+`## Scope and Orientation` heading in eight files under `v2/docs/reference/`, the
+executive report's lead section, and this capability. That is the same failure
+that retired `Workspace` in c-0007, caught before it was recorded rather than
+after. Second, the concept needed a **new group** rather than a slot under
+`Condition`, because it is not a condition: a Fleet can be correctly `Parked`
+with `Liveness` `Dead` and `Attention` false while the human still cannot act,
+since none of those says what the work *was*. No Architecture Decision Record was
+created - the decision fails part 1 of the three-part gate, because nothing is
+built and the rename is cheap to reverse.
+
 **A twelfth was confirmed in c-0016: `Attention`.** `/domain-mapping` ran in a
 live user turn, discharging the handoff staged in c-0012 and left `pending` for
 three cycles because the confirmation gate needs a user present.

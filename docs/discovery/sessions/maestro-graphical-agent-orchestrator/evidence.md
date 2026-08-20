@@ -1429,3 +1429,90 @@ recovery path.
   disclosed rather than removed.
 - Node `History` fields still exceed the schema's five-entries-plus-compaction
   bound. Third cycle disclosed, third cycle not fixed.
+
+## c-0019 - The first promotion, and a term renamed before it was recorded
+
+**The anchor was reconciled through `/discovery`, and it moved toward the tree
+rather than away from it.** Issue #1's body had contradicted confirmed c-0010
+state for seven consecutive cycles. The reconciliation corrected five things and
+removed four dead fog items:
+
+| Corrected | From | To |
+| --- | --- | --- |
+| Worktree policy | "a strong default, reinforced but not enforced" | a hard rule; one Worktree per Fleet, never shared |
+| Sibling awareness | "A Fleet must know that other Fleets may be working concurrently" | reversed - Fleets are fully isolated and unaware |
+| Integration seam | naming the Session through `-n, --name` | the Copilot SDK, with `sessionId` binding and a Maestro-owned display name |
+| Issue #18 route scope | "every candidate must be a working end-to-end MVP" | split by route in c-0018 - two committed, two reduced to probes |
+| Attention | **absent from the map entirely** | a new `Attention and observability` decision group |
+
+Four `Not yet specified` items were already answered and were removed: sibling
+awareness, the `AT_RISK` replacement, subagent tree depth, and inter-session
+messaging - all resolved in c-0010. The 8-Fleet ceiling was narrowed to duplicated
+untracked and build state and recorded as an accepted known unknown with a revisit
+trigger. Verified by content digest against the intended bytes; the only delta was
+a single trailing newline GitHub appends to every issue body.
+Evidence: <https://github.com/jdylanmc/maestro/issues/1#issuecomment-5359304402>
+
+**Three of the five corrections had never been tracked by this loop.** Only the
+two Isolation bullets were carried as the known divergence. The stale seam
+decision, the falsified Issue #18 clause, and the wholly missing Attention group
+were found by reading the anchor against `requirements.md` line by line rather
+than against the loop's own record of what was wrong. A divergence note records
+what a cycle *noticed*, not what is *true*, and the gap between those grew for
+seven cycles.
+
+**The branch gate was misread for two cycles, and the misreading was the blocker.**
+c-0017 and c-0018 both recorded n-0001's maturity as a precondition for promoting
+n-0009, on the reasoning that n-0001 is n-0009's parent in the tree. The gate does
+not say that. It requires the **branch node** of the promoted subtree and every
+**leaf selected for promotion** to be at the promotion values, and it explicitly
+folds deeper conceptual nodes into branch or story context. With n-0000 as the
+Branch and n-0003 and n-0009 as the Stories, n-0001 and n-0002 are exactly those
+deeper nodes - the acceptance-slice specification and the provider contract - and
+their content belongs in the Story bodies, which is where it went. Tree parentage
+is not promotion shape. n-0001 reached `promotion-ready` this cycle anyway, so the
+question is moot in both directions, but the two cycles it cost were spent on a
+constraint the loop invented for itself.
+
+**A question about report comparability had a product requirement hiding inside
+it.** Asked what evidence makes four executive reports comparable, the user
+accepted the fixed template and then said *"the intention is that I may come back
+to a session and not remember what is going on and want a quick 'what were we
+doing and where are we at'."* The word `session` is a **confirmed term** in this
+session's lexicon meaning a Copilot Session, so the sentence had two readings with
+very different costs: a report section, or a product capability that would re-open
+both promotion-ready leaves. Q2 disambiguated instead of guessing. The answer was
+"report now, product capability as P1" - and it produced a new node and a new term.
+
+**`Orientation` was rejected as a term, on evidence, before it was ever
+recorded.** The user proposed it. A repository search found `## Scope and
+Orientation` as a section heading in **eight** files under `v2/docs/reference/`,
+which - with the executive report's lead section and the proposed product
+capability - made it triple-booked on arrival. That is the same failure that
+retired `Workspace` in c-0007, and `Workspace` was caught only after it had been
+in use. A second objection was structural: every term in `CONTEXT.md` names the
+thing or the **Fleet's** condition, including `Attention`, defined as "*A Fleet*
+observed to want its human". `Orientation` named the *human's* state and would
+have been the only such term. `recap` and `situation` were the only collision-free
+candidates tested; `digest` and `standing` are already heavily used in this
+repository. **`Recap`** was confirmed into a new `Account` group. Digest of the
+written artifact: `acc94bc972249cc3ccd3098aea887af063cb082fc39eda51416b39199ca535e1`.
+
+**The first promotion in nineteen cycles.** Under the tier map approved in the
+same cycle, n-0000 was published as the Branch - updating
+[Issue #1](https://github.com/jdylanmc/maestro/issues/1) with its promotion key -
+and two Stories were created as native sub-issues:
+[#29 Build the working v2 Electron Maestro MVP](https://github.com/jdylanmc/maestro/issues/29)
+(`discovery:prototype`, `proto-v2.0`, `ready-for-agent`) and
+[#30 Build the route-agnostic Acceptance Harness for the Maestro MVP](https://github.com/jdylanmc/maestro/issues/30)
+(`discovery:task`, `ready-for-agent`), with #29 carrying a native blocked-by edge
+to #30. All three verified against the approved preview after the apply. The
+Electron title matches the shape already used by #23, #24, and #27 - v2 was the
+only route whose build issue had never been created, which is a small sign that
+the route carrying all the evidence was also the one nobody had written down.
+
+**Tooling note.** `gh api --method POST .../sub_issues -f sub_issue_id=<n>` fails
+with HTTP 422 because `-f` sends a string and the field is typed `integer`; `-F`
+is required. Separately, `gh issue edit --body-file` appends exactly one trailing
+newline, so post-write verification must compare `rstrip`-normalized content
+digests rather than raw bytes, or every correct write reports a false mismatch.

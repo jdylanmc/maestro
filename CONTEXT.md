@@ -85,3 +85,13 @@ Discouraged aliases: `AT_RISK`
 
 The isolated checkout a Fleet works in. Every Fleet has exactly one of its own,
 which implies its own branch. Fleets never share a checkout.
+
+### Account
+
+**Recap**
+
+A short account of what a Fleet was doing and where it got to, produced for a
+human returning to it without context. Derived from the Fleet's durable state
+and history rather than reported by its processes.
+
+Discouraged aliases: `Orientation`, `status`, `summary`
