@@ -1112,3 +1112,135 @@ LaunchServices reparenting to `launchd` while still reaching zero survivors -
 holds for a packaged unsigned `.app`. This retires n-0003's last open question
 by scoping it out rather than deferring it indefinitely, and keeps one binary
 under test so no step is verified against a binary the user does not run.
+
+## c-0017 - Two leaves clear, and the constraint moves above them
+
+No measurement this cycle. Every advance is a reclassification, a settled rule,
+or a gate evaluation, and that is stated rather than dressed up.
+
+Selection was rule 3 (shared blocker) for the second consecutive cycle. The
+deterministic tie-break reached **n-0008**, not n-0009: with n-0009 advanced to
+`decision-ready` in c-0016, n-0008 became the only P0 candidate still at
+maturity `researched`, so the lower-maturity tie-break resolved before the
+dependent-count tie-break ran. The user authorized either node, and n-0009 was
+taken because it was the sole remaining gate on n-0003 and therefore on the MVP.
+`selection-source: user`.
+
+### One question was spent and returned nothing, for the second time in three cycles
+
+The loop asked how the harness should prove it is not vacuously passing, with a
+recommendation and an alternative. The answer was a rejection of the question
+itself: *"this seems like internal banter that you need to resolve. I don't see
+any product decisions here. You should reframe this as a product decision if you
+need my input."*
+
+c-0015 recorded the same failure from a different direction - a question framed
+in the loop's internal vocabulary, answered with *"I'm not sure I even follow
+what you are asking."* c-0017's question was perfectly comprehensible and still
+wrong, because it was not the user's to answer: it was an engineering-quality
+decision about **this loop's own verification apparatus**, not about what
+Maestro is or does.
+
+The standing correction, recorded because two instances make it a pattern rather
+than an incident: **before spending a grounded question, test whether the answer
+changes what the product is or does for its user. If it only changes how this
+loop verifies something, the loop owns it.** The question budget exists to buy
+decisions the user alone can make, and both wasted questions failed that test in
+different ways - one by being unintelligible, one by being irrelevant to them.
+
+### The fuse question does not gate the MVP, and never did
+
+n-0009 carried "does disabling `enableNodeCliInspectArguments` block Playwright"
+as an open question after c-0016 failed to establish it. Re-reading it against
+c-0016's own build decision retires it as a blocker without any new work:
+
+- the MVP ships an **unsigned, fuse-enabled** `.app` (c-0016 decision);
+- Playwright was measured attaching to exactly that build, 3/3, packaged;
+- the fuse question is only live for a build that turns fuses **off**, which is
+  the configuration the MVP has explicitly deferred;
+- `requirements.md` already carried the trigger - "the first Electron route
+  build that configures fuses at all".
+
+It becomes an accepted unknown with its risk and trigger, and no prototype was
+run. The user had pre-authorized one ("do the next required prototype if
+necessary"); it was not necessary, and a general authorization is not the
+`Approve prototype <node-id>` gate string in any case, so nothing was proposed.
+
+This is worth recording as its own finding: **an open question inherited across
+cycles can stop being load-bearing without anyone re-deriving it.** c-0016
+recorded the fuse question and the unsigned-build decision in the *same cycle*
+and did not notice that the second retires the first.
+
+### The harness's missing gate condition was its own verification seam
+
+n-0009 sat at maturity `decision-ready` rather than `promotion-ready`, and the
+condition it failed was number 9: a verification seam. For a **verification
+apparatus** that condition is circular unless answered explicitly - the question
+"what verifies the verifier" has no external answer, so it must be designed in.
+
+The answer is the generalisation of the one control c-0016 actually measured:
+
+> The Acceptance Harness runs a **paired-falsification suite** against itself,
+> first, on every run. Every assertion in both layers ships with a fixture it
+> must **fail** on. The negative suite executes before the route suite; if any
+> negative case passes, the harness declares **itself** broken and refuses to
+> report on the route at all.
+
+Granularity is per assertion, not per slice step, because the near-miss in
+c-0016 was at assertion granularity: an auto-retrying `expect()` that passes is
+indistinguishable from one that never tested anything, and a step can pass with
+four assertions of which three are vacuous. The State Oracle needs it at least
+as much as the Presentation Check, in a different shape - a "both worktrees
+exist" assertion written as a subset test passes trivially on empty `git
+worktree list` output - and the Oracle is the layer nobody would think to doubt,
+because no route can influence it.
+
+Settled by the loop under `delegated-to-loop`, and recorded as a rule the
+implementation must satisfy rather than as something demonstrated at six-step
+scale. Its first honest test is the harness's own first run.
+
+### The finding that matters: the leaves are ready and the branches are not
+
+With n-0009 cleared, n-0003's last blocker is gone. Both were evaluated against
+the eleven-condition leaf gate and both pass:
+
+| Node | Fog | Maturity | Verification seam | Accepted unknowns |
+| --- | --- | --- | --- | --- |
+| n-0009 Acceptance Harness | cleared | promotion-ready | the paired-falsification suite | the fuse question, with risk and trigger |
+| n-0003 v2 Electron MVP | cleared | promotion-ready | the Acceptance Harness | inherits n-0008's quota-gated permission-callback unknown |
+
+**Neither can be published.** The promotion gate requires the branch node to be
+at fog `cleared` **and** maturity `promotion-ready`, with no exception for a
+branch at `decision-ready`. n-0000 is at `decision-ready` / `researched`;
+n-0001 is at `decision-ready` / `decision-ready`. Both fail.
+
+This inverts the shape of the session. For six cycles the constraint on shipping
+was fog on the leaves - the seam, the harness, the packaging, the Attention
+predicate. It no longer is. What blocks the Electron MVP from becoming real work
+items is:
+
+1. **n-0001's one open product question** - what evidence each route's executive
+   report must carry so four reports are genuinely comparable. It has sat
+   unasked since c-0011 while every cycle selected something below it.
+2. **n-0000's maturity**, which has been `researched` since c-0005 and was never
+   re-raised after c-0011 moved all of its questions down to children. The
+   decomposition that made the tree usable also left its root behind.
+3. **Issue #1's stale "Isolation" section**, seventh cycle. Cosmetic until now;
+   load-bearing from now, because Issue #1 is the tracker parent that promoted
+   MVP work would hang beneath, and it contradicts the confirmed c-0010 state
+   those work items would be specified from.
+
+The first is a question. The second follows from the first. The third needs
+`/discovery`, which this loop may not run.
+
+### Limitations of this cycle
+
+- Nothing was measured. n-0009 reaches `promotion-ready` on a design decision.
+- The paired-falsification rule is asserted at six-step scale and demonstrated
+  at one-assertion scale.
+- n-0003 advanced without being the selected node, as a consequence of its last
+  blocker clearing. That is legitimate under the fog transition rules but it
+  means no cycle has ever examined n-0003 deeply with it unblocked.
+- `discovery.md`'s node `History` fields exceed the schema's five-entries-plus-
+  compaction bound and were left uncompacted again, to avoid rewriting
+  provenance under a mechanical edit. Disclosed rather than silently fixed.
