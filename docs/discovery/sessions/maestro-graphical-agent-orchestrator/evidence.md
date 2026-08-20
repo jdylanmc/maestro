@@ -868,3 +868,85 @@ that; only the reinterpretation step did, one cycle later.
   a CLI of a different version, so the surface may move between releases.
 - No check was made for a session rename over RPC, and no subagent was spawned,
   so the SDK's typed-event path for `subagent.started` is unconfirmed.
+
+## c-0015 - The harness splits in two, and the rubric gains its first criterion
+
+No measurement this cycle. Selection was rule 2 for the third consecutive time,
+on n-0009 - the last node holding priority debt.
+
+### The question had to be asked twice
+
+The loop's first attempt was rejected outright: "I'm not sure I even follow what
+you are asking." It had been framed in the loop's own vocabulary - state truth
+versus presentation truth, route-agnostic assertion - which is precise and
+useless to the person answering. Restated in plain terms, without counting a
+second question against the budget, it was answered immediately and then
+improved on.
+
+Recorded because it is a repeatable failure: the loop's internal vocabulary is
+the thing it thinks in, and reaching for it in a user-facing question spends the
+user's attention on translation rather than on the decision.
+
+### The split that survived
+
+The six slice steps sort by whether anything outside the application can
+establish them:
+
+| Step | External ground truth | Presentation claim |
+| --- | --- | --- |
+| 1 two Fleets, own worktree and branch | `git worktree list`, `git branch`, durable state | none |
+| 2 primary agent window bound 1:1 | SDK `listSessions()` | the window exists |
+| 3 subagent tree with correct parentage | `events.jsonl`, `toolCallId` -> `agentId` | it renders live |
+| 4 select Fleet B, panels re-scope | **none** | entirely visual |
+| 5 Attention on that Fleet only | `permissions.pendingRequests()` | where it appears |
+| 6 zero survivors, relaunch intact, resume | `ps` by process group, on-disk state, `resumeSession` | none |
+
+Three steps are fully external; three carry a presentation half; step 4 has no
+external truth at all. That asymmetry is the whole design: a **State Oracle**
+that needs no cooperation from the route, and a **Presentation Check** that
+does.
+
+The State Oracle matters beyond convenience. Because it asks `git`, `ps`, the
+event log, and the SDK rather than the application, a route cannot assert its
+own success, and no stack is advantaged by being easier to instrument. It is the
+same discipline that made c-0009 and c-0012 trustworthy, generalised.
+
+### What the user changed
+
+The loop asked who checks the visual steps. The user answered a different and
+better question: **user-interface automation belongs in the stack selection**,
+because automated regression checks are the work that follows the MVP.
+Storybook and Playwright were named as reference points.
+
+Then, in the next turn, two constraints that sharpened it further: **"i can't
+afford human testers, so we will test with machines as much as we can"** and
+**"but first - we have to prove an MVP on a stack."**
+
+Together these settle more than the question asked:
+
+- a manual step is a stopgap of last resort, and its survival into a route's
+  verification is a **cost recorded against that route**;
+- how far each route automates the Presentation Check **is** the evidence for
+  the rubric criterion, so the criterion is measured rather than assessed;
+- harness work is sized for the Electron route only - breadth before a proven
+  MVP would repeat the pattern that produced c-0013's premature seam decision.
+
+### The criterion is not neutral, and that is recorded
+
+A component-driven web stack reaches Storybook and Playwright directly; Tauri
+reaches Playwright through WebDriver; Swift uses XCUITest; a terminal surface
+exposes almost nothing to any of them. Naming user-interface automation as a
+criterion therefore predicts part of the ranking before any route is built.
+
+That is a legitimate product decision by the person who owns it, and it is
+recorded as one rather than presented as a neutral measurement - so that when
+the evaluation reaches the WezTerm route, the reason it scores badly is visible
+as a choice made in c-0015 rather than as a discovery made at the end.
+
+### The priority-debt table emptied
+
+Over four cycles it did its whole job: opened in c-0012 with six rows, blocked
+three routes from gaining depth while two provider-level questions were
+unsettled, **reopened automatically in c-0014** when a settled decision lost its
+evidence, and emptied in c-0015 once both questions were genuinely understood.
+With it empty, rule 2 stops firing and selection returns to the higher rules.
