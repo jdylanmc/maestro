@@ -1516,3 +1516,79 @@ with HTTP 422 because `-f` sends a string and the field is typed `integer`; `-F`
 is required. Separately, `gh issue edit --body-file` appends exactly one trailing
 newline, so post-write verification must compare `rstrip`-normalized content
 digests rather than raw bytes, or every correct write reports a false mismatch.
+
+## c-0020
+
+**Selected node: n-0008 - Copilot integration mode.** Rule 3 (shared blocker), deterministic,
+fourth consecutive cycle. No prototype was proposed and no research was delegated; every finding
+below is a first-party read or a direct measurement made in the parent loop.
+
+### The classification that was wrong
+
+c-0019 recorded all three of n-0008's open questions as prototype-gated, one of them explicitly as
+needing "an `npm install` in an isolation path, **not** a free read". The Copilot SDK is in fact
+already on disk, with full typings, in five installed versions:
+
+```text
+~/.copilot/pkg/darwin-arm64/{1.0.80,1.0.81-0,1.0.81-1,1.0.81-3,1.0.81-5}/copilot-sdk
+```
+
+Two of the three questions were therefore repository-fact class all along, and both were answered
+read-only. **The lesson is not that the SDK moved; it is that a cost was asserted rather than
+checked, and then carried forward unexamined for six cycles.** The same node had already produced
+one instance of this in c-0014, where a seam was chosen without looking at a third option that was
+sitting in the same package.
+
+### Findings from the SDK typings
+
+| Question | Finding | Citation |
+| --- | --- | --- |
+| Does `subagent.started` reach an SDK client as a typed event? | **Yes**, with `subagent.completed`, `.failed`, `.selected`, `.deselected`, each with a `type` discriminator. | `generated/session-events.d.ts` |
+| Can a client subscribe to just those? | **Yes.** `EventsAgentScope` `'primary'` returns "main-agent events plus events whose type starts with `subagent.`". | `generated/rpc.d.ts:426` |
+| Is `parentId` usable for tree structure? | **No**, in the vendor's own words: "ID of the chronologically preceding event in the session, forming a linked chain." | `generated/session-events.d.ts` |
+| What is the true parent edge? | `SubagentStartedData.toolCallId` - "Tool call ID of the parent tool invocation that spawned this sub-agent". | `generated/session-events.d.ts` |
+| Does the SDK expose a session rename? | **No** rename API and no name field on `SessionConfig`. But `sessionId?: string` is caller-suppliable - "Optional custom session ID. If not provided, the server generates one" - and `session.title_changed` exists as a typed event. | `types.d.ts:2112` |
+| What does `pendingRequests()` claim? | "Reconstructs the set of pending tool permission requests from the session's event history." Confirms the c-0016 narrowing verbatim. | `generated/rpc.d.ts:19441` |
+
+**Version bound.** All four load-bearing surfaces - `pendingRequests`, `subagent.started`,
+caller-supplied `sessionId`, and `session.title_changed` - are present and identically shaped
+across **1.0.80 through 1.0.81-5**. This is the evidence ADR 0002 has needed since c-0016.
+
+### Measurements against real event logs
+
+Two sessions, **36,517 events**, neither of them among the sessions c-0010 measured.
+
+| Measurement | Result |
+| --- | --- |
+| `ephemeral` events | **0 of 36,517.** All 85 `subagent.started` durably persisted. |
+| `agentId` vs `data.toolCallId` on `subagent.started` | **Identical on all 85.** |
+| Distinct `agentId` vs `subagent.started` count | **Exactly equal** (15/15 and 70/70) - 1:1, no reuse, no orphans. |
+| Tree construction (parent = emitter of the tool call whose id is the subagent's `agentId`) | **85 subagents, 100% resolved, 0 unresolved.** |
+| Depth | 1 and 2. In the larger session, 43 of 70 nested. **Reproduces c-0010's max depth of 2 with fan-out dominating.** |
+
+**This is a revalidation, not a discovery.** c-0010 had already specified the join and excluded
+`parentId`, and `requirements.md` recorded both. What c-0020 adds is that the rule now holds on
+data it was not derived from, and that the vendor's published types independently say the same
+thing - moving it from a measured inference to a corroborated one.
+
+### The question whose framing failed
+
+Q1 was justified partly by the `ephemeral` completeness gap. The measurement above **deflated that
+justification** - 0 in 36,517 - so the loop re-put the question rather than building on a premise
+it had just weakened. The re-put failed on language: *"Again, treat me like the product manager. I
+have not a clue what you are talking about."* This is the **second** such correction in the session,
+after *"this seems like internal banter that you need to resolve."* Recorded as a loop defect.
+
+Re-framed in product terms - should helpers appear the moment they start, or fill in when you next
+look? - it answered immediately: **live**. **The decision is unchanged; its justification is not.**
+Live-first now rests on immediacy, which the user chose, rather than on completeness, which
+measurement had just undermined. Recorded because the harness must assert the former, not the latter.
+
+### Limitations
+
+- The one remaining item on n-0008 is untouched: the SDK permission callback has still never been
+  observed firing. It is quota-gated and unchanged since c-0014.
+- The two sessions measured are Copilot CLI sessions on this machine. Nothing here establishes
+  behaviour under a differently configured runtime.
+- `ephemeral` being 0 across 36,517 events bounds its observed frequency; it does not prove the
+  field is never set.
