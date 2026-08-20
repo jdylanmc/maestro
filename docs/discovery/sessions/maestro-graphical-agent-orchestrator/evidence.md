@@ -771,3 +771,100 @@ with a Maestro-owned display name.
   invoking binary, so the permission behavior may not be stable across releases.
 - The probe answered a permission-free path only; nothing was measured about
   what an ACP client should render while a tool call is `pending`.
+
+## c-0014 - The seam was reversed by a question about firstmate
+
+### How the cycle started
+
+The user asked how firstmate handles permissions. Firstmate's answer is that it
+does not: the brief's "mode and yolo contract" is validated at spawn, the
+control plane is three verbs - `interrupt`, `exit`, `relaunch` - with teardown
+permanently excluded, and human involvement arrives through the wake queue's
+actionable/absorbable split rather than through approval prompts. The only
+authority gate is the home lock, and a lock-refused session degrades to
+read-only, which is session authority rather than tool permission.
+
+Answering it required reading the neighbouring reference, and
+`v2/docs/reference/orbit-arch.md` documents an Electron application that
+receives permission requests from the **Copilot SDK**, auto-approves configured
+read-only operations, renders permission cards, resolves them through
+`answerRequest()`, and times an unanswered request out into a denial.
+
+c-0013 had settled the integration seam one cycle earlier after probing exactly
+two of three seams. The third was the one that answers the question.
+
+### Reinterpretation weakened the node the same cycle it was settled
+
+n-0008 took a `weakened` verdict: maturity `researched` -> `vague`. The ACP
+measurements were untouched - what failed was the inference built on an
+incomplete seam survey. The weakening reopened three priority-debt rows, which
+is precisely what forced the re-examination instead of letting the decision be
+inherited.
+
+### The SDK ships inside the platform package
+
+`@github/copilot` on npm is a loader. The SDK is at
+`node_modules/@github/copilot-<platform>/copilot-sdk/`, with full TypeScript
+declarations. c-0013 never looked there.
+
+| Surface | Declaration |
+| --- | --- |
+| `CopilotClient` over stdio, TCP, or in-process FFI | `client.d.ts`, `RuntimeConnection` |
+| `SessionConfig.onPermissionRequest?: PermissionHandler` | `types.d.ts:1872` |
+| Pull model when the handler is omitted | `types.d.ts:1869-1871` |
+| `permissions.pendingRequests()` | `generated/rpc.d.ts:9189-9193` |
+| `permissions.handlePendingPermissionRequest({requestId, result})` | `rpc.d.ts:19439` |
+| `permissions.setApproveAll(...)` | `rpc.d.ts:19453` |
+| `approveAll` helper | `index.js:8758` - `() => ({ kind: "approve-once" })` |
+| Per-tool `skipPermission`; `permissionDecision: allow \| deny \| ask` | `types.d.ts:467-495`, `972` |
+| `listSessions()`, `resumeSession(sessionId, config)` | `client.d.ts:226,321` |
+
+**The Attention predicate turned out to be the runtime's own contract.** The
+generated schema documents `pendingRequests` as returning "the set of
+`permission.requested` events that have not yet been followed by a matching
+`permission.completed` event." That is the sentence c-0010 derived, c-0012
+measured, and c-0013 believed was unavailable - and there is a first-class RPC
+that returns it, so Maestro never needs to reconstruct it from the event log.
+
+The decision union is far richer than a boolean: approve-once,
+approve-for-session, approve-for-location, approve-permanently, reject,
+user-not-available, denied-by-rules, denied-interactively-by-user,
+denied-by-content-exclusion-policy, denied-by-permission-request-hook. The
+user's stated habit - running with broad permissions - is `setApproveAll`, a
+toggle, rather than an architectural position.
+
+### What was verified live, and what stopped
+
+`new CopilotClient()`, `start()`, and `createSession()` succeeded, returning
+session `4dec7e07-b0d7-454c-8ee0-99f617d8e484`. `sendAndWait` then failed:
+**"You have exceeded your monthly quota."** `listModels()` returned only `auto`,
+so there was no cheaper fallback.
+
+**The permission callback was never observed firing.** That is recorded as an
+accepted unknown with a re-test trigger on quota reset, and the user accepted
+settling the seam on documentary evidence in the meantime.
+
+### What this cost, and what it bought
+
+c-0013's ACP decision produced two changes to user-confirmed requirements. One
+is now withdrawn: acceptance-slice step 5 reverts to "Fleet A hits a permission
+request", the wording the user confirmed, because the SDK can surface one. The
+other stands narrowed: no session-name field was found in `SessionConfig`, so a
+Fleet is still bound by `sessionId` with a Maestro-owned display name, pending a
+check for a rename over RPC.
+
+The lesson is not that c-0013 was careless - its measurements were sound and are
+still cited. It is that a seam **survey** was treated as complete when it had
+covered the two seams the loop happened to know about, and a user question about
+an unrelated system exposed the third. Nothing in the cycle protocol catches
+that; only the reinterpretation step did, one cycle later.
+
+### Limitations
+
+- The permission behaviour is established from declarations shipped with the
+  binary and from a second application's independent implementation, not from
+  observation.
+- The bundled SDK reports itself as `@github/copilot-sdk@1.0.9-preview.2` inside
+  a CLI of a different version, so the surface may move between releases.
+- No check was made for a session rename over RPC, and no subagent was spawned,
+  so the SDK's typed-event path for `subagent.started` is unconfirmed.

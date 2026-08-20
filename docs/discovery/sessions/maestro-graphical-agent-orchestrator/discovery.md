@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 14
+revision: 15
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-19T20:00:11Z
 anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 1
-last-cycle: c-0013
+last-cycle: c-0014
 cycle-state: complete
-state-digest: 1d9afe6c99b5fe08f32f82085da5b0fc2ff35a7eb1a3f136909d5ab5d6cf425d
-root-map-digest: a18176a5b954c3f0207d8352f97c7a495ab6a5b6c4452bd275e08ec2cdf7bef2
+state-digest: 4d35f15df2846b5e868ccb7b5e14fccaba15f7508970a9dafc8dad453b59a36e
+root-map-digest: 639e5c81ff66de1bb66bef7b0c4cae122dc1d7c1e8e6889d7bb5b25094ad5d4f
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -75,7 +75,7 @@ isolation, and restart reconciliation.
 - Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007
 - First seen: c-0001
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: **one outstanding (c-0011).** Issue #1's "Isolation" section still reads "Worktree-per-Fleet is a strong default, reinforced but not enforced" and "A Fleet must know that other Fleets may be working concurrently." Both were reversed by confirmed decisions in c-0010. Durable state is ahead of the anchor, not contradicted by it, so no node is invalidated - but the anchor must be reconciled through `/discovery` before a later cycle misreads it as authority. Previously: The c-0005 wireframe's file editor contradicted Issue #12's deferral; c-0008 resolved it in favour of read-only viewers with an "open in Visual Studio Code" action, and no editor is built. **Both c-0007 tracker divergences were reconciled in c-0008.** The map body was rewritten in confirmed vocabulary; #5 carries a correcting comment recording that its naming decision is falsified; #6, #12, #14, and #17 carry vocabulary substitution tables; #6 and #17 were retitled. `CONTEXT.md` is authoritative over any remaining issue-body wording.
@@ -93,7 +93,7 @@ isolation, and restart reconciliation.
 - Links: blocks n-0003, n-0004, n-0005, n-0006; informs n-0007; parent-of n-0009
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #18](https://github.com/jdylanmc/maestro/issues/18)
 - Divergence: none
@@ -111,7 +111,7 @@ isolation, and restart reconciliation.
 - Links: blocks n-0003; parent-of n-0008
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #2](https://github.com/jdylanmc/maestro/issues/2), [Issue #11](https://github.com/jdylanmc/maestro/issues/11)
 - Divergence: none
@@ -129,7 +129,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0001, n-0002, n-0009; blocks n-0004, n-0007; informed-by n-0008 (settled c-0013)
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #4](https://github.com/jdylanmc/maestro/issues/4)
 - Divergence: none
@@ -147,7 +147,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0003, n-0008, n-0009; blocks n-0005, n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #27](https://github.com/jdylanmc/maestro/issues/27)
 - Divergence: none
@@ -165,7 +165,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0004, n-0008, n-0009; blocks n-0006, n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #23](https://github.com/jdylanmc/maestro/issues/23)
 - Divergence: none
@@ -183,7 +183,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0005, n-0008, n-0009; blocks n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #24](https://github.com/jdylanmc/maestro/issues/24)
 - Divergence: none
@@ -201,7 +201,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0003, n-0004, n-0005, n-0006; informed-by n-0001
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
@@ -213,17 +213,17 @@ isolation, and restart reconciliation.
 - Fog: decision-ready
 - Maturity: researched
 - Priority: P0
-- Outcome: **Settled in c-0013: ACP is the seam.** A route drives a Fleet's Session through `copilot --acp` over JSON-RPC on stdio - `initialize`, `session/new`, `session/prompt`, `session/list`, `session/load` - consuming `session/update` notifications for streaming text and tool-call status. Maestro does **not** build a permission-mediation layer for the MVP. Original framing: c-0012 proved the choice is not free: a Session driven with `-p` completes every permission request instantly as `denied-no-approval-rule-and-could-not-request-from-user`, so it **can never surface Attention** and acceptance-slice step 5 is unreachable through it. The candidate is `copilot --acp`, the Agent Client Protocol server the binary already exposes; the fallback is driving the terminal user interface through a pseudo-terminal, which c-0012 found fragile enough to need four attempts before it accepted input.
-- Open questions: Does `subagent.started` reach an ACP client as a `session/update`, or only through `events.jsonl`? No subagent was spawned during the probe, so the tree's live path is confirmed only for the shared event log. Does a Copilot release exist, or arrive, whose ACP server sends `session/request_permission`? That is the single assumption the Attention decision rests on, and it is cheap to re-test on every upgrade.
-- Evidence: [c-0013](./cycles/c-0013.md) full ACP probe - protocol handshake, streaming vocabulary, zero permission events across two capability declarations, `session/list` over 50 sessions, and `session/load` resuming with real history; [c-0012](./cycles/c-0012.md) non-interactive auto-denial measured in session `0e840075`, live interactive firing in `225cda11` and `c8f382bc`, and four failed pseudo-terminal driving attempts; `copilot --help` (`--acp`, "Start as Agent Client Protocol server")
+- Outcome: **Settled in c-0014: the Copilot SDK is the seam, reversing c-0013's choice of ACP.** A route drives a Fleet through `CopilotClient` from `copilot-sdk`, shipped inside the platform package: `start()`, `createSession(config)`, `sendAndWait`, `resumeSession(sessionId)`, `listSessions()`. Permissions are first-class - `onPermissionRequest` delivers an answerable callback, and omitting it leaves requests pending for `permissions.pendingRequests()`, whose documented return is exactly the c-0010 Attention predicate. `setApproveAll` expresses the user's usual broad-permission posture as a toggle rather than an architecture. ACP remains a working fallback, and what it lost on was measured: no permission surfacing, no session naming. Maestro still builds **no** permission-mediation layer; it consumes the runtime's. Original framing: c-0012 proved the choice is not free: a Session driven with `-p` completes every permission request instantly as `denied-no-approval-rule-and-could-not-request-from-user`, so it **can never surface Attention** and acceptance-slice step 5 is unreachable through it. The candidate is `copilot --acp`, the Agent Client Protocol server the binary already exposes; the fallback is driving the terminal user interface through a pseudo-terminal, which c-0012 found fragile enough to need four attempts before it accepted input.
+- Open questions: **Accepted unknown (c-0014):** the SDK permission callback has never been observed firing - the probe reached `createSession` and was stopped by an exhausted monthly quota before a single model turn. *Risk:* the seam decision, and acceptance-slice step 5 with it, rests on declarations shipped with the binary rather than on behaviour, which is the same evidence class that produced the c-0006 spawn requirement that measurement later falsified. *Trigger:* the next quota reset, or any earlier chance to run one model turn. Does the SDK expose a session rename? No name field was found in `SessionConfig`. Does `subagent.started` reach an SDK client as a typed event, or only through `events.jsonl`?
+- Evidence: [c-0014](./cycles/c-0014.md) SDK probe - `copilot-sdk` typings shipped inside the platform package, `onPermissionRequest`, `permissions.pendingRequests()` documenting the Attention predicate verbatim, `setApproveAll`, and a live `createSession`; [orbit-arch.md](../../../../v2/docs/reference/orbit-arch.md) independently implements the same permission loop in an Electron application; [c-0013](./cycles/c-0013.md) full ACP probe - protocol handshake, streaming vocabulary, zero permission events across two capability declarations, `session/list` over 50 sessions, and `session/load` resuming with real history; [c-0012](./cycles/c-0012.md) non-interactive auto-denial measured in session `0e840075`, live interactive firing in `225cda11` and `c8f382bc`, and four failed pseudo-terminal driving attempts; `copilot --help` (`--acp`, "Start as Agent Client Protocol server")
 - Links: depends-on n-0002; blocks n-0003, n-0004, n-0005, n-0006
 - First seen: c-0012
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (weakened, then recovered)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
-- History: c-0012 created it as new fog exposed by measurement rather than by reasoning. It is provider-level, so every route inherits the answer, which is why it blocks all four rather than only Electron; c-0013 selected it under rule 2 - the first time priority debt has ever driven selection - probed ACP directly, and settled the seam. The probe found ACP superior on every structural axis and silent on exactly two: it never asks permission, and it will not name a session. The loop recommended building a Maestro-owned permission boundary; the user delegated the decision and disclosed that they run with broad permissions, which retired the recommendation rather than confirming it - a mediation layer would have serviced a gate the target workflow rarely reaches. Attention is instead derived from what the seam provides, with ACP permission surfacing recorded as an upstream dependency carrying a re-test trigger on every CLI upgrade
+- History: c-0012 created it as new fog exposed by measurement rather than by reasoning. It is provider-level, so every route inherits the answer, which is why it blocks all four rather than only Electron; c-0013 selected it under rule 2 - the first time priority debt has ever driven selection - probed ACP directly, and settled the seam. The probe found ACP superior on every structural axis and silent on exactly two: it never asks permission, and it will not name a session. The loop recommended building a Maestro-owned permission boundary; the user delegated the decision and disclosed that they run with broad permissions, which retired the recommendation rather than confirming it - a mediation layer would have serviced a gate the target workflow rarely reaches. Attention is instead derived from what the seam provides, with ACP permission surfacing recorded as an upstream dependency carrying a re-test trigger on every CLI upgrade; c-0014 **weakened this node one cycle later** when answering a user question about firstmate surfaced `orbit-arch.md`, which documents a third seam c-0013 never probed - the SDK - and the re-probe found permissions first-class there, so the seam decision reversed to the SDK, acceptance-slice step 5 reverted to the wording the user had actually confirmed, and what c-0013 had recorded as an upstream gap turned out to be a surface the loop simply had not looked at
 
 ### n-0009 - Route-agnostic Acceptance Harness
 
@@ -237,7 +237,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0001; blocks n-0003, n-0004, n-0005, n-0006
 - First seen: c-0012
 - Former node id: none
-- Reinterpreted: c-0013 (intact)
+- Reinterpreted: c-0014 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
@@ -255,23 +255,27 @@ isolation, and restart reconciliation.
 | n-0005 | scouted | vague | P1 | n-0004, n-0008, n-0009 | No feasibility research yet |
 | n-0006 | scouted | vague | P1 | n-0005, n-0008, n-0009 | No feasibility research yet |
 | n-0007 | scouted | vague | P1 | n-0003, n-0004, n-0005, n-0006 | Whether the comparison rubric is fixed before the first route ships or derived afterwards |
-| n-0008 | decision-ready | researched | P0 | none | Whether `subagent.started` reaches an ACP client live; whether any release sends `session/request_permission` |
+| n-0008 | decision-ready | researched | P0 | none | **Accepted unknown:** the SDK permission callback has never been observed firing (quota); whether the SDK exposes a session rename |
 | n-0009 | scouted | vague | P0 | none | The smallest stack-agnostic interface a route must expose; how step 4's visual re-scoping is asserted |
 
 ## Priority Debt
 
 | Lower-priority node | Outran (maturity below researched) | Relation | Cause | Detected | Last seen | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| n-0004 | n-0009 | blocked-by | advanced n-0009 | c-0012 | c-0013 | open |
-| n-0005 | n-0009 | blocked-by | advanced n-0009 | c-0012 | c-0013 | open |
-| n-0006 | n-0009 | blocked-by | advanced n-0009 | c-0012 | c-0013 | open |
+| n-0004 | n-0009 | blocked-by | advanced n-0009 | c-0012 | c-0014 | open |
+| n-0005 | n-0009 | blocked-by | advanced n-0009 | c-0012 | c-0014 | open |
+| n-0006 | n-0009 | blocked-by | advanced n-0009 | c-0012 | c-0014 | open |
 
 The table opened in c-0012 with six rows. **Three cleared in c-0013** when
 n-0008 reached maturity `researched`; `debt cleared (n-0008 reached researched)`
 is recorded in each affected node's history. The three n-0009 rows remain open,
 so the invariant still holds the three later routes until the Acceptance Harness
-reaches `researched` - and rule 2 will select **n-0009** next cycle, exactly as
-it selected n-0008 in this one.
+reaches `researched`. The n-0008 rows **reopened and cleared a second time inside
+c-0014**: reinterpretation weakened n-0008 to `vague`, reopening them with
+`Cause: weakened n-0008`, and the SDK probe restored it to `researched`, clearing
+them again in the same cycle. Both transitions are recorded rather than netted
+out, because the reopening is the mechanism that forced the seam to be
+re-examined instead of quietly inherited. Rule 2 selects **n-0009** next cycle.
 
 ## Tracker Synchronization
 

@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0013
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0014
 ---
 
 # Primary Discovery Map - Maestro
@@ -18,7 +18,7 @@ restart behavior.
 
 | Session | Kind | Priority | Maturity | Active fog | Major blockers | Package |
 | --- | --- | --- | --- | --- | --- | --- |
-| maestro-graphical-agent-orchestrator | vertical | P0 | researched | Drive all four routes to a complete MVP one at a time - v2 Electron, then v1.1 WezTerm, v3 Tauri/Rust, and v4 native macOS Swift - each executing one identical six-step acceptance slice verified by one shared route-agnostic Acceptance Harness and producing a per-stack executive report, then select the durable technology in a terminal comparative evaluation. | One P0 blocker inherited by every route: the unbuilt Acceptance Harness, still open priority debt against the three later routes. The integration mode was settled in c-0013 - ACP - leaving one upstream assumption, that some Copilot release will surface permission requests over that protocol. | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
+| maestro-graphical-agent-orchestrator | vertical | P0 | researched | Drive all four routes to a complete MVP one at a time - v2 Electron, then v1.1 WezTerm, v3 Tauri/Rust, and v4 native macOS Swift - each executing one identical six-step acceptance slice verified by one shared route-agnostic Acceptance Harness and producing a per-stack executive report, then select the durable technology in a terminal comparative evaluation. | One P0 blocker inherited by every route: the unbuilt Acceptance Harness, still open priority debt against the three later routes. The integration mode was settled in c-0014 - the Copilot SDK, reversing c-0013 - leaving one accepted unknown: the SDK permission callback has not been observed firing, because the probe hit an exhausted monthly quota. | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
 
 ## Typed Session Links
 
@@ -39,5 +39,5 @@ restart behavior.
 - Closing the application auto-Parks every Fleet behind an acknowledged pre-close summary.
 - Credentials, authentication state, employer configuration, and runtime state stay outside the repository.
 - A route that cannot build the app is **rejected**, and the reason is an input to the comparative evaluation rather than an absence from it.
-- A Fleet is driven through `copilot --acp`, settled in c-0013: it streams tool-call status, lists sessions, and resumes them with history. It does not ask permission and does not accept a session name, so Attention is mode-dependent and a Fleet is bound by `sessionId` with a Maestro-owned display name. Non-interactive `-p` mode is excluded outright - it auto-denies.
+- A Fleet is driven through the **Copilot SDK**, settled in c-0014: `CopilotClient` shipped inside the platform package, with permissions as first-class callbacks and `permissions.pendingRequests()` returning the Attention predicate as the runtime defines it. ACP is a measured fallback that surfaces no permissions and accepts no session name; non-interactive `-p` mode is excluded outright, because it auto-denies.
 - Route completion is judged by one shared Acceptance Harness asserting external ground truth, never by a route reporting on itself.
