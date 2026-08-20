@@ -8,6 +8,7 @@
 .vscode/
 build/
 dist/
+node_modules/
 
 # Runtime and credential-bearing files never belong here.
 **/credentials*

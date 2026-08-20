@@ -1,0 +1,13 @@
+{
+  "name": "@maestro/acceptance-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Route-agnostic Acceptance Harness for the Maestro MVP. Judges every candidate stack on the same external evidence.",
+  "engines": { "node": ">=22.6.0" },
+  "scripts": {
+    "test": "node --test --experimental-strip-types \"src/**/*.test.ts\"",
+    "falsify": "node --experimental-strip-types src/cli.ts --falsify-only",
+    "verify": "node --experimental-strip-types src/cli.ts"
+  }
+}
