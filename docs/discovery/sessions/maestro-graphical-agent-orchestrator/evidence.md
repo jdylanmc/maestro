@@ -950,3 +950,165 @@ three routes from gaining depth while two provider-level questions were
 unsettled, **reopened automatically in c-0014** when a settled decision lost its
 evidence, and emptied in c-0015 once both questions were genuinely understood.
 With it empty, rule 2 stops firing and selection returns to the higher rules.
+
+
+## c-0016 - The harness gets an automation path, and a prototype gets falsified
+
+Selected n-0009 under rule 3 (shared blocker). Both researchable questions were
+answered before the group ran, so the group spent one question of twelve.
+
+### The `Attention` handoff finally completed, three cycles late
+
+`/domain-mapping` ran in a live user turn and confirmed `Attention` into
+[`CONTEXT.md`](../../../../CONTEXT.md), discharging a handoff `pending` since
+c-0012. Four sources had described it as two different kinds of thing:
+`herdr-arch.md` and `domain-model.md` as a **ranking** (`Blocked > Done >
+Working > seen Idle > Unknown`), `discovery.md` and `requirements.md` as a
+**per-Fleet condition**. The ranking reading is falsified by c-0010's confirmed
+total-Fleet-isolation decision: a definition requiring comparison across
+siblings contradicts it. Resolved as **separate concepts** - the condition is
+the domain term, the ranking is presentation and stays out of the glossary.
+
+The user chose the **broad** reading, so Attention means the Fleet wants its
+human, not only that it cannot proceed. `docs/adr/0002` was approved separately,
+recording the decision to consume the runtime's permission model rather than
+build a mediation layer.
+
+### The confirmed trigger set maps cleanly onto SDK surfaces
+
+Established by read-only inspection, then confirmed against
+`@github/copilot-sdk@1.0.11-preview.2` installed under the prototype:
+
+| Attention trigger | SDK surface |
+| --- | --- |
+| Blocked on an unanswered permission | `permission.requested` unmatched by `permission.completed`; `onPermissionRequest` |
+| Stopped by an error | `session.error`; `hooks.onErrorOccurred` |
+| Stopped by an abort | `session.idle` with `aborted: true` |
+| Finished and unacknowledged | `session.idle` with `aborted` falsy; `hooks.onSessionEnd` |
+
+`pendingRequests()` at `dist/generated/rpc.d.ts:19984`, `onPermissionRequest?`
+optional at `dist/types.d.ts:1992`, `session.idle` and `IdleData.aborted` at
+`dist/generated/session-events.d.ts:1073` and `:1082`.
+
+Subagent vocabulary is richer than c-0010 recorded: `subagent.started`,
+`subagent.completed`, **`subagent.failed`**, `subagent.selected`,
+`subagent.deselected`. A failed subagent is a distinct terminal state the tree
+must show.
+
+### The permission surface is version-volatile, measured across three versions
+
+`copilot-sdk@0.3.0` and the copy bundled in `@github/copilot@1.0.40` both make
+`onPermissionRequest` **required** and expose **no** `pendingRequests()` at all.
+Version ordering was checked before concluding anything - `npm view` runs `0.x`
+through `1.0.11-preview.2` - so 0.3.0 **predates** c-0014's reading and the pull
+model was *added*, not removed. **c-0014 is confirmed, not falsified.**
+
+But the contract has now changed shape three times across observed versions, and
+the current doc comment reads "**Reconstructs** the set of pending tool
+permission requests **from the session's event history**." c-0014 concluded
+"Attention becomes a query rather than a reconstruction". It **is** a
+reconstruction; the runtime performs it. The defensible claim is narrower:
+Maestro need not *implement* the reconstruction. Pinning the SDK version is a
+route requirement, and the pinned version belongs in the executive report.
+
+### Research - Playwright against Electron
+
+`_electron` is experimental by deliberate naming but actively maintained
+(`artifactsDir` added in v1.59), attaching over the Chrome DevTools Protocol.
+Every panel in one `BrowserWindow` is one Playwright `Page`, so step 4 is
+asserted with `Promise.all` over several **auto-retrying** `expect(locator)`
+calls. Native menus and native dialogs are **completely invisible** and must be
+stubbed in the main process. `executablePath` must name the Mach-O binary inside
+`Contents/MacOS/`, not the `.app` wrapper.
+
+**Storybook was assessed and set aside** for the hard step: it renders one
+component with mocked props, so it structurally cannot express "one selection
+re-scopes four sibling panels". Useful for per-panel visual regression only.
+
+Credible alternative: **WebdriverIO with `wdio-electron-service`**, officially
+endorsed, more stable API, worse debugging. Spectron is dead (archived February
+2022).
+
+### Research - the WezTerm automation ceiling
+
+Assertable deterministically: `wezterm cli list --format json` (panes, sizes,
+titles, cwd), `get-text --pane-id` (pane text), `list-clients` (focused pane),
+`get-pane-direction` (adjacency).
+
+Unreachable through any surface: colors reliably - `--escapes` emits a
+non-standard SGR variant that even the `rich` library misparses - focus rings,
+cursor state, images, pane borders, tab-bar rendering, frontmost-window state,
+scroll position.
+
+**No macOS accessibility tree at all** (issue #913). Terminal.app and iTerm2
+both expose one; WezTerm does not, which closes XCTest UI Testing, Appium, and
+AppleScript in one stroke. The only fallback is `screencapture` plus Tesseract
+or pixel diffing - brittle to font, resolution, and OS rendering changes.
+
+**Roughly 40-50% of on-screen verification is automatable**, and the remainder
+is structural, not a fixable tooling gap.
+
+### Prototype n-0009-c-0016 - what it proved, and what it got wrong
+
+Approved as `Approve prototype n-0009`. A four-panel Electron app with panel
+updates deliberately staggered at 40, 120, 260, and 500 ms so a point-in-time
+assertion cannot pass by luck. Playwright 1.62.1, Electron 44.0.0-beta.3,
+electron-builder 26.15.3.
+
+**Established, and this is the cycle's main result:**
+
+- **Acceptance-slice step 4 is machine-verifiable.** One click, then four
+  auto-retrying assertions - `toHaveText`, `toContainText`, `toHaveAttribute`,
+  `toHaveClass` - passed 3/3 against an **unpackaged** app (8.2 s) and 3/3
+  against a **packaged `.app`** (4.1 s). Step 4 was the only slice step with no
+  external ground truth, and it is the one that decided whether the Presentation
+  Check is viable at all. It is.
+- **The negative control passed**, and it is what makes the result trustworthy:
+  an immediate `getAttribute` right after the click still read the stale
+  `data-fleet="a"`. The auto-retry is doing real work.
+- `electronApp.evaluate()` returned `BrowserWindow.getAllWindows().length` from
+  the main process, so the harness can read main-process truth too.
+
+**Withdrawn as confounded.** The probe first concluded that disabling
+`enableNodeCliInspectArguments` is what stops Playwright attaching, isolated by
+a variant holding `runAsNode: true`. The user reported repeated "probe quit
+unexpectedly" dialogs, and the crash reports gave the real cause:
+
+```text
+exception:    EXC_BAD_ACCESS, SIGKILL (Code Signature Invalid)
+termination:  namespace CODESIGNING, indicator "Invalid Page"
+```
+
+`@electron/fuses` rewrites the Mach-O **after** electron-builder ad-hoc signs
+it, so on Apple Silicon the signature no longer matches and the kernel refuses
+to execute the binary. `Error: Process failed to launch!` is downstream of the
+OS kill, not evidence about `--inspect`. The fuse claim reverts to **documentary
+only**; a valid test must re-sign after flipping fuses.
+
+**Newly established instead:** flipping Electron fuses without re-signing
+produces a binary macOS kills on sight. That is a real packaging constraint for
+the Electron route, and it interacts directly with this cycle's decision to ship
+the MVP unsigned.
+
+**Process lesson.** The failing tests looked exactly like the researched failure
+mode, which is why the wrong conclusion was convincing, and nothing inside the
+loop caught it - it was caught only because the user mentioned an operating
+system dialog the loop never thought to look for. **A prototype asserting a
+negative result must establish *why* the negative happened, not merely that it
+happened.**
+
+**Cleanup and side effects.** The isolation path was removed and verified gone,
+and no prototype process survives. macOS wrote six `.ips` crash reports to
+`~/Library/Logs/DiagnosticReports/`, outside the isolation path and outside this
+skill's permitted deletion scope; they were disclosed and left for the user.
+
+### Decision - which binary the slice runs against
+
+The MVP targets an **unsigned, fuse-enabled `.app`**. Signing and notarization
+are excluded from the acceptance slice and deferred, with the trigger being the
+first distribution of Maestro to anyone but the author. The user is the only
+user of the MVP, and c-0012 already showed the property that matters -
+LaunchServices reparenting to `launchd` while still reaching zero survivors -
+holds for a packaged unsigned `.app`. This retires n-0003's last open question
+by scoping it out rather than deferring it indefinitely, and keeps one binary
+under test so no step is verified against a binary the user does not run.

@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 16
+revision: 17
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-19T20:00:11Z
 anchor-status: unchanged
 question-group-size: 12
-last-question-group-size: 2
-last-cycle: c-0015
+last-question-group-size: 1
+last-cycle: c-0016
 cycle-state: complete
-state-digest: fd8deb6f848c950ce3c3bc5cced58256ca2603e88c9a61de02888fa64675018b
-root-map-digest: de8e93624b0f3e0a9ca1ab07f8d0a4a1c1875e01c13c3747c7a163d30dcb644e
+state-digest: 445068222a0956463af7a19352f742ed4eb0687d5270b753e42955aa11353cbd
+root-map-digest: 061ec1510e77924fa56e97068cde71404878167ea173c4ce4087ea3f953086fb
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -56,7 +56,7 @@ isolation, and restart reconciliation.
 | Interrupted | confirmed | A Fleet stopped unintentionally, leaving in-flight work dangling. The opposite of `Parked` and distinguishable from it in the store. A **Fleet state**. | Maestro Fleet | none | Issue #9; c-0005 | c-0005 | c-0007 | Parked, Fleet | session:maestro-graphical-agent-orchestrator |
 | Liveness | confirmed | The observed process-evidence axis, independent of Fleet state: `Alive`, `Dead`, or `Ambiguous`. Never persisted as truth; recomputed each launch. | Maestro orchestration | none | firstmate-arch.md; c-0006; c-0007 | c-0007 | c-0008 | Fleet, Parked, Interrupted | session:maestro-graphical-agent-orchestrator |
 | Acceptance Slice | candidate | The single scripted end-to-end flow every prototype route must execute to be judged complete. Identical across routes, so the comparison is like-for-like. | Maestro discovery process | none | c-0011 | c-0011 | c-0011 | Fleet, MVP contract | session:maestro-graphical-agent-orchestrator |
-| Attention | candidate | A Fleet state meaning the human is required. Signals: `session.error` and `abort` always; a `permission.requested` whose `data.requestId` has no matching `permission.completed` **wherever the integration mode surfaces one** - c-0012 observed it firing and clearing on a pseudo-terminal session, and c-0013 measured that ACP emits no permission events at all. Availability is mode-dependent, not universal. Replaces the unreachable `AT_RISK` reading. | Maestro orchestration | AT_RISK (rejected reading) | c-0010 derivation; c-0012 live measurement; c-0013 ACP absence | c-0010 | c-0013 | Fleet, Session, permission.requested | session:maestro-graphical-agent-orchestrator |
+| Attention | confirmed | A Fleet observed to want its human: blocked on an unanswered permission request, stopped by an error or an abort, or finished and unacknowledged. Observed per Fleet and never inferred from another Fleet. **Broadened from "cannot proceed" to "wants its human" on the user's choice in c-0016**; the c-0013 mode-dependence qualifier is removed as superseded, since c-0014 replaced ACP with the SDK. The cross-Fleet ranking that consumes it is presentation, not domain. | Maestro Fleet | AT_RISK (discouraged) | [`CONTEXT.md`](../../../../CONTEXT.md) Condition group; [`docs/adr/0002`](../../../../docs/adr/0002-consume-the-runtime-permission-model.md); c-0010 derivation; c-0012 live measurement | c-0010 | c-0016 | Fleet, Liveness, Parked, Interrupted | session:maestro-graphical-agent-orchestrator |
 | Acceptance Harness | candidate | The verification apparatus every route must pass. **Two layers, settled in c-0015:** a State Oracle plus a Presentation Check. | Maestro discovery process | none | c-0012; c-0015 | c-0012 | c-0015 | Acceptance Slice, State Oracle, Presentation Check | session:maestro-graphical-agent-orchestrator |
 | State Oracle | candidate | The route-agnostic layer of the Acceptance Harness. Asserts slice steps 1-6 from `git`, `ps` by recorded process group, `events.jsonl`, and the SDK, requiring no cooperation from the route under test - so a route can neither be advantaged by being easy to instrument nor assert its own success. | Maestro discovery process | none | c-0015 | c-0015 | c-0015 | Acceptance Harness | session:maestro-graphical-agent-orchestrator |
 | Presentation Check | candidate | The layer verifying what only appears on screen - the primary agent window, the live subagent tree, panel re-scoping, and where Attention surfaces. Automated as far as each stack allows; whatever stays manual is a cost recorded against that route, never a neutral choice. | Maestro discovery process | none | c-0015 | c-0015 | c-0015 | Acceptance Harness, n-0007 | session:maestro-graphical-agent-orchestrator |
@@ -77,7 +77,7 @@ isolation, and restart reconciliation.
 - Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007
 - First seen: c-0001
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: **one outstanding (c-0011).** Issue #1's "Isolation" section still reads "Worktree-per-Fleet is a strong default, reinforced but not enforced" and "A Fleet must know that other Fleets may be working concurrently." Both were reversed by confirmed decisions in c-0010. Durable state is ahead of the anchor, not contradicted by it, so no node is invalidated - but the anchor must be reconciled through `/discovery` before a later cycle misreads it as authority. Previously: The c-0005 wireframe's file editor contradicted Issue #12's deferral; c-0008 resolved it in favour of read-only viewers with an "open in Visual Studio Code" action, and no editor is built. **Both c-0007 tracker divergences were reconciled in c-0008.** The map body was rewritten in confirmed vocabulary; #5 carries a correcting comment recording that its naming decision is falsified; #6, #12, #14, and #17 carry vocabulary substitution tables; #6 and #17 were retitled. `CONTEXT.md` is authoritative over any remaining issue-body wording.
@@ -90,12 +90,12 @@ isolation, and restart reconciliation.
 - Maturity: decision-ready
 - Priority: P0
 - Outcome: One scripted end-to-end flow, identical across all four routes, that defines "complete" and supplies the comparative evaluation's rubric: create two named Fleets, each in its own enforced Worktree and branch; present each Fleet's primary agent window bound 1:1; prompt Fleet A so it delegates at least one subagent and the tree renders live with correct parentage; select Fleet B and observe every panel re-scope; drive Fleet A into a permission request and observe Attention surface on that Fleet; quit through the pre-close summary, auto-Parking both Fleets with zero surviving processes; relaunch and find both Fleets with identity, history, Worktree, and recomputed Liveness intact, resuming Fleet A's Session by name. Each route additionally produces an executive report of that stack's pros and cons, and a stack that cannot build the app is **rejected** rather than counted as a failure.
-- Open questions: **Step 5 was re-specified in c-0013** after ACP proved it emits no permission events - Attention now means "a state requiring the human", with the permission signal used wherever the mode surfaces it. That change was made under delegation, not confirmed by the user, and is flagged revisitable. Does executing the slice against a real route reveal a step that is unimplementable rather than merely hard, and if so is the slice wrong or is the route rejected? What evidence must the executive report carry to make four reports genuinely comparable?
+- Open questions: **Step 5's vocabulary is settled as of c-0016.** `Attention` is confirmed in `CONTEXT.md` and is *broader* than this step: the step drives a permission request, which is one of four confirmed triggers. The step is narrower than the term, not in conflict with it, and the c-0013 delegation drift is fully paid back. Does executing the slice against a real route reveal a step that is unimplementable rather than merely hard, and if so is the slice wrong or is the route rejected? What evidence must the executive report carry to make four reports genuinely comparable?
 - Evidence: [c-0011](./cycles/c-0011.md); [Issue #18](https://github.com/jdylanmc/maestro/issues/18); every step restates a requirement already confirmed in c-0005 through c-0010
 - Links: blocks n-0003, n-0004, n-0005, n-0006; informs n-0007; parent-of n-0009
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #18](https://github.com/jdylanmc/maestro/issues/18)
 - Divergence: none
@@ -113,7 +113,7 @@ isolation, and restart reconciliation.
 - Links: blocks n-0003; parent-of n-0008
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #2](https://github.com/jdylanmc/maestro/issues/2), [Issue #11](https://github.com/jdylanmc/maestro/issues/11)
 - Divergence: none
@@ -126,16 +126,16 @@ isolation, and restart reconciliation.
 - Maturity: decision-ready
 - Priority: P0
 - Outcome: The first route driven to a complete MVP, executing n-0001's acceptance slice end to end and producing its executive report. Chosen to lead on evidence rather than version order: it is the only route carrying measured results.
-- Open questions: **Both prior questions are answered.** Packaging preserves supervision (c-0012, measured), and the real `BrowserWindow` seam was already exercised in c-0009. n-0008 was settled in c-0013, so one blocker is gone; the Acceptance Harness (n-0009) is the last one it cannot clear itself. Does a signed, notarized, hardened-runtime build still spawn and reap process groups the way the unsigned `--dir` build measured in c-0012 does?
+- Open questions: **Both prior questions are answered.** Packaging preserves supervision (c-0012, measured), and the real `BrowserWindow` seam was already exercised in c-0009. n-0008 was settled in c-0013, so one blocker is gone; the Acceptance Harness (n-0009) is the last one it cannot clear itself. **The signed-and-notarized question was retired in c-0016 by scoping it out**: the MVP ships an unsigned, fuse-enabled `.app`, so this node now holds **no open question of its own** and is gated solely on n-0009.
 - Evidence: [c-0003](./cycles/c-0003.md) runtime/state boundary probe; [c-0004](./cycles/c-0004.md) deferral of real installation; [c-0005](./cycles/c-0005.md) confirmation of Electron as the first route; [c-0009](./cycles/c-0009.md) prototype reaching zero survivors across three process groups on quit; [c-0012](./cycles/c-0012.md) packaged `.app` measured at zero survivors on graceful quit, nine survivors on Force Quit without a reaper, and zero after reap-on-launch; [Issue #4](https://github.com/jdylanmc/maestro/issues/4)
-- Links: depends-on n-0001, n-0002, n-0009; blocks n-0004, n-0007; informed-by n-0008 (settled c-0013)
+- Links: depends-on n-0001, n-0002, n-0009; blocks n-0004, n-0007; informed-by n-0008 (settled c-0013; the stale reciprocal `blocks` edge on n-0008 was corrected in c-0016)
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #4](https://github.com/jdylanmc/maestro/issues/4)
 - Divergence: none
-- History: c-0011 created by decomposition, inheriting the Electron evidence accumulated across c-0003, c-0004, c-0005, and c-0009, and placed first in the sequence. Its maturity is load-bearing for the whole sequence: because it enters at `researched`, the P1 nodes that depend on it generate no priority debt, and if it is ever weakened below that floor the loop is required to stop deepening n-0004 and n-0007 until it recovers; c-0012 selected it under rule 3, retired both of its open questions by measurement, and advanced it through fog `researched` to `decision-ready` with maturity `decision-ready` - but it did **not** reach promotion, because clearing its fog exposed two new blockers it does not own, and because the `Attention` vocabulary its step-5 Story is written in is still a `candidate` term with a pending domain handoff
+- History: c-0011 created by decomposition, inheriting the Electron evidence accumulated across c-0003, c-0004, c-0005, and c-0009, and placed first in the sequence. Its maturity is load-bearing for the whole sequence: because it enters at `researched`, the P1 nodes that depend on it generate no priority debt, and if it is ever weakened below that floor the loop is required to stop deepening n-0004 and n-0007 until it recovers; c-0012 selected it under rule 3, retired both of its open questions by measurement, and advanced it through fog `researched` to `decision-ready` with maturity `decision-ready` - but it did **not** reach promotion, because clearing its fog exposed two new blockers it does not own, and because the `Attention` vocabulary its step-5 Story is written in was still a `candidate` term with a pending domain handoff; c-0016 discharged that handoff - `Attention` is confirmed in `CONTEXT.md` - and retired this node's last open question by scoping signing out of the MVP, leaving n-0009 as its only gate
 
 ### n-0004 - v1.1 WezTerm MVP
 
@@ -149,7 +149,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0003, n-0008, n-0009; blocks n-0005, n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #27](https://github.com/jdylanmc/maestro/issues/27)
 - Divergence: none
@@ -167,7 +167,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0004, n-0008, n-0009; blocks n-0006, n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #23](https://github.com/jdylanmc/maestro/issues/23)
 - Divergence: none
@@ -185,7 +185,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0005, n-0008, n-0009; blocks n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #24](https://github.com/jdylanmc/maestro/issues/24)
 - Divergence: none
@@ -203,7 +203,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0003, n-0004, n-0005, n-0006; informed-by n-0001, n-0009
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
@@ -215,13 +215,13 @@ isolation, and restart reconciliation.
 - Fog: decision-ready
 - Maturity: researched
 - Priority: P0
-- Outcome: **Settled in c-0014: the Copilot SDK is the seam, reversing c-0013's choice of ACP.** A route drives a Fleet through `CopilotClient` from `copilot-sdk`, shipped inside the platform package: `start()`, `createSession(config)`, `sendAndWait`, `resumeSession(sessionId)`, `listSessions()`. Permissions are first-class - `onPermissionRequest` delivers an answerable callback, and omitting it leaves requests pending for `permissions.pendingRequests()`, whose documented return is exactly the c-0010 Attention predicate. `setApproveAll` expresses the user's usual broad-permission posture as a toggle rather than an architecture. ACP remains a working fallback, and what it lost on was measured: no permission surfacing, no session naming. Maestro still builds **no** permission-mediation layer; it consumes the runtime's. Original framing: c-0012 proved the choice is not free: a Session driven with `-p` completes every permission request instantly as `denied-no-approval-rule-and-could-not-request-from-user`, so it **can never surface Attention** and acceptance-slice step 5 is unreachable through it. The candidate is `copilot --acp`, the Agent Client Protocol server the binary already exposes; the fallback is driving the terminal user interface through a pseudo-terminal, which c-0012 found fragile enough to need four attempts before it accepted input.
-- Open questions: **Accepted unknown (c-0014):** the SDK permission callback has never been observed firing - the probe reached `createSession` and was stopped by an exhausted monthly quota before a single model turn. *Risk:* the seam decision, and acceptance-slice step 5 with it, rests on declarations shipped with the binary rather than on behaviour, which is the same evidence class that produced the c-0006 spawn requirement that measurement later falsified. *Trigger:* the next quota reset, or any earlier chance to run one model turn. Does the SDK expose a session rename? No name field was found in `SessionConfig`. Does `subagent.started` reach an SDK client as a typed event, or only through `events.jsonl`?
+- Outcome: **Settled in c-0014: the Copilot SDK is the seam, reversing c-0013's choice of ACP.** A route drives a Fleet through `CopilotClient` from `copilot-sdk`, shipped inside the platform package: `start()`, `createSession(config)`, `sendAndWait`, `resumeSession(sessionId)`, `listSessions()`. Permissions are first-class - `onPermissionRequest` delivers an answerable callback, and omitting it leaves requests pending for `permissions.pendingRequests()`, whose documented return is exactly the c-0010 Attention predicate. `setApproveAll` expresses the user's usual broad-permission posture as a toggle rather than an architecture. **Narrowed in c-0016:** the current documentation reads "**Reconstructs** the set of pending tool permission requests **from the session's event history**", so Attention *is* a reconstruction - the runtime simply performs it. Maestro need not implement it; that is the defensible claim, and it is narrower than the one c-0014 recorded. **A route must also pin the SDK version**, because the permission surface changed shape three times across observed versions. ACP remains a working fallback, and what it lost on was measured: no permission surfacing, no session naming. Maestro still builds **no** permission-mediation layer; it consumes the runtime's. Original framing: c-0012 proved the choice is not free: a Session driven with `-p` completes every permission request instantly as `denied-no-approval-rule-and-could-not-request-from-user`, so it **can never surface Attention** and acceptance-slice step 5 is unreachable through it. The candidate is `copilot --acp`, the Agent Client Protocol server the binary already exposes; the fallback is driving the terminal user interface through a pseudo-terminal, which c-0012 found fragile enough to need four attempts before it accepted input.
+- Open questions: **Accepted unknown (c-0014):** the SDK permission callback has never been observed firing - the probe reached `createSession` and was stopped by an exhausted monthly quota before a single model turn. *Risk:* the seam decision, and acceptance-slice step 5 with it, rests on declarations shipped with the binary rather than on behaviour, which is the same evidence class that produced the c-0006 spawn requirement that measurement later falsified. *Trigger:* the next quota reset, or any earlier chance to run one model turn. Does the SDK expose a session rename? No name field was found in `SessionConfig`. Does `subagent.started` reach an SDK client as a typed event, or only through `events.jsonl`? **Retired in c-0016:** the widened Attention definition is fully served - `session.idle` carries `aborted?: boolean`, and `hooks.onSessionEnd` and `onErrorOccurred` cover the remaining triggers.
 - Evidence: [c-0014](./cycles/c-0014.md) SDK probe - `copilot-sdk` typings shipped inside the platform package, `onPermissionRequest`, `permissions.pendingRequests()` documenting the Attention predicate verbatim, `setApproveAll`, and a live `createSession`; [orbit-arch.md](../../../../v2/docs/reference/orbit-arch.md) independently implements the same permission loop in an Electron application; [c-0013](./cycles/c-0013.md) full ACP probe - protocol handshake, streaming vocabulary, zero permission events across two capability declarations, `session/list` over 50 sessions, and `session/load` resuming with real history; [c-0012](./cycles/c-0012.md) non-interactive auto-denial measured in session `0e840075`, live interactive firing in `225cda11` and `c8f382bc`, and four failed pseudo-terminal driving attempts; `copilot --help` (`--acp`, "Start as Agent Client Protocol server")
-- Links: depends-on n-0002; blocks n-0003, n-0004, n-0005, n-0006
+- Links: depends-on n-0002; blocks n-0004, n-0005, n-0006; informs n-0003
 - First seen: c-0012
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
@@ -230,54 +230,62 @@ isolation, and restart reconciliation.
 ### n-0009 - Route-agnostic Acceptance Harness
 
 - Parent: n-0001
-- Fog: researched
-- Maturity: researched
+- Fog: decision-ready
+- Maturity: decision-ready
 - Priority: P0
-- Outcome: **Settled in c-0015 as two layers.** The **State Oracle** asserts slice steps 1 through 6 from `git worktree list`, `git branch`, `ps` by recorded process group, `~/.copilot/session-state/<id>/events.jsonl`, and the SDK's `listSessions()`, `resumeSession()`, and `permissions.pendingRequests()`. It requires no cooperation from the route under test, so no stack is advantaged by being easy to instrument and no route can assert its own success - and it can be written before any route exists, which is what unblocks n-0003. The **Presentation Check** covers what only appears on screen and is automated as far as each stack allows, beginning with Playwright against Electron. **Pass or fail never depends on automation reach**; a route checked only by the operator still passes if it behaves correctly. What changes is the executive report, which must state the manual residue explicitly, because that residue is evidence for n-0007's user-interface-automation criterion.
-- Open questions: Step 4 - selecting a Fleet re-scopes every panel - has **no external ground truth at all**, so it is the only step whose verification depends entirely on the Presentation Check. Does Playwright's Electron support reach it cleanly enough to set the pattern the other routes are measured against? How much of the slice can the WezTerm route automate, given that a terminal surface exposes almost nothing to drive?
-- Evidence: [c-0015](./cycles/c-0015.md) settled the two-layer shape and the machine-first constraint; [c-0014](./cycles/c-0014.md) supplied the SDK queries the State Oracle asserts with; [c-0012](./cycles/c-0012.md) - both prototypes were trustworthy only because they measured external ground truth rather than asking the application under test
+- Outcome: **Settled in c-0015 as two layers.** The **State Oracle** asserts slice steps 1 through 6 from `git worktree list`, `git branch`, `ps` by recorded process group, `~/.copilot/session-state/<id>/events.jsonl`, and the SDK's `listSessions()`, `resumeSession()`, and `permissions.pendingRequests()`. It requires no cooperation from the route under test, so no stack is advantaged by being easy to instrument and no route can assert its own success - and it can be written before any route exists, which is what unblocks n-0003. The **Presentation Check** covers what only appears on screen and is automated as far as each stack allows, beginning with Playwright against Electron. **Pass or fail never depends on automation reach**; a route checked only by the operator still passes if it behaves correctly. What changes is the executive report, which must state the manual residue explicitly, because that residue is evidence for n-0007's user-interface-automation criterion. **c-0016 gave the Presentation Check a measured automation path**: step 4 - the only slice step with no external ground truth, and therefore the step that decided whether this layer was viable at all - was asserted successfully against a packaged Electron `.app` using `Promise.all` over auto-retrying `expect(locator)` calls, 3/3 passing. It also fixed the harness's own honesty rule: **every Presentation Check assertion is paired with a negative control**, because an auto-retrying assertion that passes is indistinguishable from one that never tested anything. Storybook is excluded - it renders one component with mocked props and structurally cannot express cross-panel re-scoping. The WezTerm end is bounded rather than solved: roughly **40-50%** is automatable through `wezterm cli list`, `get-text`, and `list-clients`, and WezTerm exposes **no macOS accessibility tree at all**, which closes XCTest, Appium, and AppleScript together.
+- Open questions: **Both prior questions are answered.** Playwright reaches step 4 on a packaged `.app` (measured, c-0016), and the WezTerm ceiling is bounded at roughly 40-50% with no accessibility-tree fallback (researched, c-0016). What remains: how does the harness prove it is **not vacuously passing** across all six steps - the negative-control pattern is demonstrated but not yet settled as a rule? And does disabling `enableNodeCliInspectArguments` actually block Playwright, which the c-0016 probe **failed to establish** because its fuse-disabled builds were killed by macOS for an invalid code signature before the attach was ever exercised?
+- Evidence: [c-0016](./cycles/c-0016.md) prototype - step 4 asserted 3/3 against a packaged Electron `.app` with a passing negative control, `electronApp.evaluate()` reaching main-process state, plus delegated research bounding the WezTerm ceiling and excluding Storybook; [c-0015](./cycles/c-0015.md) settled the two-layer shape and the machine-first constraint; [c-0014](./cycles/c-0014.md) supplied the SDK queries the State Oracle asserts with; [c-0012](./cycles/c-0012.md) - both prototypes were trustworthy only because they measured external ground truth rather than asking the application under test
 - Links: depends-on n-0001; blocks n-0003, n-0004, n-0005, n-0006
 - First seen: c-0012
 - Former node id: none
-- Reinterpreted: c-0015 (intact)
+- Reinterpreted: c-0016 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
-- History: c-0012 created it from the Q4 verification-seam decision, taken under `delegated-to-loop` with the user absent, so it carried a revisit flag the other nodes did not; c-0015 selected it under rule 2, split it into a State Oracle and a Presentation Check, and advanced it to maturity `researched`, clearing the last three priority-debt rows. The user supplied two constraints that shaped it: user-interface automation is a **selection criterion** for the stack rather than a harness implementation detail, and **there are no human testers**, so a manual step is a stopgap of last resort whose survival is a cost recorded against the route. The revisit flag is discharged - the user has now engaged with this node's substance directly
+- History: c-0012 created it from the Q4 verification-seam decision, taken under `delegated-to-loop` with the user absent, so it carried a revisit flag the other nodes did not; c-0015 selected it under rule 2, split it into a State Oracle and a Presentation Check, and advanced it to maturity `researched`, clearing the last three priority-debt rows. The user supplied two constraints that shaped it: user-interface automation is a **selection criterion** for the stack rather than a harness implementation detail, and **there are no human testers**, so a manual step is a stopgap of last resort whose survival is a cost recorded against the route. The revisit flag is discharged - the user has now engaged with this node's substance directly; c-0016 selected it under rule 3, retired both of its open questions - one by measurement and one by research - and advanced both axes one level to `decision-ready`. Its prototype also produced the cycle's sharpest lesson: it reported a confident causal finding about the `enableNodeCliInspectArguments` fuse that was **wrong**, because the fuse-disabled builds were killed by macOS for an invalid code signature and the failing tests looked exactly like the researched failure mode. Nothing inside the loop caught it; the user did, by mentioning an operating-system crash dialog. The node now carries the rule that a prototype asserting a negative result must establish *why* the negative happened
 
 ## Active Frontier
 
 | Node | Fog | Maturity | Priority | Blocked by | Open questions |
 | --- | --- | --- | --- | --- | --- |
 | n-0000 | decision-ready | researched | P0 | none | none held directly; decomposed in c-0011 |
-| n-0001 | decision-ready | decision-ready | P0 | none | What evidence makes four executive reports genuinely comparable |
+| n-0001 | decision-ready | decision-ready | P0 | none | What evidence makes four executive reports genuinely comparable (step 5 vocabulary settled in c-0016) |
 | n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` and why - identity not captured, only the count |
-| n-0003 | decision-ready | decision-ready | P0 | n-0008, n-0009 | Whether a signed, notarized, hardened-runtime build still spawns and reaps like the unsigned build measured in c-0012 |
-| n-0004 | scouted | vague | P1 | n-0003, n-0008, n-0009 | Whether a WezTerm route can satisfy process ownership at all; whether `proto-v1/` helps or hinders |
-| n-0005 | scouted | vague | P1 | n-0004, n-0008, n-0009 | No feasibility research yet |
-| n-0006 | scouted | vague | P1 | n-0005, n-0008, n-0009 | No feasibility research yet |
+| n-0003 | decision-ready | decision-ready | P0 | n-0009 | **none of its own** - signing scoped out of the MVP in c-0016 |
+| n-0004 | scouted | vague | P1 | n-0003, n-0009 | Whether a WezTerm route can satisfy process ownership at all; whether `proto-v1/` helps or hinders |
+| n-0005 | scouted | vague | P1 | n-0004, n-0009 | No feasibility research yet |
+| n-0006 | scouted | vague | P1 | n-0005, n-0009 | No feasibility research yet |
 | n-0007 | investigating | vague | P1 | n-0003, n-0004, n-0005, n-0006 | What the rubric holds beyond the user-interface-automation criterion fixed in c-0015, and how criteria weigh |
-| n-0008 | decision-ready | researched | P0 | none | **Accepted unknown:** the SDK permission callback has never been observed firing (quota); whether the SDK exposes a session rename |
-| n-0009 | researched | researched | P0 | none | Whether Playwright reaches step 4 cleanly on Electron; how much the WezTerm route can automate at all |
+| n-0008 | decision-ready | researched | P0 | none | **Accepted unknown:** the SDK permission callback has never been observed firing (quota); whether the SDK exposes a session rename. Attention coverage retired in c-0016 |
+| n-0009 | decision-ready | decision-ready | P0 | none | How the harness proves it is not vacuously passing across all six steps; whether the `enableNodeCliInspectArguments` fuse actually blocks Playwright (c-0016 probe failed to establish it) |
 
 ## Priority Debt
 
 | Lower-priority node | Outran (maturity below researched) | Relation | Cause | Detected | Last seen | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 
-**The table is empty again as of c-0015.** It opened in c-0012 with six rows.
-Three cleared in c-0013 when n-0008 reached maturity `researched`; those three
-reopened inside c-0014 when reinterpretation weakened n-0008, and cleared again
-in the same cycle when the SDK probe restored it. The final three cleared in
-c-0015 when n-0009 reached `researched`. Every clear is recorded in the affected
-nodes' history rather than netted out. The three n-0009 rows remain open,
-Over four cycles the table did its whole job: it blocked three routes from
+**The table is still empty as of c-0016**, and no new debt was detected: every
+P0 node sits at maturity `researched` or above, so no lower-priority node is
+outrunning anything, and nothing was weakened this cycle.
+
+It opened in c-0012 with six rows. Three cleared in c-0013 when n-0008 reached
+maturity `researched`; those three reopened inside c-0014 when reinterpretation
+weakened n-0008, and cleared again in the same cycle when the SDK probe restored
+it. The final three cleared in c-0015 when n-0009 reached `researched`. Every
+clear is recorded in the affected nodes' history rather than netted out. *(A
+dangling fragment left here by c-0015's write - "The three n-0009 rows remain
+open," contradicting the sentence before it - was removed in c-0016.)*
+
+Over five cycles the table did its whole job: it blocked three routes from
 gaining depth while two provider-level questions were unsettled, it reopened
 automatically when a settled decision lost its evidence, and it emptied only
 once both were genuinely understood. **With it empty, rule 2 no longer fires**,
-and selection returns to the higher rules - n-0003 is the node with no
-unresolved blocker of its own, and taking it through the leaf gate is the next
-cycle's work.
+and selection returns to the higher rules. **c-0015 predicted n-0003 here and
+was wrong**: rule 3 selects on *being* a shared blocker, not on being unblocked,
+so it reaches n-0009 instead. c-0016 reported that difference rather than
+quietly following the prediction, and corrected a stale n-0008 -> n-0003
+blocking edge whose presence would have flipped the tie-break to n-0008.
 
 ## Tracker Synchronization
 

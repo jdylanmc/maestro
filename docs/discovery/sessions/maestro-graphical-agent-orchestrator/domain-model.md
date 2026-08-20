@@ -4,10 +4,45 @@
 
 **Confirmed in c-0008.** `/domain-mapping` ran the c-0007 handoff and published
 the canonical glossary at the repository root, [`CONTEXT.md`](../../../../CONTEXT.md),
-the single-context location named by `docs/agents/domain.md`. Eleven terms are
+the single-context location named by `docs/agents/domain.md`. Eleven terms were
 confirmed there: `Fleet`, `Session`, `Task`, `Primary Agent`, `Agent`,
 `subagent`, `subagent tree`, `Parked`, `Interrupted`, `Liveness`, and
 `Worktree`.
+
+**A twelfth was confirmed in c-0016: `Attention`.** `/domain-mapping` ran in a
+live user turn, discharging the handoff staged in c-0012 and left `pending` for
+three cycles because the confirmation gate needs a user present.
+
+> **Attention** - A Fleet observed to want its human: blocked on an unanswered
+> permission request, stopped by an error or an abort, or finished and
+> unacknowledged. Observed per Fleet and never inferred from another Fleet.
+> Discouraged alias: `AT_RISK`.
+
+Three things about that wording are deliberate. **"Observed"** mirrors the
+existing `Liveness` entry, making Attention a **third independent axis**: the
+durable lifecycle is persisted, while Liveness and Attention are observed and
+never assumed. **"Never inferred from another Fleet"** encodes the c-0010
+total-isolation decision into the definition itself. And `AT_RISK` is
+discouraged because it carries `/ship-with-squadron`'s stale-heartbeat and
+milestone semantics that the c-0007 fully-generic decision put out of reach.
+
+The disagreement it resolved was **separate concepts**, not a revised
+definition. Four sources described `Attention` as two different kinds of thing -
+`herdr-arch.md` and this file as a **ranking** over statuses, `discovery.md` and
+`requirements.md` as a **per-Fleet condition**. The ranking reading is falsified
+by confirmed state: c-0010 settled that Fleets have no sibling awareness at all,
+so a definition requiring comparison across up to eight Fleets contradicts it.
+The condition is the domain term; the ranking that consumes it is presentation
+and is deliberately **not** in the glossary.
+
+A second Architecture Decision Record was approved in the same turn,
+[`docs/adr/0002-consume-the-runtime-permission-model.md`](../../../../docs/adr/0002-consume-the-runtime-permission-model.md),
+recording the decision to consume the runtime's permission model rather than
+build a mediation layer, with four rejected alternatives and what each was
+measured to lose on. **One correction is outstanding against it:** it cites
+`pendingRequests()` without a version bound, and c-0016 measured that surface
+changing shape across three SDK versions. `/domain-mapping` owns that file; this
+loop does not write it.
 
 The first Architecture Decision Record was also published,
 [`docs/adr/0001-adopt-fleet-as-the-structural-unit.md`](../../../../docs/adr/0001-adopt-fleet-as-the-structural-unit.md),
@@ -118,7 +153,7 @@ durable ticket state in a ledger and deriving worker health from heartbeats.
 
 ## Candidate and Unconfirmed
 
-The eleven terms above are **confirmed** in `CONTEXT.md`. `Alive`, `Dead`, and
+The twelve terms above are **confirmed** in `CONTEXT.md`. `Alive`, `Dead`, and
 `Ambiguous` are confirmed as the values of `Liveness` rather than as standalone
 terms.
 
@@ -130,20 +165,9 @@ presentation state remains unresolved.
 
 ## Known Gaps in the Vocabulary
 
-Concepts in use that still have no term:
+Concepts in use that still have no term. **`Attention` left this list in
+c-0016** and is now confirmed above.
 
-- **Attention** - the actionable-versus-absorbable distinction deciding which of
-  up to 8 Fleets should pull the user's eye. `/ship-with-squadron` defines
-  `AT_RISK` as stale heartbeat, or under 15 minutes to a milestone with an
-  unresolved blocker; the c-0007 decision to stay fully generic puts that
-  definition out of reach, so a replacement must be derived from generic runtime
-  events. **c-0012 gives it a measurable definition:** a `permission.requested`
-  whose `data.requestId` has no matching `permission.completed`, plus
-  `session.error` and `abort` as terminal states - observed firing on a genuinely
-  blocked live Session and clearing on human approval. The term stays a
-  **candidate**: a `/domain-mapping` packet was staged in c-0012 and left
-  `pending`, because that skill's confirmation and Architecture Decision Record
-  gates need a live user turn and the user was absent. It is the next handoff.
 - **Activity** - the "what it is doing right now" line shown per subagent.
 - **Capacity** and **admission** - the host-resource guardrail.
 - **Focus** - the global selection that re-scopes every panel.
