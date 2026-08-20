@@ -2,22 +2,22 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 18
+revision: 19
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-19T20:00:11Z
 anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
-last-cycle: c-0017
+last-cycle: c-0018
 cycle-state: complete
-state-digest: 28966da08b4e66aefbf147c4675b084b57d2d843680330584c5989d7d2f03cbc
-root-map-digest: 2e3c568f124a20fb0683e686263a53dab671fc0edae645c1399692646e2ef9ef
+state-digest: 5a70b9cc42e041edc14cad324969453507faa2b90355071f638e92fe13e2e763
+root-map-digest: e2b79cf547785598ab58be592d12d3be6291eec068377cdc61a31fa773060e12
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
 state-scope: full
 tracker-mode: remote
-tracker-tier-map: n-0000 -> Issue #1 (discovery:map); n-0001..n-0009 unpromoted
+tracker-tier-map: unmapped - proposed in c-0018, awaiting `Approve tier map maestro-graphical-agent-orchestrator`; proposal is Branch=GitHub issue labelled `discovery:map`; Story=native sub-issue labelled `discovery:task`; Task=collapsed into Story body as a checklist
 ---
 
 # Discovery Session - Maestro Graphical Agent Orchestrator
@@ -69,15 +69,15 @@ isolation, and restart reconciliation.
 
 - Parent: none
 - Fog: decision-ready
-- Maturity: researched
+- Maturity: decision-ready
 - Priority: P0
 - Outcome: Prove the shared Maestro MVP contract through one complete real flow on Electron, judged primarily on lifecycle ownership - durable Fleet state with strictly ephemeral processes and verified-zero orphans on quit - and on a three-column Visual Studio Code-shaped layout where selecting a Fleet re-scopes every panel and always presents that Fleet's primary agent window.
-- Open questions: none held directly. **Decomposed in c-0011** into n-0001 through n-0007; every question this node was carrying now lives on the child that owns it.
+- Open questions: none held directly. **Decomposed in c-0011** into n-0001 through n-0007; every question this node was carrying now lives on the child that owns it. **c-0018 corrected this node's maturity from `researched` to `decision-ready`, and the change is a correction rather than an advance.** It was lowered to `researched` in c-0005 for a stated reason - "the form of the destination proved less settled than the tree recorded", the user having floated neovim, the GitHub app, tmux, and a Visual Studio Code extension inside one cycle. That reason stopped being true in c-0011, when the destination was settled as four named routes in evidence order against one six-step slice. No cycle re-raised the field for twelve cycles, and in c-0017 it silently became the constraint blocking promotion. Reaching `promotion-ready` still requires reconciling Issue #1, which is tracked as a divergence rather than as fog.
 - Evidence: [Issue #1](https://github.com/jdylanmc/maestro/issues/1); [Issue #18](https://github.com/jdylanmc/maestro/issues/18); [Issue #12](https://github.com/jdylanmc/maestro/issues/12); [Issue #6](https://github.com/jdylanmc/maestro/issues/6); [Issue #9](https://github.com/jdylanmc/maestro/issues/9); [c-0005 wireframe and firstmate research](./cycles/c-0005.md); [c-0006 live orphan-process forensics](./cycles/c-0006.md); [c-0007 worktree experiment, ship-with-squadron specification, and Copilot vocabulary extraction](./cycles/c-0007.md)
 - Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007
 - First seen: c-0001
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: **one outstanding (c-0011).** Issue #1's "Isolation" section still reads "Worktree-per-Fleet is a strong default, reinforced but not enforced" and "A Fleet must know that other Fleets may be working concurrently." Both were reversed by confirmed decisions in c-0010. Durable state is ahead of the anchor, not contradicted by it, so no node is invalidated - but the anchor must be reconciled through `/discovery` before a later cycle misreads it as authority. **Seventh consecutive cycle carried, and as of c-0017 it is load-bearing rather than cosmetic:** Issue #1 is this node's own tracker item, so it is the parent any promoted MVP work would hang beneath. Publishing n-0003 and n-0009 under it would parent real implementation items under a tracker body that contradicts the confirmed state those items are specified from. Previously: The c-0005 wireframe's file editor contradicted Issue #12's deferral; c-0008 resolved it in favour of read-only viewers with an "open in Visual Studio Code" action, and no editor is built. **Both c-0007 tracker divergences were reconciled in c-0008.** The map body was rewritten in confirmed vocabulary; #5 carries a correcting comment recording that its naming decision is falsified; #6, #12, #14, and #17 carry vocabulary substitution tables; #6 and #17 were retitled. `CONTEXT.md` is authoritative over any remaining issue-body wording.
@@ -95,7 +95,7 @@ isolation, and restart reconciliation.
 - Links: blocks n-0003, n-0004, n-0005, n-0006; informs n-0007; parent-of n-0009
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #18](https://github.com/jdylanmc/maestro/issues/18)
 - Divergence: none
@@ -108,16 +108,16 @@ isolation, and restart reconciliation.
 - Maturity: decision-ready
 - Priority: P0
 - Outcome: The provider-side facts every route inherits unchanged, so each route implements a presentation of the same contract rather than rediscovering it. Established: the subagent tree is reconstructed by joining `subagent.started.data.toolCallId` to the `agentId` on the spawning agent's own `tool.*` event, never through `parentId`; `agentId` is reliable identity; the tree is arbitrary-depth but must be optimised for fan-out; Sessions are named with `-n, --name` and resumed by name; `inbox_entries` is the subagent-to-owning-session channel and out of scope. **Added in c-0012 by measurement:** Attention is an unmatched `permission.requested` joined to `permission.completed` by `data.requestId`, and `data.result.kind` discriminates the outcome; events are read from `events.jsonl`, never from `session.db`, which holds only `inbox_entries`, `todos`, and `todo_deps`; a live Session's teardown requires `SIGKILL` escalation because `SIGTERM` alone leaves survivors; and `copilot` self-assigns its own process group even when spawned without a detach flag.
-- Open questions: Which processes survive `SIGTERM` and why - only the count was captured, not the identity, so the c-0006 pattern of wrapper processes exiting after their children is inferred rather than shown. Does `subagent.started` reach an ACP client as a live notification, or only through `events.jsonl`? Held jointly with n-0008.
+- Open questions: Which processes survive `SIGTERM` and why - only the count was captured, not the identity, so the c-0006 pattern of wrapper processes exiting after their children is inferred rather than shown. Does `subagent.started` reach an **SDK** client as a typed event, or only through `events.jsonl`? **Restated in c-0018: this question was still phrased against ACP, a seam c-0014 superseded, and was duplicated in its SDK form on n-0008 and in its ACP form in `requirements.md`.** One question, three recordings, two of them stale. It is now held solely by n-0008, which owns the seam; this node retains only the `SIGTERM` survivor-identity question. It bears on acceptance-slice step 3.
 - Evidence: [c-0010](./cycles/c-0010.md) measurement of 41,928 events and 132 subagents in one Session and a full scan of all 674 local session databases; [c-0009](./cycles/c-0009.md) supervisor teardown prototype; [Issue #2](https://github.com/jdylanmc/maestro/issues/2); [Issue #11](https://github.com/jdylanmc/maestro/issues/11); [Issue #9](https://github.com/jdylanmc/maestro/issues/9)
 - Links: blocks n-0003; parent-of n-0008
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #2](https://github.com/jdylanmc/maestro/issues/2), [Issue #11](https://github.com/jdylanmc/maestro/issues/11)
 - Divergence: none
-- History: c-0011 extracted the provider-level findings of c-0009 and c-0010 into their own node, because they are inherited identically by all four routes and were being re-read out of the root's prose each cycle. Enters at maturity `researched` on c-0010's measured evidence, with two genuinely empirical questions outstanding, both of which can only be answered against a live Session; c-0012 answered both against live Sessions under an approved prototype, advancing fog to `researched` and maturity to `decision-ready` - the predicate fired and cleared, and teardown falsified the assumption that a live Session behaves like a synthetic tree - and spun the newly exposed integration-mode question out as n-0008 rather than absorbing it back into this node
+- History: c-0011 extracted the provider-level findings of c-0009 and c-0010 into their own node, because they are inherited identically by all four routes and were being re-read out of the root's prose each cycle. Enters at maturity `researched` on c-0010's measured evidence, with two genuinely empirical questions outstanding, both of which can only be answered against a live Session; c-0012 answered both against live Sessions under an approved prototype, advancing fog to `researched` and maturity to `decision-ready` - the predicate fired and cleared, and teardown falsified the assumption that a live Session behaves like a synthetic tree - and spun the newly exposed integration-mode question out as n-0008 rather than absorbing it back into this node; c-0018 removed a stale duplicate question phrased against ACP and left this node holding exactly one open item, the identity of the five `SIGTERM` survivors, which is the only genuinely empirical question in the session that nothing else is waiting on
 
 ### n-0003 - v2 Electron MVP
 
@@ -126,12 +126,12 @@ isolation, and restart reconciliation.
 - Maturity: promotion-ready
 - Priority: P0
 - Outcome: The first route driven to a complete MVP, executing n-0001's acceptance slice end to end and producing its executive report. Chosen to lead on evidence rather than version order: it is the only route carrying measured results.
-- Open questions: **Both prior questions are answered.** Packaging preserves supervision (c-0012, measured), and the real `BrowserWindow` seam was already exercised in c-0009. n-0008 was settled in c-0013, so one blocker is gone; the Acceptance Harness (n-0009) is the last one it cannot clear itself. **The signed-and-notarized question was retired in c-0016 by scoping it out**: the MVP ships an unsigned, fuse-enabled `.app`, so this node now holds **no open question of its own** and is gated solely on n-0009. **n-0009 cleared in c-0017, so this node has no remaining gate**: it passes all eleven leaf conditions, with the Acceptance Harness as its verification seam and a `feasible-with-constraint` disposition - the constraint being that a build manipulating Electron fuses must re-sign afterwards. What blocks it now is not its own state but its **branch**: n-0000 is at fog `decision-ready` / maturity `researched`, and the branch gate admits no exception.
+- Open questions: **Both prior questions are answered.** Packaging preserves supervision (c-0012, measured), and the real `BrowserWindow` seam was already exercised in c-0009. n-0008 was settled in c-0013, so one blocker is gone; the Acceptance Harness (n-0009) is the last one it cannot clear itself. **The signed-and-notarized question was retired in c-0016 by scoping it out**: the MVP ships an unsigned, fuse-enabled `.app`, so this node now holds **no open question of its own** and is gated solely on n-0009. **n-0009 cleared in c-0017, so this node has no remaining gate**: it passes all eleven leaf conditions, with the Acceptance Harness as its verification seam and a `feasible-with-constraint` disposition - the constraint being that a build manipulating Electron fuses must re-sign afterwards. What blocks it now is not its own state but its **branch**: n-0000, whose maturity c-0018 corrected upward to `decision-ready` after finding the `researched` value was a twelve-cycle-old artifact rather than a judgment. **c-0018 also confirmed this route runs first and alone**: both it and n-0004 are committed, but strictly one at a time, so the shared Acceptance Harness is validated against one route before it is asked to judge a second.
 - Evidence: [c-0003](./cycles/c-0003.md) runtime/state boundary probe; [c-0004](./cycles/c-0004.md) deferral of real installation; [c-0005](./cycles/c-0005.md) confirmation of Electron as the first route; [c-0009](./cycles/c-0009.md) prototype reaching zero survivors across three process groups on quit; [c-0012](./cycles/c-0012.md) packaged `.app` measured at zero survivors on graceful quit, nine survivors on Force Quit without a reaper, and zero after reap-on-launch; [Issue #4](https://github.com/jdylanmc/maestro/issues/4)
 - Links: depends-on n-0001, n-0002, n-0009; blocks n-0004, n-0007; informed-by n-0008 (settled c-0013; the stale reciprocal `blocks` edge on n-0008 was corrected in c-0016)
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #4](https://github.com/jdylanmc/maestro/issues/4)
 - Divergence: none
@@ -140,56 +140,56 @@ isolation, and restart reconciliation.
 ### n-0004 - v1.1 WezTerm MVP
 
 - Parent: n-0000
-- Fog: scouted
-- Maturity: vague
+- Fog: investigating
+- Maturity: framed
 - Priority: P1
-- Outcome: The second route driven to a complete MVP against the same acceptance slice, with its own executive report.
-- Open questions: Can a WezTerm-hosted route satisfy the process-ownership requirement at all? v1.0's detached `herdr server` daemon is the original violation, so this route starts holding the defect that produced the requirement. Does `proto-v1/` shorten the distance to completion, or does it carry the architecture that has to be abandoned?
+- Outcome: The second route driven to a complete MVP against the same acceptance slice, with its own executive report. **Committed unconditionally in c-0018** - *"You can build Electron and WezTerm variants now"* - so it is no longer a route whose scope depends on how the Electron route turns out. It remains **sequenced after** n-0003 rather than concurrent with it, because the Acceptance Harness is shared and unbuilt, and building it against two routes at once would let it be shaped by whichever route is easier to instrument, which is the exact bias the State Oracle exists to prevent.
+- Open questions: Can a WezTerm-hosted route satisfy the process-ownership requirement at all? v1.0's detached `herdr server` daemon is the original violation, so this route starts holding the defect that produced the requirement. Does `proto-v1/` shorten the distance to completion, or does it carry the architecture that has to be abandoned? **And the one that is newly answerable:** what is this route's *measured* Presentation Check ceiling? The ~40-50% figure and the missing macOS accessibility tree come from c-0016 **delegated research**, which is untrusted-evidence class, and they feed a fixed rubric criterion for a route now committed to completion. c-0018 obtained standing permission to measure it directly - *"I do not use WezTerm actively on this computer so you may experiment with it's capabilities"* - so the ceiling can be moved from research to measurement under a prototype gate.
 - Evidence: [c-0006](./cycles/c-0006.md) live orphan-process forensics; `proto-v1/` preserved v1.0 implementation; [Issue #26](https://github.com/jdylanmc/maestro/issues/26); [Issue #27](https://github.com/jdylanmc/maestro/issues/27); [Issue #28](https://github.com/jdylanmc/maestro/issues/28)
 - Links: depends-on n-0003, n-0008, n-0009; blocks n-0005, n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #27](https://github.com/jdylanmc/maestro/issues/27)
 - Divergence: none
-- History: c-0011 created by decomposition and sequenced second; c-0012 added the two provider-level blockers n-0008 and n-0009 that every route inherits, which put this node into priority debt against both; c-0013 debt cleared (n-0008 reached researched); the n-0009 row remains open; c-0015 debt cleared (n-0009 reached researched) - this node now carries no priority debt
+- History: c-0011 created by decomposition and sequenced second; c-0012 added the two provider-level blockers n-0008 and n-0009 that every route inherits, which put this node into priority debt against both; c-0013 debt cleared (n-0008 reached researched); the n-0009 row remains open; c-0015 debt cleared (n-0009 reached researched) - this node now carries no priority debt; c-0018 committed it unconditionally alongside n-0003 while keeping the one-at-a-time sequencing, advanced it to fog `investigating` and maturity `framed` on the strength of having a bounded outcome and named exclusions rather than new evidence, and recorded that its automation ceiling - the single input it contributes to a fixed rubric criterion - has never been measured, only researched, and that permission to measure it now exists
 
-### n-0005 - v3 Tauri/Rust MVP
+### n-0005 - v3 Tauri/Rust feasibility probe
 
 - Parent: n-0000
-- Fog: scouted
-- Maturity: vague
+- Fog: investigating
+- Maturity: framed
 - Priority: P1
-- Outcome: The third route driven to a complete MVP against the same acceptance slice, with its own executive report.
-- Open questions: Everything. No feasibility research has been done on this route beyond its tracker item.
-- Evidence: [Issue #23](https://github.com/jdylanmc/maestro/issues/23)
+- Outcome: **Reduced in c-0018 from a complete MVP to a bounded feasibility probe**, under a `delegated-to-loop` disposition after the user committed n-0003 and n-0004 and handed this route back to the loop. The probe answers one decisive question and still produces an executive report, which c-0011 requires of every route including a rejected one. **The decisive question: does the WebdriverIO embedded-WebDriver path actually drive a packaged Tauri `.app` on macOS, and does the official Rust SDK binding remove the Node sidecar?** Research established both halves of why this is the right question. Playwright is out entirely on macOS - `WKWebView` exposes no Chrome DevTools Protocol - and Tauri's own documentation states that driving `tauri-driver` directly supports only Windows and Linux. The working path, `@wdio/tauri-service`, embeds a W3C WebDriver server **inside the application binary**, so this route must modify the product to make it testable, which no other route does. Offsetting that, GitHub publishes an **official Rust SDK** binding for Copilot, so a Tauri route can consume the seam natively with no Node sidecar - an advantage no cycle had counted.
+- Open questions: The decisive question above. Everything beyond it is deliberately out of the probe's scope.
+- Evidence: [c-0018](./cycles/c-0018.md) delegated research on macOS user-interface automation and Copilot SDK language bindings; [Issue #23](https://github.com/jdylanmc/maestro/issues/23)
 - Links: depends-on n-0004, n-0008, n-0009; blocks n-0006, n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #23](https://github.com/jdylanmc/maestro/issues/23)
 - Divergence: none
-- History: c-0011 created by decomposition and sequenced third; c-0012 added the inherited blockers n-0008 and n-0009; c-0013 debt cleared (n-0008 reached researched); the n-0009 row remains open; c-0015 debt cleared (n-0009 reached researched) - this node now carries no priority debt
+- History: c-0011 created by decomposition and sequenced third; c-0012 added the inherited blockers n-0008 and n-0009; c-0013 debt cleared (n-0008 reached researched); the n-0009 row remains open; c-0015 debt cleared (n-0009 reached researched) - this node now carries no priority debt; c-0018 reduced it from a complete MVP to a bounded feasibility probe under delegation, and replaced "Open questions: Everything" with one decisive question derived from research. This is the reduction the loop recommended in c-0011 and was overruled on; what changed is that it is now grounded in per-route facts rather than in a general cost argument, and the user split the decision by route rather than accepting or rejecting it wholesale
 
-### n-0006 - v4 native macOS Swift MVP
+### n-0006 - v4 native macOS Swift feasibility probe
 
 - Parent: n-0000
-- Fog: scouted
-- Maturity: vague
+- Fog: investigating
+- Maturity: framed
 - Priority: P1
-- Outcome: The fourth route driven to a complete MVP against the same acceptance slice, with its own executive report.
-- Open questions: Everything. No feasibility research has been done on this route beyond its tracker item.
-- Evidence: [Issue #24](https://github.com/jdylanmc/maestro/issues/24)
+- Outcome: **Reduced in c-0018 from a complete MVP to a bounded feasibility probe**, under the same `delegated-to-loop` disposition as n-0005, and still producing an executive report. **The decisive question: what does the Copilot seam cost from Swift, given there is no Swift SDK?** Research established the asymmetry that makes this route unlike the other three. Its verification story is the **best** of the four - `XCUITest` is Apple's first-class framework and `XCUIApplication` drives an already-packaged `.app` by bundle identifier or file URL, with no test target compiled into the product, which is the exact opposite of what Tauri requires. But GitHub publishes official Copilot SDK bindings for TypeScript, Python, Go, Rust, Java, and .NET, and **none for Swift**, so this route must spawn a Node or Rust sidecar and speak JSON-RPC, or hand-roll the wire protocol against no published specification. Known macOS costs on the verification side: the test runner needs Accessibility permission, an active graphical session, and there is no per-run sandbox reset.
+- Open questions: The decisive question above. Everything beyond it is deliberately out of the probe's scope.
+- Evidence: [c-0018](./cycles/c-0018.md) delegated research on macOS user-interface automation and Copilot SDK language bindings; [Issue #24](https://github.com/jdylanmc/maestro/issues/24)
 - Links: depends-on n-0005, n-0008, n-0009; blocks n-0007
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none - relates to [Issue #24](https://github.com/jdylanmc/maestro/issues/24)
 - Divergence: none
-- History: c-0011 created by decomposition and sequenced fourth; c-0012 added the inherited blockers n-0008 and n-0009; c-0013 debt cleared (n-0008 reached researched); the n-0009 row remains open; c-0015 debt cleared (n-0009 reached researched) - this node now carries no priority debt
+- History: c-0011 created by decomposition and sequenced fourth; c-0012 added the inherited blockers n-0008 and n-0009; c-0013 debt cleared (n-0008 reached researched); the n-0009 row remains open; c-0015 debt cleared (n-0009 reached researched) - this node now carries no priority debt; c-0018 reduced it to a bounded feasibility probe under delegation and gave it one decisive question. The research that produced it also inverted the assumption behind this route's low ranking: it has the strongest verification story of the four and the weakest provider-integration story, which is the opposite shape from the terminal route and is exactly the kind of tradeoff n-0007 exists to weigh
 
 ### n-0007 - Comparative technology evaluation
 
@@ -198,16 +198,16 @@ isolation, and restart reconciliation.
 - Maturity: vague
 - Priority: P1
 - Outcome: The terminal deliverable: an analysis selecting which stack is best suited to this problem, consuming the four per-route executive reports rather than re-deriving the comparison. A rejected stack is an input to this evaluation, not an absence from it - the reason a stack could not build the app is itself a finding.
-- Open questions: **Partly answered in c-0015.** The user fixed one criterion before any route shipped - **user-interface automation capability** - on the stated reasoning that automated regression checks are the work that follows the MVP. The remaining question is what else the rubric holds and how the criteria weigh against each other. Recorded honestly: this criterion is **not neutral** between the routes. A component-driven web stack reaches Storybook and Playwright directly, Tauri reaches Playwright through WebDriver, Swift uses XCUITest, and a terminal surface exposes very little to any of them - so naming it predicts part of the ranking. That is a legitimate product decision, recorded as one rather than presented as a neutral measurement.
+- Open questions: **Partly answered in c-0015.** The user fixed one criterion before any route shipped - **user-interface automation capability** - on the stated reasoning that automated regression checks are the work that follows the MVP. The remaining question is what else the rubric holds and how the criteria weigh against each other. Recorded honestly: this criterion is **not neutral** between the routes. A component-driven web stack reaches Storybook and Playwright directly, Swift uses XCUITest, and a terminal surface exposes very little to any of them - so naming it predicts part of the ranking. **One clause of that reasoning was falsified in c-0018:** "Tauri reaches Playwright through WebDriver" is wrong on macOS. Playwright cannot drive `WKWebView` at all, and Tauri's own documentation excludes macOS from `tauri-driver`; the working path embeds a WebDriver server inside the application binary. The criterion's *shape* survives - the routes still separate on automation reach - but the predicted ordering shifts, because Swift turns out to have the strongest automation story of the four rather than a middling one. That is a legitimate product decision, recorded as one rather than presented as a neutral measurement.
 - Evidence: [c-0015](./cycles/c-0015.md) fixed the user-interface-automation criterion and made each route's automation reach the evidence for it; [c-0011](./cycles/c-0011.md)
 - Links: depends-on n-0003, n-0004, n-0005, n-0006; informed-by n-0001, n-0009
 - First seen: c-0011
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
-- History: c-0015 fixed its first rubric criterion before any route shipped, and tied it to measurement rather than assessment: how far each route automates the Presentation Check **is** the evidence. c-0011 created by decomposition. It exists as a node rather than as a closing step because the user named it a first-class deliverable - "then do an analysis and evaluation on which technology is best to solve this problem" - and because its rubric question has to be settled before the routes finish, not after
+- History: c-0018 falsified one clause of the criterion's supporting reasoning and inverted part of the ranking it implied - Swift's `XCUITest` story is the strongest of the four, and Tauri's is materially worse than recorded, requiring the product under test to be modified to be testable. It also learned that Copilot SDK language bindings differ per route, which is a second, previously uncounted axis the rubric must weigh: Rust has an official binding and Swift has none. c-0015 fixed its first rubric criterion before any route shipped, and tied it to measurement rather than assessment: how far each route automates the Presentation Check **is** the evidence. c-0011 created by decomposition. It exists as a node rather than as a closing step because the user named it a first-class deliverable - "then do an analysis and evaluation on which technology is best to solve this problem" - and because its rubric question has to be settled before the routes finish, not after
 
 ### n-0008 - Copilot integration mode
 
@@ -221,7 +221,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0002; blocks n-0004, n-0005, n-0006; informs n-0003
 - First seen: c-0012
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
@@ -239,7 +239,7 @@ isolation, and restart reconciliation.
 - Links: depends-on n-0001; blocks n-0003, n-0004, n-0005, n-0006
 - First seen: c-0012
 - Former node id: none
-- Reinterpreted: c-0017 (intact)
+- Reinterpreted: c-0018 (intact)
 - Promotion key: none
 - Tracker: none
 - Divergence: none
@@ -247,18 +247,24 @@ isolation, and restart reconciliation.
 
 ## Active Frontier
 
+Every row lists **all** of its node's open questions. c-0018 found n-0002's row
+carrying one of two, which mattered because selection reads this table rather
+than the node blocks.
+
 | Node | Fog | Maturity | Priority | Blocked by | Open questions |
 | --- | --- | --- | --- | --- | --- |
-| n-0000 | decision-ready | researched | P0 | none | **Blocks promotion as a branch.** Holds no question directly (decomposed in c-0011) but was never re-matured, and its tracker item still contradicts c-0010 |
-| n-0001 | decision-ready | decision-ready | P0 | none | **Blocks promotion as a branch.** What evidence makes four executive reports genuinely comparable - product-owned and now on the critical path |
-| n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` and why - identity not captured, only the count |
-| n-0003 | **cleared** | **promotion-ready** | P0 | none | none - passes the leaf gate; held only by its branch n-0000 |
-| n-0004 | scouted | vague | P1 | n-0003, n-0009 | Whether a WezTerm route can satisfy process ownership at all; whether `proto-v1/` helps or hinders |
-| n-0005 | scouted | vague | P1 | n-0004, n-0009 | No feasibility research yet |
-| n-0006 | scouted | vague | P1 | n-0005, n-0009 | No feasibility research yet |
-| n-0007 | investigating | vague | P1 | n-0003, n-0004, n-0005, n-0006 | What the rubric holds beyond the user-interface-automation criterion fixed in c-0015, and how criteria weigh |
-| n-0008 | decision-ready | researched | P0 | none | **Accepted unknown:** the SDK permission callback has never been observed firing (quota); whether the SDK exposes a session rename. Attention coverage retired in c-0016 |
-| n-0009 | **cleared** | **promotion-ready** | P0 | none | none - passes the leaf gate; held only by its branch n-0001. Accepted unknown: whether the `enableNodeCliInspectArguments` fuse blocks Playwright |
+| n-0000 | decision-ready | decision-ready | P0 | none | none held directly. Path to `promotion-ready` is reconciling Issue #1, tracked as a divergence rather than as fog |
+| n-0001 | decision-ready | decision-ready | P0 | none | (1) What evidence makes four executive reports genuinely comparable - product-owned, unasked since c-0011, and the last gate on promoting n-0009. (2) Whether executing the slice reveals an unimplementable step - an accepted unknown by construction, since running the slice is what answers it |
+| n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` on a live Session, and why - only the count was captured. The `subagent.started` question moved to n-0008 in c-0018, where the seam is owned |
+| n-0004 | investigating | framed | P1 | n-0003 | (1) Can a WezTerm route satisfy process ownership at all. (2) Does `proto-v1/` shorten the distance or carry the architecture to abandon. (3) What is the **measured** Presentation Check ceiling - currently research-derived only, and now measurable under permission granted in c-0018 |
+| n-0005 | investigating | framed | P1 | n-0003, n-0004 | Reduced to a bounded probe: does the WebdriverIO embedded-WebDriver path drive a packaged Tauri `.app` on macOS, and does the official Rust SDK binding remove the Node sidecar |
+| n-0006 | investigating | framed | P1 | n-0003, n-0004, n-0005 | Reduced to a bounded probe: what does the Copilot seam cost from Swift, given no Swift SDK binding exists |
+| n-0007 | investigating | vague | P1 | n-0003, n-0004, n-0005, n-0006 | What the rubric holds beyond the user-interface-automation criterion, and how criteria weigh - now including SDK language-binding availability, a second axis found in c-0018 |
+| n-0008 | decision-ready | researched | P0 | none | (1) **Accepted unknown:** the SDK permission callback has never been observed firing (quota). (2) Whether the SDK exposes a session rename - needs an `npm install` in an isolation path, **not** a free read; no SDK copy remains on disk. (3) Whether `subagent.started` reaches an SDK client as a typed event or only through `events.jsonl` - inherited from n-0002 in c-0018 |
+
+Nodes at fog `cleared` and therefore off the frontier: **n-0003** (v2 Electron
+MVP) and **n-0009** (Acceptance Harness), both at maturity `promotion-ready`
+and both held only by the branch gate.
 
 ## Priority Debt
 
@@ -298,7 +304,17 @@ unknown and one cheaply researchable question about a session rename, and
 nothing about deferring it created debt, because the table requires a *lower*
 priority node to outrun a higher one and n-0008 is P0.
 
-**The table stays empty in c-0017 for a reason worth stating**, because two
+**It stays empty in c-0018 too, and this cycle tested it properly.** Three P1
+nodes advanced - n-0004 to `framed`, n-0005 and n-0006 to `framed` - which is
+exactly the condition that generates debt if any *related* higher-priority node
+sits below maturity `researched`. Every P0 node was checked: n-0000
+`decision-ready` (corrected up this cycle), n-0001 `decision-ready`, n-0002
+`decision-ready`, n-0003 `promotion-ready`, n-0008 `researched`, n-0009
+`promotion-ready`. All at or above the floor, so no row opens.
+
+**The previous statement below is retained, and c-0017's reason still holds:**
+
+**The table stayed empty in c-0017 for a reason worth stating**, because two
 nodes advanced this cycle: both n-0003 and n-0009 are P0, and every P0 node in
 the session sits at maturity `researched` or above, so no lower-priority node
 outran anything and no weakening occurred. Debt detection is not the constraint
