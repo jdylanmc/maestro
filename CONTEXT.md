@@ -71,6 +71,14 @@ Parked.
 Whether a Fleet's processes are observed to be `Alive`, `Dead`, or `Ambiguous`.
 Independent of whether the Fleet is Parked or Interrupted, and never assumed.
 
+**Attention**
+
+A Fleet observed to want its human: blocked on an unanswered permission
+request, stopped by an error or an abort, or finished and unacknowledged.
+Observed per Fleet and never inferred from another Fleet.
+
+Discouraged aliases: `AT_RISK`
+
 ### Place
 
 **Worktree**
