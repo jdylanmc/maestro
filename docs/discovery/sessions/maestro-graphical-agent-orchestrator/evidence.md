@@ -1685,3 +1685,87 @@ must be shown to fail on the case it exists to catch, not merely to run.
 - **`evidence.md` was read in bounded fashion this cycle** - structure and final section only - and
   modified by an anchored append. No section was re-rendered, so no unread bytes were at risk.
 - cmux auto-updates; every measurement above is bound to 0.64.22 (102).
+
+## c-0022 - The non-P0 set, vetted against the wrap route
+
+User-directed subject: *"Take the previous p1 list that you had + the p0's I had deferred and run the
+analysis that way."* Every requirement outside the c-0021 P0 set, judged against the now-settled
+cmux wrap route. Verdicts: **free** (the host ships it), **partial**, **build** (ours), **moot**
+(retired by hosting), **method** (verification, not product).
+
+### Already delivered by the host - no work
+
+| Id | Requirement | Mechanism |
+| --- | --- | --- |
+| F0.10 | Attention | `agentPermissionPrompt` on by default, Feed panel, pane ring, `jump-to-unread`, plus idle-suppression Maestro never designed |
+| F0.11 | Consume runtime Attention rather than rebuild it | cmux Copilot hooks - `PreToolUse`, `agentStop` |
+| F0.19 | Three-column layout | left sidebar / pane grid / right sidebar |
+| F0.25 | Session addressable from the command line without Maestro | it is a terminal |
+| F0.26 | Targeted per-Fleet cancellation | close the pane |
+| F1.2 | Desktop notification on Attention | native banners and dock badge |
+| N0.4 | Each Fleet in its own process group | PTY foreground groups; `copilot` self-assigns (c-0012) |
+| N0.15 | Generic runtime evidence only | `events.jsonl`; nothing skill-specific |
+| N1.1 | Keyboard-first, no new keymap | Ghostty keybinds, `Cmd+D` splits |
+
+### Partly delivered
+
+| Id | Requirement | Residual gap |
+| --- | --- | --- |
+| F0.3 | Primary window bound 1:1 | the pane is free; the binding and lock are ours |
+| F0.17 | Liveness from process evidence | cmux's `running/idle/needsInput/unknown` is ephemeral; the durable verdict is ours |
+| F0.21 | Main-window content rules | chat and file view free; the subagent log is ours |
+| F0.23 | Admission control | `maxLiveTerminals` (default **12**) plus hibernation already degrade gracefully - adjacent to the 8-Fleet ceiling and never previously connected to it |
+| N0.2 | Descendant-tree ownership | `agentHibernation` already signals an agent's process group - but to reclaim memory, not on quit |
+| N0.10 | Isolation on both axes | no cross-Fleet messaging is **free**, since workspaces are independent by design; worktree isolation is ours |
+
+### Must build
+
+`F0.2` branch-per-Fleet, `F0.6` the `parentId` exclusion, and `F0.8` live-versus-reconstructed were
+all demonstrated by the c-0021 prototype. `N0.7` state outside any worktree and `N0.8` Park
+preserving uncommitted work are small. `N0.9` the 1:1 lock, `N0.13` the still-unmeasured 8-Fleet
+ceiling, `N1.3` bounded per-worktree build state, and `F1.1` Fleet Recap remain.
+
+**The substantial item is durable lifecycle state** - `F0.15` and `F0.16`, moved to `P0-implied`
+this cycle. cmux deliberately holds **no durable intent at all**; its four agent states are
+ephemeral and recomputed from hooks. This is the one thing the host philosophically refuses to
+provide, and it is therefore the reason Maestro remains software rather than a cmux configuration
+file.
+
+### Moot rather than deferred
+
+`N0.18` main-process authority boundary and `N0.19` the unsigned fuse-enabled build were v2 Electron
+artifacts. `N0.3` verify-and-escalate teardown was dropped by the user in c-0021.
+
+### Three findings the table does not carry
+
+**1. The Copilot SDK is not used on this route, and the contradiction was live in confirmed state.**
+The prototype ran `copilot` in a pane and read `events.jsonl`: no `CopilotClient`, no `sendAndWait`,
+no `permissions.pendingRequests()`. Four cycles of SDK work (c-0014, c-0016, c-0020) appeared to be
+stranded. The user resolved it by **route class** rather than by choosing a winner - terminal-hosted
+routes use the CLI because the terminal *is* the chat interface; application routes use the SDK
+because they must build one. The seam had been recorded as a property of the product when it is a
+property of the route class, and that misfiling is what made the work look wasted.
+
+**2. Permission accountability inverted rather than disappeared.** `N0.11` and `N0.12` exist because
+macOS binds the responsible process at launch. Hosted in cmux, a Fleet's descendants raise prompts
+attributed to **cmux**, not Maestro. By the test that rewrote `N0.5` in c-0021 this is an
+improvement - the host is a visible foreground application the operator can identify and quit - but
+"Maestro is accountable" is now false on a hosted route.
+
+**3. The analysis contained a defect that the same cycle's principle removed.** cmux's global,
+chronological notification Feed was scored a **partial miss** against "selecting a Fleet re-scopes
+every panel". When the user confirmed *"we basically want to 'lean in' on each platform and embrace
+it's strengths"*, that score became wrong: a unified triage inbox is a legitimate expression of
+Attention across 8 Fleets. The rubric measures what the design *becomes* on a stack, not how
+faithfully a stack reproduces a design authored for a different one.
+
+### Limitations of this cycle
+
+- **The analysis is desk work.** It reuses c-0021's measured CLI surface and the reference documents;
+  nothing was re-measured against a running cmux, and no prototype was proposed or approved.
+- Every "free" verdict inherits c-0021's version pin at cmux 0.64.22 (102), on an auto-updating
+  application.
+- The `maxLiveTerminals = 12` figure comes from published documentation, not from measurement, and
+  its relationship to the 8-Fleet ceiling is an observation rather than a tested interaction.
+- `evidence.md` was again read in bounded fashion and extended by an anchored append; no section was
+  re-rendered.

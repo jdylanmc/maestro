@@ -131,6 +131,23 @@
 - **Git is not the constraint; duplicated working state is.** Measured: a worktree of a clean checkout costs ~2.6 MiB and ~50 ms to create, with the object store shared and unchanged. What scales badly is per-worktree untracked and build state - `node_modules`, build output, caches. File descriptors are not a risk at this scale. Because worktrees are now mandatory rather than optional, this is the load-bearing limit on concurrent Fleets. [c-0010](./cycles/c-0010.md)
 - **Maestro must not duplicate build state per Fleet where it can avoid it.** Sparse checkout is settable per worktree and is the strongest available mitigation for a monorepo. [c-0010](./cycles/c-0010.md)
 
+### Route class, platform idiom, and the five-route comparison
+
+**All three confirmed in c-0022.**
+
+- **There are five routes, and cmux leads.** *User: "cmux joins the comparison but push it to the front of the lead."* n-0011 (cmux) does **not** supersede n-0004 (WezTerm), n-0005 (Tauri), or n-0006 (Swift); it joins them and takes the lead position. n-0003 (v2 Electron) is already built and promoted, so the live sequence is **cmux, then WezTerm, then Tauri, then Swift**, with Electron's report already in hand. Every count of "four routes" or "four executive reports" recorded from c-0011 onward is superseded by **five**. This extends c-0011's evidence-order rule rather than breaking it: Electron led because it alone carried measured evidence, and cmux now carries measured evidence too - from [c-0021](./cycles/c-0021.md), and against the current P0 set rather than the superseded one. [c-0011](./cycles/c-0011.md), [c-0022](./cycles/c-0022.md)
+
+- **The integration seam is a property of the route class, not of the product.** *User: "Deprioritize the copilot seam for cmux directly since it can use the cli and it's a terminal itself -- reserve copilot sdk for the apps where we need to create our own chat interface."*
+  - **Terminal-hosted routes** (n-0011 cmux, n-0004 WezTerm) drive a Fleet through the **Copilot CLI**. The terminal *is* the chat interface, so no programmatic send is needed, and the subagent tree, Attention, and Liveness are read from `events.jsonl`.
+  - **Application routes** (n-0003 Electron, n-0005 Tauri, n-0006 Swift) use the **Copilot SDK**, because they must build a chat interface and therefore need programmatic send, resume, and permission surfaces.
+  This **narrows c-0014 rather than falsifying it**, and preserves the SDK work of c-0014, c-0016, and c-0020 instead of stranding it. The seam had been recorded as a property of the product when it is a property of the route class. Consequence: **`N0.17` (pin the SDK version) binds only where the SDK is used.** A terminal-hosted route pins the **event-log format** instead - the more stable of the two, since the SDK permission surface changed shape across three observed versions while the log join has held across four cycles and more than 36,000 events. [c-0014](./cycles/c-0014.md), [c-0022](./cycles/c-0022.md)
+
+- **A route implements the contract in its host's idiom.** *User: "we basically want to 'lean in' on each platform and embrace it's strengths."* A route does not reproduce a design authored for a different host. Worked consequences for n-0011: Attention is **cmux's global Feed**, chronological across all Fleets, rather than a Fleet-scoped panel - a unified triage inbox is a legitimate expression of Attention at 8 Fleets, and c-0022's own analysis had wrongly scored it as a partial miss before this principle was confirmed; the layout is **cmux's** sidebar / pane-grid / right-sidebar rather than the c-0005 three-column wireframe; and subagents may be rendered as **panes** as well as a tree, since cmux already does this for Claude Teams.
+
+- **The idiom principle is bounded, and the bound is load-bearing.** The **Acceptance Slice stays identical across every route**, and the executive report keeps its fixed five-section shape. Idiomatic *implementation* is permitted; idiomatic *behaviour* is not, and neither is an idiomatic rubric. Without this bound the principle silently becomes "each route is judged by its own standard", which would void the five-route comparison confirmed in the same cycle. The rubric question becomes "what does our design become on this stack" rather than "can this stack implement our design" - a sharpening rather than a loosening. [c-0011](./cycles/c-0011.md), [c-0019](./cycles/c-0019.md), [c-0022](./cycles/c-0022.md)
+
+- **Permission accountability inverts under hosting rather than disappearing.** `N0.11` (distinct bundle identity) and `N0.12` (accountability for descendants' prompts) were written because macOS binds the responsible process at launch. On a terminal-hosted route, prompts raised by a Fleet's descendants are attributed to **the host application** - cmux - not to Maestro. This is *better* than the `herdr` case by the same test that rewrote `N0.5`: the host is a visible foreground application the operator can identify and quit. But "Maestro is accountable" is false on a hosted route, and `N0.11` is retired there rather than merely deferred. [c-0006](./cycles/c-0006.md), [c-0021](./cycles/c-0021.md), [c-0022](./cycles/c-0022.md)
+
 ### Runtime integration
 
 - **Maestro names the runtime's Session rather than maintaining a private name.** The Copilot CLI accepts `-n, --name`, supports `/rename`, and resolves `--resume` by name. This supersedes the recorded decision on [Issue #5](https://github.com/jdylanmc/maestro/issues/5) that Maestro owns naming. A consequence is that a Maestro-created Fleet stays addressable from the command line without Maestro. [c-0007](./cycles/c-0007.md)
@@ -213,6 +230,8 @@ and keeping the promise.
 | F0.6 | `parentId` must never build the tree | F0.5 |
 | F0.8 | Subscribe while `Alive`, reconstruct when `Parked`/`Dead` | F0.5 |
 | F0.11 | Attention is consumed from the runtime, not rebuilt | F0.10 |
+| F0.15 | `Parked` vs `Interrupted` - durable intent | F0.13, F0.14 |
+| F0.16 | The two lifecycle axes: durable intent x observed Liveness | F0.13, F0.14 |
 | F0.17 | Liveness classified from process evidence | F0.14 |
 | N0.2 | Ownership covers the descendant tree, not direct children | N0.1 |
 | N0.4 | Each Fleet in its own process group, recorded durably | N0.1, F0.18 |
@@ -220,11 +239,14 @@ and keeping the promise.
 
 ### P1
 
-**Functional:** F0.10 Attention; F0.15 `Parked` vs `Interrupted`; F0.16 the two
-lifecycle axes; F0.19 three-column layout; F0.21 main-window content rules; F0.23
-admission control; F0.25 runtime-addressable session naming; F0.26 targeted
-cancellation; F1.1 **Fleet Recap**; F1.2 desktop notification on Attention; F1.5
-per-route executive report; F1.6 comparative technology evaluation.
+**Functional:** F0.10 Attention; F0.19 three-column layout; F0.21 main-window
+content rules; F0.23 admission control; F0.25 runtime-addressable session naming;
+F0.26 targeted cancellation; F1.1 **Fleet Recap**; F1.2 desktop notification on
+Attention; F1.5 per-route executive report; F1.6 comparative technology
+evaluation. *(F0.15 and F0.16 were moved to `P0-implied` in c-0022: auto-Park at
+P0 without a durable Parked/Interrupted distinction makes Park decorative on
+relaunch, which is the exact outcome c-0008 rejected silent termination to
+avoid.)*
 
 **Non-functional:** N0.3 verify-and-escalate teardown (**explicitly dropped to P1
 by the user**, not merely deprioritized); N0.7 durable state outside any

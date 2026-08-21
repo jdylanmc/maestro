@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 22
+revision: 23
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-20T19:52:31Z
 anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
-last-cycle: c-0021
+last-cycle: c-0022
 cycle-state: complete
-state-digest: bfea49d1a2e19589b04e5a4f35af1aa72c2deb7bc9a974eef76eca8f51837482
-root-map-digest: e105ddc02f064c30bbbba5138e086f0caf055aad3d819725d56396d8d85a8508
+state-digest: a7a56ab082cd02bf37e18e49e9922d451403c049fd203b5ae1d9ef3005b69302
+root-map-digest: b2a673893ea036e1f3dbf9e55b370e38e7ee6f9e18953313f718aac7d8aa3ae5
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -195,7 +195,7 @@ isolation, and restart reconciliation.
 - Fog: investigating
 - Maturity: vague
 - Priority: P1
-- Outcome: The terminal deliverable: an analysis selecting which stack is best suited to this problem, consuming the four per-route executive reports rather than re-deriving the comparison. A rejected stack is an input to this evaluation, not an absence from it - the reason a stack could not build the app is itself a finding.
+- Outcome: The terminal deliverable: an analysis selecting which stack is best suited to this problem, consuming the **five** per-route executive reports rather than re-deriving the comparison. A rejected stack is an input to this evaluation, not an absence from it - the reason a stack could not build the app is itself a finding. **Corrected in c-0022 from four to five**: n-0011 (cmux) joins the comparison and leads it. Two axes recorded there also bear directly on this node: the seam is now a property of the **route class** - terminal-hosted routes use the Copilot CLI, application routes use the SDK - so "SDK language-binding cost" applies to only three of the five; and each route implements the contract in **its host's idiom**, which means the evaluation compares what the design *becomes* on each stack rather than how faithfully each stack reproduces one design. The Acceptance Slice and the fixed five-section report shape are unchanged, and are what keep the comparison like-for-like under that principle.
 - Open questions: **Partly answered in c-0015.** The user fixed one criterion before any route shipped - **user-interface automation capability** - on the stated reasoning that automated regression checks are the work that follows the MVP. The remaining question is what else the rubric holds and how the criteria weigh against each other. Recorded honestly: this criterion is **not neutral** between the routes. A component-driven web stack reaches Storybook and Playwright directly, Swift uses XCUITest, and a terminal surface exposes very little to any of them - so naming it predicts part of the ranking. **One clause of that reasoning was falsified in c-0018:** "Tauri reaches Playwright through WebDriver" is wrong on macOS. Playwright cannot drive `WKWebView` at all, and Tauri's own documentation excludes macOS from `tauri-driver`; the working path embeds a WebDriver server inside the application binary. The criterion's *shape* survives - the routes still separate on automation reach - but the predicted ordering shifts, because Swift turns out to have the strongest automation story of the four rather than a middling one. That is a legitimate product decision, recorded as one rather than presented as a neutral measurement.
 - Evidence: [c-0015](./cycles/c-0015.md) fixed the user-interface-automation criterion and made each route's automation reach the evidence for it; [c-0011](./cycles/c-0011.md)
 - Links: depends-on n-0003, n-0004, n-0005, n-0006; informed-by n-0001, n-0009
@@ -268,9 +268,9 @@ isolation, and restart reconciliation.
 - Maturity: decision-ready
 - Priority: P0
 - Outcome: Maestro is **hosted inside cmux** rather than built as its own application. cmux supplies the window, tabs and splits, workspace selection and panel re-scoping, the file tree, the resource meter, branch and pull-request metadata, notifications, Attention, and the Nord theme. Maestro supplies what cmux deliberately does not: enforced worktree-per-Fleet, the live subagent tree, durable `Parked`/`Interrupted` intent, and sweep-on-launch. It runs as a **helper process inside a cmux pane**, which is measured to receive full control-socket access with no configuration change, no fork, and no Swift.
-- Open questions: (1) **Does cmux replace the four-route comparison or become a fifth route?** n-0003 is promoted and built, n-0004 through n-0006 are unstarted, and n-0007 exists to consume four reports that may never be written. This is the next product decision and it is not the loop's to take. (2) Slice steps 2 and 5 are **unexercised** - no live Copilot Session ran inside a Fleet worktree, so the tree was proven against sessions elsewhere on disk. (3) Teardown was **not measured on cmux at all**; the best-effort bar and the residual survivor count are carried from c-0012. (4) Custom sidebars (`~/.config/cmux/sidebars/`) are the richest rendering surface and remain **untested**, because they sit outside the approved isolation path. (5) cmux **auto-updates**; every measurement is bound to 0.64.22 and nothing yet re-tests on upgrade.
-- Evidence: [c-0021](./cycles/c-0021.md) prototype n-0011-c-0021 - enforced Fleets, a three-level subagent tree, and Fleet state rendered in cmux's own sidebar from an external process; [cmux-arch.md](../../../../v2/docs/reference/cmux-arch.md); [ghostty-arch.md](../../../../v2/docs/reference/ghostty-arch.md); [ccmux-arch.md](../../../../v2/docs/reference/ccmux-arch.md); [warp-arch.md](../../../../v2/docs/reference/warp-arch.md)
-- Links: refines n-0000; depends-on n-0002; informs n-0007; supersedes-candidate n-0004, n-0005, n-0006
+- Open questions: (1) ~~Does cmux replace the four-route comparison or become a fifth route?~~ **Settled in c-0022: it joins and leads.** *User: "cmux joins the comparison but push it to the front of the lead."* (2) Slice steps 2 and 5 are **unexercised** - no live Copilot Session ran inside a Fleet worktree, so the tree was proven against sessions elsewhere on disk. (3) Teardown was **not measured on cmux at all**; the best-effort bar and the residual survivor count are carried from c-0012. (4) Custom sidebars (`~/.config/cmux/sidebars/`) are the richest rendering surface and remain **untested**, because they sit outside the approved isolation path. (5) cmux **auto-updates**; every measurement is bound to 0.64.22 and nothing yet re-tests on upgrade. (6) **New in c-0022:** the durable lifecycle state - `Parked` vs `Interrupted` and the two axes - is now the largest single build item on this route, because cmux deliberately holds no durable intent at all.
+- Evidence: [c-0021](./cycles/c-0021.md) prototype n-0011-c-0021 - enforced Fleets, a three-level subagent tree, and Fleet state rendered in cmux's own sidebar from an external process; [c-0022](./cycles/c-0022.md) requirement-by-requirement analysis of the whole non-P0 set against this route; [cmux-arch.md](../../../../v2/docs/reference/cmux-arch.md); [ghostty-arch.md](../../../../v2/docs/reference/ghostty-arch.md); [ccmux-arch.md](../../../../v2/docs/reference/ccmux-arch.md); [warp-arch.md](../../../../v2/docs/reference/warp-arch.md)
+- Links: refines n-0000; depends-on n-0002; informs n-0007; **peer-of n-0004, n-0005, n-0006** (the c-0021 `supersedes-candidate` links were withdrawn in c-0022 when the user confirmed cmux joins the comparison rather than replacing it)
 - First seen: c-0021
 - Former node id: none
 - Reinterpreted: c-0021 (created)
@@ -288,7 +288,7 @@ than the node blocks.
 | Node | Fog | Maturity | Priority | Blocked by | Open questions |
 | --- | --- | --- | --- | --- | --- |
 | n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` on a live Session, and why - only the count was captured. **Deferred by user redirect in c-0021**; this was the deterministic selection. |
-| n-0011 | researched | decision-ready | P0 | none | (1) Does cmux **replace** the four-route comparison or become a fifth route. (2) Slice steps 2 and 5 unexercised - no live Copilot Session ran inside a Fleet worktree. (3) Teardown never measured on cmux. (4) Custom sidebars untested (outside the isolation path). (5) cmux auto-updates; measurements bound to 0.64.22 |
+| n-0011 | researched | decision-ready | P0 | none | (1) ~~replace or join~~ **settled c-0022: joins and leads.** (2) Slice steps 2 and 5 unexercised - no live Copilot Session ran inside a Fleet worktree. (3) Teardown never measured on cmux. (4) Custom sidebars untested (outside the isolation path). (5) cmux auto-updates; measurements bound to 0.64.22. (6) Durable lifecycle state is the largest remaining build item, because cmux holds no durable intent |
 | n-0004 | investigating | framed | P1 | n-0003 | (1) Can a WezTerm route satisfy process ownership at all. (2) Does `proto-v1/` shorten the distance or carry the architecture to abandon. (3) What is the **measured** Presentation Check ceiling - research-derived only, and measurable under permission granted in c-0018 |
 | n-0005 | investigating | framed | P1 | n-0003, n-0004 | Reduced to a bounded probe: does the WebdriverIO embedded-WebDriver path drive a packaged Tauri `.app` on macOS, and does the official Rust SDK binding remove the Node sidecar |
 | n-0006 | investigating | framed | P1 | n-0003, n-0004, n-0005 | Reduced to a bounded probe: what does the Copilot seam cost from Swift, given no Swift SDK binding exists |
