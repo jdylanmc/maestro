@@ -1769,3 +1769,105 @@ faithfully a stack reproduces a design authored for a different one.
   its relationship to the 8-Fleet ceiling is an observation rather than a tested interaction.
 - `evidence.md` was again read in bounded fashion and extended by an anchored append; no section was
   re-rendered.
+
+## c-0024 - Five slice steps measured on cmux, and an observer that vetoed
+
+### Prototype n-0011b-c-0024
+
+Approved with the exact string. Isolation path removed and verified gone. Versions re-pinned before
+measuring: **cmux 0.64.22 (102) [ddd4a01bc]** - unchanged from c-0021 despite `auto_updates` - and
+**Copilot CLI 1.0.81-5**, the top of the band c-0020 measured.
+
+### Slice steps 2, 3, 4 - met
+
+A **real Copilot Session ran inside Fleet alpha's own worktree**, which c-0021 never did, and
+delegated three subagents. The external helper read them from that session's own event log:
+
+```
+Fleet alpha  session 18564e66
+  |- v notes-summarizer (explore)
+  |- v readme-summarizer (explore)
+  `- v Inspect Git branch status (execution-subagent)
+```
+
+3 of 3 resolved through the measured `toolCallId` join, zero unresolved. Fleet **beta reported no
+session at all** in the same instant - the isolation control fired. Unplanned: cmux **auto-named the
+workspace "Summarize README and Notes"** from the prompt, giving a human-meaningful Fleet name nobody
+typed, which is adjacent to n-0010 and was not known to be free.
+
+### Slice step 5 - met, first time in the project
+
+The first attempt measured **0 permission events**, and the cause was neither runtime nor route:
+`~/.copilot/permissions-config.json` holds an **approve-for-location** rule on `/Users/dylan/git`
+granting `write: *`, `mcp: *`, and a command list. The Fleet worktree sits beneath it, so the command
+was pre-approved and correctly never requested. This is the **third distinct reason** step 5 has
+failed to fire - after ACP (c-0013) and the SDK hook (c-0020) - and the first that is the system
+working as designed.
+
+*Consequence for the harness:* a step-5 assertion must use a command outside the approved set, or a
+location no standing rule covers, **and must assert that precondition**. Otherwise it measures the
+operator's local trust configuration and returns a confident false negative.
+
+The retry used an unapproved `rm` inside the disposable worktree:
+
+```
+  `- > Delete notes file (execution-subagent)
+  ** ATTENTION ** 1 pending permission
+  permissions: 1 requested / 0 completed / 1 pending
+```
+
+Raw: `permission.requested`, `requestId d5092cfc-1d68-4b22-8f65-bcb25b82f94d`,
+`2026-08-21T22:13:03.447Z`, **0 matching completions**. On approval the same requestId completed with
+`kind: approved` and **Attention cleared** - so the predicate holds in both directions, not as a
+latch. **This discharges the accepted unknown carried since c-0014.**
+
+Also measured: the tree is genuinely live (three `completed` beside one `running` in one render), and
+`data.permissionRequest` carries `kind`, `fullCommandText`, `intention`, `commands`,
+`commandSegments`, `possiblePaths`, `possibleUrls`, `hasWriteFileRedirection`,
+`canOfferSessionApproval` - enough to present *what* a Fleet is blocked on, not merely *that* it is.
+
+### Teardown - half measured
+
+A live Fleet occupied **one process group of 8**: an `agency` wrapper, `copilot`, three Model Context
+Protocol servers, and two `node` children, every one resolving by `lsof` to the Fleet's worktree and
+distinct from the observing session's group. This reproduces c-0012's Electron shape exactly.
+
+**Graceful path: 0 survivors of 8**, MCP servers included. The case `N0.1` exists for - host quit with
+the agent still live - was **not run**. Recorded as an accepted unknown rather than a pass.
+
+### The observer that vetoed
+
+Installing the ecosystem's one dedicated Copilot plugin, `Attamusc/copilot-cmux`, **broke an
+unrelated live Copilot session**: every tool call refused with `Denied by preToolUse hook from
+"copilot-cmux" (hook errored)`, `pwd` included.
+
+Root cause, reproduced directly: Copilot treats a **non-zero exit from `preToolUse` as a denial**, and
+the plugin's runner set `exitCode = 1` on any internal error. Its parser requires `toolName` and
+`toolArgs` as strings; 1.0.81-5 sends a different shape.
+
+```console
+$ echo '{"toolName":"bash","sessionId":"x","cwd":"/tmp"}' | node dist/hook-runner.js preToolUse
+upstream  -> exit 1   # DENIED
+fork      -> exit 0   # ALLOWED
+```
+
+**The plugin's own 68 tests passed before and after.** They only exercised the payload shape it
+assumed. Forked to `maestro-cmux/` (MIT, attribution retained), fixed to fail open, and 12 fail-open
+tests added with a negative control - 80/80 passing.
+
+### Two ecosystem surveys
+
+Across 190+ projects, independently confirmed: **nothing enforces one worktree per workspace**,
+**nothing distinguishes a deliberate stop from a crash**, and **nothing renders a genuine parent-child
+agent hierarchy** - all are flat boards, lane groups, or widgets. The Copilot hook surface has **no
+subagent event at all**, so the ecosystem fakes trees by convention; Maestro's event-log join is a
+path none of them found. Licensing: `cmux-agent-mcp` is PolyForm Strict (no commercial use);
+`cmuxlayer` is Apache 2.0.
+
+### Limitations of this cycle
+
+- The force-quit teardown case was not run; the operator ended the probe.
+- Custom sidebars remain untested, and are the intended tree surface.
+- Both surveys are delegated research, which this loop classes as untrusted evidence; only the cmux
+  and Copilot measurements above are first-hand.
+- All measurements are bound to cmux 0.64.22 (102) and Copilot CLI 1.0.81-5.

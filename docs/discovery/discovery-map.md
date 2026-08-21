@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0023
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0024
 ---
 
 # Primary Discovery Map - Maestro
@@ -71,3 +71,9 @@ restart behavior.
 - **Zellij is a candidate host and trades opposite to cmux.** MIT licensed, plugins are WebAssembly modules that render **first-class user-interface panes** - Zellij's own interface is built with the same system - and it ships session resurrection. But it has **no agent awareness at all**, so most of what cmux gives away must be built. It is a **third route class**: a multiplexer inside the operator's own terminal, owning no window and exposing no accessibility tree of its own. Researched, never run. (c-0023)
 - **Durable lifecycle state is the one thing a terminal host refuses to provide.** cmux's agent states are ephemeral by design. `Parked` versus `Interrupted` is therefore the largest remaining build item, and the reason Maestro is software rather than a configuration file. (c-0022)
 - **The route count lives in one place.** `requirements.md` holds a route register; no other document states a number. Written as a literal it was wrong three cycles running - four, then five, then six inside a single cycle. (c-0011, c-0022, c-0023)
+- **Attention was observed firing, and clearing, on the lead route.** An unanswered `rm` approval produced one unmatched `permission.requested` on the correct Fleet and on no other; approving it cleared the condition. This discharges the c-0014 unknown that acceptance-slice step 5 rested on declarations rather than behaviour. (c-0024)
+- **A step-5 assertion is invalid against a directory covered by a standing approval.** An approve-for-location rule silently pre-approves the command, producing zero permission events and a confident false negative. The harness must assert the precondition, or it measures the operator's trust configuration rather than the route. (c-0024)
+- **An observer must never be able to veto the thing it observes.** Copilot treats a non-zero `preToolUse` exit as a denial; an unmaintained status plugin exited non-zero on an unrecognised payload and refused every tool call in a live session, `pwd` included. Maestro's hooks always exit zero. (c-0024)
+- **A green suite is not evidence of compatibility.** That plugin's 68 tests passed before and after, because they only exercised the payload shape it assumed. Third occurrence of the class, after c-0016 and c-0021. (c-0016, c-0021, c-0024)
+- **Maestro is three surfaces, and only two are host-shaped:** a Copilot CLI plugin, a pane-hosted helper, and a Fleet core of git, a state file, and the process table that needs no Host Application. It **presents** as a plugin and is **not built** as one, which is what keeps the route register meaningful. The presentation seam is a backend interface built now, because retrofitting one is painful. (c-0024)
+- **The subagent tree is unclaimed.** Two surveys of 190+ ecosystem projects found nothing that enforces one worktree per workspace, nothing that separates a deliberate stop from a crash, and nothing that renders a genuine parent-child agent hierarchy. (c-0024)

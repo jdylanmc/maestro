@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 24
+revision: 25
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-20T19:52:31Z
 anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
-last-cycle: c-0023
-cycle-state: in-progress
-state-digest: c227d678601507593b7186c2feecc07f6630abc87e2689a3a1cd81cc4fd9237d
-root-map-digest: 94d2c3c62c25e0a255c1e2f2414b3265eb4a60cde63485e7a6e945afbac8f6be
+last-cycle: c-0024
+cycle-state: complete
+state-digest: 7d12ac78c87427648b1def796c5c2e48993a16e3887baa2c896a5fd9d1a0bbb2
+root-map-digest: 414c5a3e4a811a980bf10eaff30240b20ecc65023ee15b51dd6f62b8ff9edd88
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -268,8 +268,8 @@ isolation, and restart reconciliation.
 - Maturity: promotion-ready
 - Priority: P0
 - Outcome: Maestro is **hosted inside cmux** rather than built as its own application. cmux supplies the window, tabs and splits, workspace selection and panel re-scoping, the file tree, the resource meter, branch and pull-request metadata, notifications, Attention, and the Nord theme. Maestro supplies what cmux deliberately does not: enforced worktree-per-Fleet, the live subagent tree, durable `Parked`/`Interrupted` intent, and sweep-on-launch. It runs as a **helper process inside a cmux pane**, which is measured to receive full control-socket access with no configuration change, no fork, and no Swift.
-- Open questions: (1) ~~Does cmux replace the four-route comparison or become a fifth route?~~ **Settled in c-0022: it joins and leads.** *User: "cmux joins the comparison but push it to the front of the lead."* (2) Slice steps 2 and 5 are **unexercised** - no live Copilot Session ran inside a Fleet worktree, so the tree was proven against sessions elsewhere on disk. (3) Teardown was **not measured on cmux at all**; the best-effort bar and the residual survivor count are carried from c-0012. (4) Custom sidebars (`~/.config/cmux/sidebars/`) are the richest rendering surface and remain **untested**, because they sit outside the approved isolation path. (5) cmux **auto-updates**; every measurement is bound to 0.64.22 and nothing yet re-tests on upgrade. (6) **New in c-0022:** the durable lifecycle state - `Parked` vs `Interrupted` and the two axes - is now the largest single build item on this route, because cmux deliberately holds no durable intent at all.
-- Evidence: [c-0021](./cycles/c-0021.md) prototype n-0011-c-0021 - enforced Fleets, a three-level subagent tree, and Fleet state rendered in cmux's own sidebar from an external process; [c-0022](./cycles/c-0022.md) requirement-by-requirement analysis of the whole non-P0 set against this route; [cmux-arch.md](../../../../v2/docs/reference/cmux-arch.md); [ghostty-arch.md](../../../../v2/docs/reference/ghostty-arch.md); [ccmux-arch.md](../../../../v2/docs/reference/ccmux-arch.md); [warp-arch.md](../../../../v2/docs/reference/warp-arch.md)
+- Open questions: (1) ~~Does cmux replace the four-route comparison or become a fifth route?~~ **Settled in c-0022: it joins and leads.** *User: "cmux joins the comparison but push it to the front of the lead."* (2) ~~Slice steps 2 and 5 unexercised~~ **closed in c-0024 by measurement**: a live Copilot Session ran inside Fleet alpha's own worktree, delegated three subagents that resolved 100% through the measured join, and raised a real unanswered permission request that surfaced Attention on that Fleet and on no other, then cleared to `kind: approved`. (3) **Teardown is half-measured.** The graceful path reached **0 survivors of 8** on cmux, but the case `N0.1` exists for - host quit while the agent is still live - was not run. *Risk:* c-0012 measured 5 survivors in exactly that case on Electron, so if cmux behaves the same, sweep-on-launch is the **sole** protection rather than a backstop. *Trigger:* the first cmux route build, or any earlier chance to force-quit with a live agent. **Accepted unknown.** (4) Custom sidebars remain **untested** and are the intended tree surface; only one ecosystem project uses them, their Swift schema is not public, and they are beta. (5) cmux **auto-updates**; measurements are bound to 0.64.22 (102), re-verified unchanged in c-0024. (6) Durable lifecycle state is the largest single build item. (7) **New in c-0024:** whether the multiplexer abstraction is built now or retrofitted - delegated research warns that retrofitting it is painful, and n-0012 depends on the answer.
+- Evidence: [c-0021](./cycles/c-0021.md) prototype n-0011-c-0021 - enforced Fleets, a three-level subagent tree, and Fleet state rendered in cmux's own sidebar from an external process; [c-0022](./cycles/c-0022.md) requirement-by-requirement analysis of the whole non-P0 set against this route; [c-0024](./cycles/c-0024.md) prototype n-0011b-c-0024 - five slice steps measured against a live Session in a Fleet worktree, Attention observed firing and clearing, one 8-process Fleet group reaching 0 survivors on the graceful path, plus two delegated ecosystem surveys of 190+ projects; [cmux-arch.md](../../../../v2/docs/reference/cmux-arch.md); [ghostty-arch.md](../../../../v2/docs/reference/ghostty-arch.md); [ccmux-arch.md](../../../../v2/docs/reference/ccmux-arch.md); [warp-arch.md](../../../../v2/docs/reference/warp-arch.md)
 - Links: refines n-0000; depends-on n-0002; informs n-0007; **peer-of n-0004, n-0005, n-0006** (the c-0021 `supersedes-candidate` links were withdrawn in c-0022 when the user confirmed cmux joins the comparison rather than replacing it)
 - First seen: c-0021
 - Former node id: none
