@@ -9,7 +9,7 @@ anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
 last-cycle: c-0023
-cycle-state: complete
+cycle-state: in-progress
 state-digest: c227d678601507593b7186c2feecc07f6630abc87e2689a3a1cd81cc4fd9237d
 root-map-digest: 94d2c3c62c25e0a255c1e2f2414b3265eb4a60cde63485e7a6e945afbac8f6be
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
@@ -264,8 +264,8 @@ isolation, and restart reconciliation.
 ### n-0011 - vNext route: Maestro as a pane-hosted wrap of cmux
 
 - Parent: n-0000
-- Fog: researched
-- Maturity: decision-ready
+- Fog: decision-ready
+- Maturity: promotion-ready
 - Priority: P0
 - Outcome: Maestro is **hosted inside cmux** rather than built as its own application. cmux supplies the window, tabs and splits, workspace selection and panel re-scoping, the file tree, the resource meter, branch and pull-request metadata, notifications, Attention, and the Nord theme. Maestro supplies what cmux deliberately does not: enforced worktree-per-Fleet, the live subagent tree, durable `Parked`/`Interrupted` intent, and sweep-on-launch. It runs as a **helper process inside a cmux pane**, which is measured to receive full control-socket access with no configuration change, no fork, and no Swift.
 - Open questions: (1) ~~Does cmux replace the four-route comparison or become a fifth route?~~ **Settled in c-0022: it joins and leads.** *User: "cmux joins the comparison but push it to the front of the lead."* (2) Slice steps 2 and 5 are **unexercised** - no live Copilot Session ran inside a Fleet worktree, so the tree was proven against sessions elsewhere on disk. (3) Teardown was **not measured on cmux at all**; the best-effort bar and the residual survivor count are carried from c-0012. (4) Custom sidebars (`~/.config/cmux/sidebars/`) are the richest rendering surface and remain **untested**, because they sit outside the approved isolation path. (5) cmux **auto-updates**; every measurement is bound to 0.64.22 and nothing yet re-tests on upgrade. (6) **New in c-0022:** the durable lifecycle state - `Parked` vs `Interrupted` and the two axes - is now the largest single build item on this route, because cmux deliberately holds no durable intent at all.

@@ -6,6 +6,16 @@ Maestro is evolving toward a source-controlled orchestration environment where:
 2. Herdr provides persistent workspaces, tabs, panes, and pseudoterminals, and
 3. an agent orchestrator launches and supervises visible worker agents in isolated worktrees.
 
+## maestro-cmux
+
+[`maestro-cmux/`](maestro-cmux/) is a GitHub Copilot CLI plugin that reports session
+activity to a [cmux](https://www.cmux.dev/) workspace. It is a fork of
+[Attamusc/copilot-cmux](https://github.com/Attamusc/copilot-cmux) (MIT), vendored so
+that its failure mode is ours to control: upstream exited non-zero when it could not
+parse a hook payload, and Copilot reads a non-zero `preToolUse` exit as a **denial**,
+so a decoration plugin was able to refuse every tool call in a live session. This fork
+always fails open, and a test suite enforces it.
+
 ## Prototype v1
 
 The original branded WezTerm + Herdr launcher is preserved in [`proto-v1/`](proto-v1/).

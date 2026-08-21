@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "maestro-cmux",
+  "version": "0.1.0",
+  "description": "GitHub Copilot CLI plugin that surfaces Copilot activity in cmux",
+  "type": "module",
+  "main": "dist/hook-runner.js",
+  "files": [
+    "dist",
+    "plugin.json",
+    "hooks.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "check": "npm run lint && npm test",
+    "lint": "biome check src/ tests/",
+    "lint:fix": "biome check --write src/ tests/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "copilot",
+    "copilot-cli",
+    "cmux",
+    "plugin"
+  ],
+  "author": "Attamusc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Attamusc/copilot-cmux.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Attamusc/copilot-cmux/issues"
+  },
+  "homepage": "https://github.com/Attamusc/copilot-cmux#readme",
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
+    "@types/node": "^24.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "maestro-cmux",
+  "description": "Surface GitHub Copilot CLI activity in cmux status, progress, and notifications. Fails open by design.",
+  "version": "0.1.0",
+  "author": {
+    "name": "jdylanmc"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jdylanmc/maestro",
+  "keywords": [
+    "copilot",
+    "copilot-cli",
+    "cmux",
+    "tmux"
+  ],
+  "hooks": "hooks.json"
+}
