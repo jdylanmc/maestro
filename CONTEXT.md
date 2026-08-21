@@ -86,6 +86,16 @@ Discouraged aliases: `AT_RISK`
 The isolated checkout a Fleet works in. Every Fleet has exactly one of its own,
 which implies its own branch. Fleets never share a checkout.
 
+**Host Application**
+
+The application a Fleet's Session runs inside. It owns the lifetime of the
+Fleet's processes and is the identity the operating system attributes their
+permission prompts to. Maestro may be the Host Application or may run inside
+another one.
+
+Discouraged aliases: `host` (bare - reserved for the machine), `shell`,
+`harness`, `container`
+
 ### Account
 
 **Recap**

@@ -48,13 +48,33 @@ Accepted.
 - Maestro stores no permission decisions and owns no approval rules. The
   runtime's policy surfaces - per-tool `skipPermission`, `permissionDecision`,
   and `setApproveAll` - are the only ones.
-- All four prototype routes integrate through the same SDK seam, so a route's
-  permission behaviour is not a differentiator between technology stacks.
+- **The seam is chosen by route class, and permission behaviour therefore *is* a
+  differentiator.** This corrects the original consequence, which read "all four
+  prototype routes integrate through the same SDK seam, so a route's permission
+  behaviour is not a differentiator between technology stacks." Both halves
+  became false. There are now six routes, and a **terminal-hosted** route -
+  cmux, WezTerm - does not use the SDK at all: it runs the Copilot command-line
+  interface, because the terminal already is the chat interface, and reads
+  `events.jsonl`. Only **application** routes - Electron, Tauri, Swift - consume
+  this seam, because only they must build a chat interface. So permission
+  behaviour differs by route: an application route queries the SDK, while a
+  terminal-hosted route inherits whatever its Host Application already surfaces.
+  This narrows the decision's *scope* without weakening it - within application
+  routes, the reasoning and the rejected alternatives stand unchanged.
+- **The seam is pinned to a measured version range.** `permissions.pendingRequests()`,
+  the typed `subagent.*` events, caller-supplied `SessionConfig.sessionId`, and
+  `session.title_changed` are present and identically shaped across **1.0.80
+  through 1.0.81-5**. The pin matters because the permission surface changed
+  shape across three earlier observed versions: `copilot-sdk@0.3.0` and the copy
+  bundled in `@github/copilot@1.0.40` made `onPermissionRequest` required and
+  exposed no query at all; `1.0.9-preview.2` added it; `1.0.11-preview.2`
+  re-worded its contract. An unpinned SDK means an unstable `Attention`
+  implementation. This obligation binds only where the SDK is used.
 - **The permission callback has never been observed firing.** The live probe
   reached `start()` and `createSession()`, then failed on an exhausted monthly
   quota before a decision could be requested. This decision therefore rests on
   documentary evidence plus an independent implementation of the same loop in an
   Electron application, and carries a standing trigger to re-test.
-- Reversing this is expensive in proportion to how many routes exist when the
-  reversal happens, because the mediation layer would have to be built once per
-  route.
+- Reversing this is expensive in proportion to how many **application** routes
+  exist when the reversal happens, because the mediation layer would have to be
+  built once per route. Terminal-hosted routes are unaffected either way.
