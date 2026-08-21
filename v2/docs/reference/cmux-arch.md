@@ -343,6 +343,68 @@ cmux and Maestro share one structural insight — the sidebar-selected-unit resc
 
 ---
 
+## Configuration Surface — How Far Can We Get Without Forking? [V, from published documentation]
+
+Added after the initial analysis, on the operator's observation that *"CMUX has very rich configuration"*. Sources: [`cmux.com/docs/configuration`](https://cmux.com/docs/configuration) and [`cmux.com/docs/custom-commands`](https://cmux.com/docs/custom-commands), read 2026-08-21. This section asks one question: **how much of the Maestro MVP is reachable by configuring cmux, with no fork?**
+
+The answer is: **more than expected, and the gap that remains is exactly the reason Maestro exists.**
+
+### What configuration already reaches
+
+**Terminal config is Ghostty's.** cmux reads `~/.config/ghostty/config` directly. App-owned settings live in `~/.config/cmux/cmux.json`, with a published JSON schema, comments and trailing commas allowed, hot reload via `cmux reload-config`, and a **project-local `.cmux/cmux.json`** that overrides actions, commands, UI wiring, and notification hooks.
+
+**Worktree-per-workspace is a documented example, not a workaround.** The custom-commands page ships a worked example named **"Worktree Agents"**, bound to the plus button, whose setup terminal runs:
+
+```sh
+repo=$(git rev-parse --show-toplevel); mkdir -p "$repo/../worktrees"
+slug=agents-$(date +%Y%m%d-%H%M%S); dir="$repo/../worktrees/$slug"
+git -C "$repo" worktree add -b "$slug" "$dir"
+```
+
+It then starts Codex and Claude in sibling panes, each waiting on a workspace-scoped state file before `cd`-ing into the new worktree. This is close to a Fleet: one workspace, one fresh worktree, one new branch, agents started inside it.
+
+**Attention is already implemented, and better than Warp's.** Three separate notification settings map onto our predicate:
+
+- `notifications.agentPermissionPrompt` — *"Notify when an agent (e.g. Claude Code) is blocked waiting for your permission to run a tool. **On by default, since this is the alert you must act on to unblock the agent.**"*
+- `notifications.agentIdleReminder` — fires ~60s after a turn ends, and is *"suppressed while background work from the last turn is still pending, so a running build or watcher does not trigger a false waiting alert."*
+- `notifications.agentTurnComplete: whenIdle` — *"suppresses the notification while the agent still has a running background task or a pending scheduled wakeup, so you are pinged once work truly drains."*
+
+The suppression logic is a refinement we had not designed: it distinguishes *waiting for a human* from *still working*, which is the exact failure Warp shipped in issue #14730. **cmux got right, in production, the thing Warp got wrong.**
+
+**`notifications.hooks` is a real extension point** — *"Composable shell hooks that receive notification policy JSON on stdin and return updated policy JSON on stdout"* — plus `notifications.command` for a shell command run alongside delivery. Policy can be transformed by external programs without touching Swift.
+
+**The sidebar already displays Fleet-shaped metadata:** git branch (`sidebar.showBranch`, vertical or inline), pull-request metadata, working directory, listening ports, agent activity spinner, unread badges, per-workspace colours, and custom metadata pills. Workspace groups can be customised per-cwd with longest-match and glob keys.
+
+**Other relevant reach:** `terminal.autoResumeAgentSessions` re-runs agent resume commands for restored sessions on reopen; `workspaceGroups`/`workspaceColors` give per-Fleet visual identity; actions can be bound to the Command Palette, the surface tab bar, and keyboard shortcuts; `confirm` gates dangerous actions; project-local actions require a per-fingerprint trust prompt on first run.
+
+### What configuration cannot reach
+
+Three P0 requirements are **not** expressible in `cmux.json`, and none of them is an oversight — each follows from cmux being a terminal emulator rather than a supervisor.
+
+1. **Lifecycle ownership.** There is no setting for "terminate every agent process group on quit and verify zero survivors". `app.confirmQuit` controls a *dialog*, not a teardown. Agents that ignore `SIGHUP`, are backgrounded, or run under `nohup` survive. There is no process-group recording, no post-quit sweep, and no reap-on-launch.
+
+   **But the machinery exists and is pointed elsewhere.** `terminal.agentHibernation` already sends `SIGTERM` to *an agent's process group*, scoped to a workspace and surface, gated on an idle-lifecycle state and a confirmation window in which output and PID must stay unchanged. cmux can already signal an agent's process group correctly — it simply does it to reclaim RAM, not to guarantee teardown. **That makes a fork or an upstream contribution substantially cheaper than building the capability from nothing.**
+
+2. **Enforcement of isolation.** The "Worktree Agents" example is a *convention you opt into*, not an invariant. Nothing prevents two workspaces pointing at the same checkout, and cmux does not model the worktree as belonging to the workspace. Our requirement is that a Fleet has exactly one worktree, enforced.
+
+3. **`Parked` versus `Interrupted`.** No configuration distinguishes a deliberate stop from a crash, because cmux does not persist that intent.
+
+### What this means for Maestro
+
+Configuration alone gets a surprisingly long way: **Fleet-shaped workspaces, worktree creation, agent startup, live git metadata in a sidebar, and a mature Attention implementation** — without writing any Swift.
+
+What it cannot give is **process-lifetime ownership**, which is the single requirement this whole product was created to satisfy, and which no amount of `cmux.json` will express.
+
+That sharpens the options materially. The choice is no longer *"build everything"* versus *"adopt something"*. It is:
+
+- **Configure cmux** and accept that agents may outlive the app — rejecting our own P0.
+- **Fork or upstream** the teardown path into cmux, reusing its existing process-group signalling, its Ghostty rendering, and its notification model.
+- **Build on `libghostty` ourselves**, taking cmux as a proven reference for the architecture but owning lifetime from the start.
+
+All three are now cheaper and better understood than they were before this configuration surface was read.
+
+---
+
 ## Limitations of This Analysis
 
 - **`Sources/` is large and mostly unread.** The directory contains hundreds of Swift files. This analysis read a filtered subset covering agent management, hibernation, lifecycle, session restore, and event publishing. AppDelegate, the main view controller hierarchy, socket command handling, and billing code were not read. Claims about lifecycle mechanics are derived from documentation and the specific files listed above.
