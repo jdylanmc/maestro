@@ -22,6 +22,18 @@ The README has not been updated to reflect this transition.
 
 ---
 
+## Operator Finding — Warp Cannot Host Maestro **[M: measured by the operator, 2026-08-21]**
+
+**Warp was installed and evaluated by hand on the day this analysis was written, and uninstalled the same day.** The operator's conclusion: *"it doesn't work with copilot from what i can tell."*
+
+This is the decisive fact about Warp for our purposes, and it outranks everything else in this document because it is **measured rather than researched**. It is consistent with the architecture described below: Warp drives its own server-side agents (the Oz orchestration path) plus whatever agent CLI a user types into a pane. There is no published integration seam through which a host application could bind a specific Copilot Session, supply its own `sessionId`, read `pendingRequests()`, or consume typed `subagent.*` events.
+
+Maestro's entire seam is the Copilot SDK. A host with nowhere to put that seam cannot be a Maestro route, regardless of how good its terminal or its agent user interface is.
+
+**Consequence:** Warp is retained in this reference set as **prior art only** - specifically for its multi-agent presentation, its approval user interface, and its publicly visible failure modes, which are the most valuable part of this document. It is **not** a candidate host surface, and it is not carried into the route comparison.
+
+---
+
 ## Scope
 
 Terminal emulator, agent UX, parallel agent execution model, approvals, process lifecycle, session persistence, local automation API, UI rendering architecture, and the implications for Maestro as a potential host surface. Excluded: internal server architecture, billing, Warp Drive (cloud sync) internals, font shaping, detailed Lua API (Warp has none), and the full Oz cloud agent backend.
