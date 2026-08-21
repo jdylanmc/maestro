@@ -1,0 +1,4 @@
+node_modules/
+
+# Excluded deliberately - see proto-v2.0/.gitignore for the reason.
+package-lock.json

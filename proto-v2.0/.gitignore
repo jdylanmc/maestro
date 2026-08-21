@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+
+# Excluded deliberately: npm resolved these through an internal package feed, so
+# the lockfile embeds internal endpoint URLs that must not enter a public repo.
+# The tradeoff is that installs are not pinned here; versions in package.json are.
+package-lock.json
