@@ -135,7 +135,22 @@
 
 **All three confirmed in c-0022.**
 
-- **There are five routes, and cmux leads.** *User: "cmux joins the comparison but push it to the front of the lead."* n-0011 (cmux) does **not** supersede n-0004 (WezTerm), n-0005 (Tauri), or n-0006 (Swift); it joins them and takes the lead position. n-0003 (v2 Electron) is already built and promoted, so the live sequence is **cmux, then WezTerm, then Tauri, then Swift**, with Electron's report already in hand. Every count of "four routes" or "four executive reports" recorded from c-0011 onward is superseded by **five**. This extends c-0011's evidence-order rule rather than breaking it: Electron led because it alone carried measured evidence, and cmux now carries measured evidence too - from [c-0021](./cycles/c-0021.md), and against the current P0 set rather than the superseded one. [c-0011](./cycles/c-0011.md), [c-0022](./cycles/c-0022.md)
+- **The route register is the single source of the route count.** Routes are listed here and nowhere else; no other document states a number. This is recorded as a fix to a defect that recurred three cycles running - c-0011 wrote "four routes" as a literal into several places, c-0022 corrected it to five, and c-0023 superseded that to six within one cycle. A count written as a literal in four documents is wrong the moment a route is added, and it was.
+
+  | Route | Node | Class | Status |
+  | --- | --- | --- | --- |
+  | cmux | n-0011 | terminal-hosted | **leads**; prototyped c-0021 |
+  | v2 Electron | n-0003 | application | built and promoted ([#29](https://github.com/jdylanmc/maestro/issues/29)) |
+  | v1.1 WezTerm | n-0004 | terminal-hosted | committed, unstarted |
+  | v3 Tauri/Rust | n-0005 | application | bounded probe |
+  | v4 native macOS Swift | n-0006 | application | bounded probe |
+  | Zellij | n-0012 | multiplexer-in-host-terminal | candidate, unsequenced beyond "after cmux" |
+
+  Every route on the register produces one executive report in the fixed five-section shape, and the comparative evaluation (n-0007) consumes **one report per register row**. [c-0011](./cycles/c-0011.md), [c-0022](./cycles/c-0022.md), [c-0023](./cycles/c-0023.md)
+
+- **There is a third route class, found in c-0023.** The c-0022 distinction had two values - terminal-hosted and application - and does not cover **a multiplexer running inside the operator's own terminal**, which is what Zellij is. It owns no window, has no renderer or accessibility tree of its own, and layers a keymap inside a terminal that already has one. Its seam is the Copilot CLI, like the other terminal-hosted routes, but its presentation and automation surfaces are its own command-line interface and its WebAssembly plugin API. This is carried in the pending `/domain-mapping` packet for `route class` rather than settled here. [c-0022](./cycles/c-0022.md), [c-0023](./cycles/c-0023.md)
+
+- **There are five routes, and cmux leads.** *User: "cmux joins the comparison but push it to the front of the lead."* n-0011 (cmux) does **not** supersede n-0004 (WezTerm), n-0005 (Tauri), or n-0006 (Swift); it joins them and takes the lead position. n-0003 (v2 Electron) is already built and promoted, so the live sequence is **cmux, then WezTerm, then Tauri, then Swift**, with Electron's report already in hand. ~~Every count of "four routes" or "four executive reports" recorded from c-0011 onward is superseded by **five**.~~ **Superseded within one cycle by c-0023**, which added Zellij as a sixth. The count is now held only by the route register above. This extends c-0011's evidence-order rule rather than breaking it: Electron led because it alone carried measured evidence, and cmux now carries measured evidence too - from [c-0021](./cycles/c-0021.md), and against the current P0 set rather than the superseded one. [c-0011](./cycles/c-0011.md), [c-0022](./cycles/c-0022.md), [c-0023](./cycles/c-0023.md)
 
 - **The integration seam is a property of the route class, not of the product.** *User: "Deprioritize the copilot seam for cmux directly since it can use the cli and it's a terminal itself -- reserve copilot sdk for the apps where we need to create our own chat interface."*
   - **Terminal-hosted routes** (n-0011 cmux, n-0004 WezTerm) drive a Fleet through the **Copilot CLI**. The terminal *is* the chat interface, so no programmatic send is needed, and the subagent tree, Attention, and Liveness are read from `events.jsonl`.

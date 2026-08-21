@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 23
+revision: 24
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-20T19:52:31Z
 anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
-last-cycle: c-0022
+last-cycle: c-0023
 cycle-state: complete
-state-digest: a7a56ab082cd02bf37e18e49e9922d451403c049fd203b5ae1d9ef3005b69302
-root-map-digest: b2a673893ea036e1f3dbf9e55b370e38e7ee6f9e18953313f718aac7d8aa3ae5
+state-digest: c227d678601507593b7186c2feecc07f6630abc87e2689a3a1cd81cc4fd9237d
+root-map-digest: 94d2c3c62c25e0a255c1e2f2414b3265eb4a60cde63485e7a6e945afbac8f6be
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -75,7 +75,7 @@ isolation, and restart reconciliation.
 - Outcome: Prove the shared Maestro MVP contract through one complete real flow on Electron, judged primarily on lifecycle ownership - durable Fleet state with strictly ephemeral processes and verified-zero orphans on quit - and on a three-column Visual Studio Code-shaped layout where selecting a Fleet re-scopes every panel and always presents that Fleet's primary agent window.
 - Open questions: none held directly. **Decomposed in c-0011** into n-0001 through n-0007; every question this node was carrying now lives on the child that owns it. **c-0018 corrected this node's maturity from `researched` to `decision-ready`, and the change is a correction rather than an advance.** It was lowered to `researched` in c-0005 for a stated reason - "the form of the destination proved less settled than the tree recorded", the user having floated neovim, the GitHub app, tmux, and a Visual Studio Code extension inside one cycle. That reason stopped being true in c-0011, when the destination was settled as four named routes in evidence order against one six-step slice. No cycle re-raised the field for twelve cycles, and in c-0017 it silently became the constraint blocking promotion. Reaching `promotion-ready` still requires reconciling Issue #1, which is tracked as a divergence rather than as fog.
 - Evidence: [Issue #1](https://github.com/jdylanmc/maestro/issues/1); [Issue #18](https://github.com/jdylanmc/maestro/issues/18); [Issue #12](https://github.com/jdylanmc/maestro/issues/12); [Issue #6](https://github.com/jdylanmc/maestro/issues/6); [Issue #9](https://github.com/jdylanmc/maestro/issues/9); [c-0005 wireframe and firstmate research](./cycles/c-0005.md); [c-0006 live orphan-process forensics](./cycles/c-0006.md); [c-0007 worktree experiment, ship-with-squadron specification, and Copilot vocabulary extraction](./cycles/c-0007.md)
-- Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007, n-0010; refined-by n-0011
+- Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007, n-0010; refined-by n-0011, n-0012
 - First seen: c-0001
 - Former node id: none
 - Reinterpreted: c-0020 (intact)
@@ -195,7 +195,7 @@ isolation, and restart reconciliation.
 - Fog: investigating
 - Maturity: vague
 - Priority: P1
-- Outcome: The terminal deliverable: an analysis selecting which stack is best suited to this problem, consuming the **five** per-route executive reports rather than re-deriving the comparison. A rejected stack is an input to this evaluation, not an absence from it - the reason a stack could not build the app is itself a finding. **Corrected in c-0022 from four to five**: n-0011 (cmux) joins the comparison and leads it. Two axes recorded there also bear directly on this node: the seam is now a property of the **route class** - terminal-hosted routes use the Copilot CLI, application routes use the SDK - so "SDK language-binding cost" applies to only three of the five; and each route implements the contract in **its host's idiom**, which means the evaluation compares what the design *becomes* on each stack rather than how faithfully each stack reproduces one design. The Acceptance Slice and the fixed five-section report shape are unchanged, and are what keep the comparison like-for-like under that principle.
+- Outcome: The terminal deliverable: an analysis selecting which stack is best suited to this problem, consuming **one per-route executive report per row of the route register in `requirements.md`** rather than re-deriving the comparison. A rejected stack is an input to this evaluation, not an absence from it - the reason a stack could not build the app is itself a finding. **The literal count was removed in c-0023** after being wrong in three consecutive cycles: four (c-0011), corrected to five (c-0022), superseded to six (c-0023) when Zellij was added. The register is now the only place a route count exists. Two axes recorded in c-0022 also bear directly on this node: the seam is a property of the **route class** - terminal-hosted routes use the Copilot CLI, application routes use the SDK - so "SDK language-binding cost" applies to only three rows; and each route implements the contract in **its host's idiom**, which means the evaluation compares what the design *becomes* on each stack rather than how faithfully each stack reproduces one design. The Acceptance Slice and the fixed five-section report shape are unchanged, and are what keep the comparison like-for-like under that principle.
 - Open questions: **Partly answered in c-0015.** The user fixed one criterion before any route shipped - **user-interface automation capability** - on the stated reasoning that automated regression checks are the work that follows the MVP. The remaining question is what else the rubric holds and how the criteria weigh against each other. Recorded honestly: this criterion is **not neutral** between the routes. A component-driven web stack reaches Storybook and Playwright directly, Swift uses XCUITest, and a terminal surface exposes very little to any of them - so naming it predicts part of the ranking. **One clause of that reasoning was falsified in c-0018:** "Tauri reaches Playwright through WebDriver" is wrong on macOS. Playwright cannot drive `WKWebView` at all, and Tauri's own documentation excludes macOS from `tauri-driver`; the working path embeds a WebDriver server inside the application binary. The criterion's *shape* survives - the routes still separate on automation reach - but the predicted ordering shifts, because Swift turns out to have the strongest automation story of the four rather than a middling one. That is a legitimate product decision, recorded as one rather than presented as a neutral measurement.
 - Evidence: [c-0015](./cycles/c-0015.md) fixed the user-interface-automation criterion and made each route's automation reach the evidence for it; [c-0011](./cycles/c-0011.md)
 - Links: depends-on n-0003, n-0004, n-0005, n-0006; informed-by n-0001, n-0009
@@ -279,6 +279,24 @@ isolation, and restart reconciliation.
 - Divergence: none
 - History: c-0021 created it by user redirect after four reference analyses (cmux, ccmux, Ghostty, Warp) and the user's own reframing - *"it's a terminal multiplexer at the end of the day… maybe we just customize one of these solutions"*. The cycle asked which shape to take and the loop's recommendation **changed mid-cycle on the user's own answer**: `own it (fork)` was recommended while verified-zero teardown was a P0, and was withdrawn in favour of `wrap it` the moment the user narrowed that bar to best effort, because the fork's whole justification was source access for teardown. The prototype then falsified the remaining objection: wrapping was assumed to require loosening cmux's automation security, and it does not - a pane-hosted helper is fully privileged. Two things were measured that no prior cycle knew: cmux's CLI already implements the resource meter and file tree this session had specified as work, and its `read-screen`/`send` surface makes it the **most** automatable host measured so far, inverting the ranking the c-0015 automation criterion implied. The node enters at fog `researched` on measured evidence rather than at `scouted`, matching the n-0002 precedent
 
+### n-0012 - Zellij candidate route
+
+- Parent: n-0000
+- Fog: scouted
+- Maturity: framed
+- Priority: P1
+- Outcome: Evaluate Zellij as a host, on the hypothesis that it trades in the opposite direction to cmux: **less given away, but far deeper extensibility, and open**. Zellij plugins are WebAssembly modules that render **first-class user-interface panes** - Zellij's own interface is built with the same system - so a Fleet panel and a subagent tree would be native components rather than a script drawing into a terminal pane. It is **MIT licensed** and ships **session resurrection**, which restores panes, tabs, and running commands across terminal closure and reboot.
+- Open questions: (1) **How much does it cost to rebuild what cmux gives free?** Zellij has no agent awareness at all - no Attention, no agent hooks, no notifications, no resource meter, no file tree, no workspace metadata - so eight of c-0022's nine "already delivered" items move back into the build column. (2) **Does the plugin API actually reach a live subagent tree**, and is a Rust/WebAssembly plugin a proportionate way to render one? (3) **What is the measured automation ceiling?** As a multiplexer inside a host terminal it owns no window and exposes **no accessibility tree of its own** - the property that capped the WezTerm route - so its Presentation Check surface is its CLI and plugin API instead, and that is unmeasured. (4) **Is session resurrection usable as Park?** It is the first candidate host shipping anything in that neighbourhood, and c-0022 identified durable lifecycle state as the largest remaining build item. (5) Does hosting inside a host terminal reopen the input-model requirement, since the operator's own terminal keeps its keymap and Zellij layers its own on top.
+- Evidence: [c-0023](./cycles/c-0023.md) bounded read-only research - `brew info zellij` (0.45.0, MIT, one dependency) plus delegated web research on the plugin system, themes, and session resurrection. **No Zellij was run; nothing here is measured.**
+- Links: refines n-0000; peer-of n-0003, n-0004, n-0005, n-0006, n-0011
+- First seen: c-0023
+- Former node id: none
+- Reinterpreted: c-0023 (created)
+- Promotion key: none
+- Tracker: none
+- Divergence: none
+- History: c-0023 created it on one user instruction - *"vnext prototype of zellij is also warranted - write that down"* - in a recording cycle that opened no question group, because the user asked for a record rather than a decision. Bounded research was run first so the node would not enter as empty fog. It enters at fog `scouted` rather than `investigating`: the candidate is named and its shape is understood, but nothing about it has been measured, and the loop's own rules class delegated web research as untrusted evidence. The node exists to be measured, and the comparison it feeds is the reason it is not simply folded into n-0011
+
 ## Active Frontier
 
 Every row lists **all** of its node's open questions. c-0018 found n-0002's row
@@ -294,6 +312,7 @@ than the node blocks.
 | n-0006 | investigating | framed | P1 | n-0003, n-0004, n-0005 | Reduced to a bounded probe: what does the Copilot seam cost from Swift, given no Swift SDK binding exists |
 | n-0007 | investigating | vague | P1 | n-0003, n-0004, n-0005, n-0006 | What the rubric holds beyond the user-interface-automation criterion, and how criteria weigh - now including SDK language-binding availability, a second axis found in c-0018 |
 | n-0010 | scouted | framed | P1 | none | (1) What a Recap is derived from, and whether the runtime's event stream suffices. (2) Generated on demand or maintained continuously. (3) Whether a *useful* Recap is machine-checkable at all |
+| n-0012 | scouted | framed | P1 | none | (1) Cost of rebuilding what cmux gives free - Zellij has no agent awareness at all. (2) Does the WebAssembly plugin API reach a live subagent tree, proportionately. (3) Measured automation ceiling - no accessibility tree of its own, CLI and plugin API instead. (4) Is session resurrection usable as Park. (5) Input-model cost of layering a keymap inside the operator's own terminal |
 
 **Five nodes are off the frontier.** **n-0008 left it in c-0020** at fog `cleared` and maturity `decision-ready`, holding one quota-gated accepted unknown and nothing else; it is not promotable, because it is provider understanding rather than work.
 
@@ -402,6 +421,7 @@ on this session any more - the branch gate is.
 | n-0009 | Story | maestro-graphical-agent-orchestrator/n-0009 | [Issue #30](https://github.com/jdylanmc/maestro/issues/30) | c-0019 | none |
 | n-0010 | unpromoted | none | none | never | none |
 | n-0011 | unpromoted | none | none | never | none |
+| n-0012 | unpromoted | none | none | never | none |
 
 **First promotion in the session's history.** c-0019 published the Branch and two
 Stories under the tier map approved in the same cycle: Branch = a `discovery:map`

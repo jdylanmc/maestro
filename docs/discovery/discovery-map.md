@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0022
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0023
 ---
 
 # Primary Discovery Map - Maestro
@@ -68,4 +68,6 @@ restart behavior.
 - **The integration seam is a property of the route class, not of the product.** Terminal-hosted routes (cmux, WezTerm) drive a Fleet through the **Copilot CLI** and read `events.jsonl`, because the terminal already is the chat interface. Application routes (Electron, Tauri, Swift) use the **Copilot SDK**, because they must build one. This narrows c-0014 instead of falsifying it, and preserves the SDK work rather than stranding it. The SDK version pin binds only where the SDK is used. (c-0022)
 - **A route implements the contract in its host's idiom** - *"lean in on each platform and embrace its strengths"* - **bounded** by an Acceptance Slice that stays identical across routes and an executive report that keeps its fixed five-section shape. Idiomatic implementation is permitted; idiomatic behaviour and an idiomatic rubric are not, or the comparison stops meaning anything. (c-0022)
 - **Permission accountability inverts under hosting.** A hosted Fleet's prompts are attributed to the host application, not to Maestro. Better than the `herdr` case by the same visibility test that rewrote the lifetime rule - but "Maestro is accountable" is false on a hosted route. (c-0022)
+- **Zellij is a candidate host and trades opposite to cmux.** MIT licensed, plugins are WebAssembly modules that render **first-class user-interface panes** - Zellij's own interface is built with the same system - and it ships session resurrection. But it has **no agent awareness at all**, so most of what cmux gives away must be built. It is a **third route class**: a multiplexer inside the operator's own terminal, owning no window and exposing no accessibility tree of its own. Researched, never run. (c-0023)
 - **Durable lifecycle state is the one thing a terminal host refuses to provide.** cmux's agent states are ephemeral by design. `Parked` versus `Interrupted` is therefore the largest remaining build item, and the reason Maestro is software rather than a configuration file. (c-0022)
+- **The route count lives in one place.** `requirements.md` holds a route register; no other document states a number. Written as a literal it was wrong three cycles running - four, then five, then six inside a single cycle. (c-0011, c-0022, c-0023)
