@@ -1592,3 +1592,96 @@ measurement had just undermined. Recorded because the harness must assert the fo
   behaviour under a differently configured runtime.
 - `ephemeral` being 0 across 36,517 events bounds its observed frequency; it does not prove the
   field is never set.
+
+## c-0021 - The terminal pivot lands, and the P0 set is rewritten by its owner
+
+### Prototype n-0011-c-0021 - wrapping stock cmux
+
+Approved with the exact string in a live turn. Isolation path
+`.discovery-prototypes/maestro-graphical-agent-orchestrator/n-0011-c-0021/`, removed and verified
+gone in the same cycle. **cmux pinned at 0.64.22 (102) [ddd4a01bc]**, installed by the operator via
+Homebrew cask; the cask declares `auto_updates`, so the pin is the measurement's only anchor.
+
+**Hypothesis.** Stock cmux, driven only by project-local configuration plus an external read-only
+helper, can present a Fleet - enforced worktree and branch, a live Copilot session, and a live
+subagent tree rendered inside cmux - with no cmux source changes and no writes to shared
+configuration.
+
+**Result: confirmed**, with one part unexercised.
+
+### The decisive measurement - pane-hosted helpers get full control
+
+cmux refuses external socket control by default: `automation.socketControlMode` is `cmuxOnly` with
+an empty `socketPassword`. The boundary is **not** all-or-nothing, and the split matters:
+
+- `cmux <path>` - open a directory as a workspace - **succeeds** from an outside process.
+- `cmux workspace list` - any query or control - fails with
+  `Access denied - only processes started inside cmux can connect`.
+
+A helper started **inside a cmux pane** receives full access with no configuration change.
+Confirmed visually: two values written by an external Python process - the metadata pill
+`0 agents / 0 running` and the status line `Fleet alpha - Maestro attached` - render in cmux's own
+sidebar beside the `fleet/alpha` branch cmux displays natively.
+
+**This settles the wrap architecture.** Maestro runs as a pane-hosted helper: no fork, no Swift, no
+`socketPassword`, no loosening of cmux's automation posture, no writes to shared configuration. The
+security boundary rules out only the *outside-in* variant of the design.
+
+### cmux's control plane is far larger than its published documentation
+
+`cmux rpc`, `cmux events`, `read-screen`, `send`, `send-key`, `workspace list`,
+`new-workspace --cwd --command --layout`, `set-status`, `set-progress`, `log`, `notify`, `sidebar`,
+`top`, `tree`. Three consequences bear directly on the rubric:
+
+- `top --processes --sort cpu|mem` **already implements F0.24**, the in-panel resource meter.
+- `right-sidebar files` **already provides F0.20**, the file tree.
+- `read-screen` + `send` + `workspace list` mean the Acceptance Harness can drive cmux directly -
+  a materially better Presentation Check story than WezTerm's research-derived 40-50%, and one
+  measured rather than researched.
+
+Also measured: **Nord ships built in**, in six variants, settable with `cmux themes set Nord`.
+
+### What the prototype built and proved
+
+- **F0.1 enforced worktree-per-Fleet works over stock cmux.** Two Fleets created, each with its own
+  worktree and branch; duplicate creation refused; `git worktree list` confirmed three checkouts on
+  three distinct branches.
+- **F0.5/F0.7 the subagent tree reproduces on this machine.** The measured c-0010/c-0020 join -
+  `subagent.started.data.toolCallId` to the `agentId` on the spawning `tool.*` event - resolved
+  100% of subagents, and rendered a real three-level tree with correct parentage.
+- **12 of 13 harness assertions passed**, with one deliberate failure included to prove the suite
+  is not vacuous.
+
+### New findings that qualify earlier cycles
+
+- **Subagent nesting reaches depth 3.** c-0010 and c-0020 both recorded a maximum observed depth of
+  2. A scan of all local sessions found seven with genuine nesting and one at depth 3 (`b7d9967c`,
+  six subagents, zero unresolved). The requirement survives; the figure does not.
+- **`inuse.<pid>.lock` in a session directory is a liveness signal.** Not recorded anywhere in this
+  session's prior state. The verdict derived from it agreed with `ps` (`Alive pid=53275`).
+
+### The harness lied twice, silently - the c-0016 lesson reproduced
+
+Evidence selection broke the negative control twice without failing:
+
+1. selecting by **file size** picked a 195 MB session whose 12 MB read window held one subagent;
+2. selecting by **subagent count** picked a 58-subagent session that was entirely **flat**, where
+   the forbidden `parentId` construction *coincidentally agrees* with the correct join.
+
+In both runs the control executed and reported PASS while testing nothing. `parentId` only diverges
+where there is real nesting - which is precisely why it looked plausible for as long as it did.
+Only after selecting for **depth** did the control fire: 2 of 6 parents wrong. A negative control
+must be shown to fail on the case it exists to catch, not merely to run.
+
+### Limitations of this cycle
+
+- **No live Copilot session ran inside a Fleet worktree.** The tree was proven against real sessions
+  elsewhere on disk, not against one owned by a Fleet. Slice steps 2 and 5 were not exercised.
+- **Teardown was not measured on cmux at all.** The narrowed best-effort bar and the residual
+  ~5 processes per live Session are carried from c-0012, not re-measured here.
+- **Custom sidebars were not tested.** They live in `~/.config/cmux/sidebars/`, outside the approved
+  isolation path, so the richest rendering surface remains an untested option rather than a
+  rejected one.
+- **`evidence.md` was read in bounded fashion this cycle** - structure and final section only - and
+  modified by an anchored append. No section was re-rendered, so no unread bytes were at risk.
+- cmux auto-updates; every measurement above is bound to 0.64.22 (102).

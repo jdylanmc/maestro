@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 21
+revision: 22
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-20T19:52:31Z
-anchor-status: revised
+anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
-last-cycle: c-0020
+last-cycle: c-0021
 cycle-state: complete
-state-digest: 09af61279fd102341d00379c3981f0d10079a62284197568a95e3665963526ca
-root-map-digest: 6268316720e4d05f1c329ee039d6ec8dab3c29964692c38f228d8109e5f135c8
+state-digest: bfea49d1a2e19589b04e5a4f35af1aa72c2deb7bc9a974eef76eca8f51837482
+root-map-digest: e105ddc02f064c30bbbba5138e086f0caf055aad3d819725d56396d8d85a8508
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -75,7 +75,7 @@ isolation, and restart reconciliation.
 - Outcome: Prove the shared Maestro MVP contract through one complete real flow on Electron, judged primarily on lifecycle ownership - durable Fleet state with strictly ephemeral processes and verified-zero orphans on quit - and on a three-column Visual Studio Code-shaped layout where selecting a Fleet re-scopes every panel and always presents that Fleet's primary agent window.
 - Open questions: none held directly. **Decomposed in c-0011** into n-0001 through n-0007; every question this node was carrying now lives on the child that owns it. **c-0018 corrected this node's maturity from `researched` to `decision-ready`, and the change is a correction rather than an advance.** It was lowered to `researched` in c-0005 for a stated reason - "the form of the destination proved less settled than the tree recorded", the user having floated neovim, the GitHub app, tmux, and a Visual Studio Code extension inside one cycle. That reason stopped being true in c-0011, when the destination was settled as four named routes in evidence order against one six-step slice. No cycle re-raised the field for twelve cycles, and in c-0017 it silently became the constraint blocking promotion. Reaching `promotion-ready` still requires reconciling Issue #1, which is tracked as a divergence rather than as fog.
 - Evidence: [Issue #1](https://github.com/jdylanmc/maestro/issues/1); [Issue #18](https://github.com/jdylanmc/maestro/issues/18); [Issue #12](https://github.com/jdylanmc/maestro/issues/12); [Issue #6](https://github.com/jdylanmc/maestro/issues/6); [Issue #9](https://github.com/jdylanmc/maestro/issues/9); [c-0005 wireframe and firstmate research](./cycles/c-0005.md); [c-0006 live orphan-process forensics](./cycles/c-0006.md); [c-0007 worktree experiment, ship-with-squadron specification, and Copilot vocabulary extraction](./cycles/c-0007.md)
-- Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007, n-0010
+- Links: parent-of n-0001, n-0002, n-0003, n-0004, n-0005, n-0006, n-0007, n-0010; refined-by n-0011
 - First seen: c-0001
 - Former node id: none
 - Reinterpreted: c-0020 (intact)
@@ -261,6 +261,24 @@ isolation, and restart reconciliation.
 - Divergence: none
 - History: c-0019 created it from the Q2 answer. It exists because a question about executive-report comparability turned out to have a product requirement hiding inside it: the user's reason for wanting comparable reports was *"I may come back to a session and not remember what is going on and want a quick 'what were we doing and where are we at'"*, and the word `session` was ambiguous between the confirmed runtime term and the ordinary English sense. Q2 disambiguated rather than guessing, because the two readings had very different costs - binding it to the product would have re-opened n-0003 and n-0009, the only two promotion-ready leaves, for a capability that cannot separate four stacks. The user placed it at **P1**, "very desired" but not P0, matching the c-0016 disposition of desktop notifications. The concept was named `Orientation` by the user and renamed **`Recap`** by `/domain-mapping` in the same cycle, on evidence that `Orientation` was already triple-booked in this repository - the `## Scope and Orientation` heading in eight reference documents, the executive report's lead section, and this capability - which is the failure that retired `Workspace` in c-0007. `Orientation` survives as a discouraged alias; c-0020 narrowed its first open question without selecting it. The runtime's event stream is now known to carry typed `subagent.*` lifecycle events with resolvable parentage, and `parentId` is confirmed useless for structure by the vendor's own typings - so the raw material a Recap would be derived from is better understood than when this node was written. What stays open is whether that material is *sufficient*, which is a different question from whether it is *available*
 
+### n-0011 - vNext route: Maestro as a pane-hosted wrap of cmux
+
+- Parent: n-0000
+- Fog: researched
+- Maturity: decision-ready
+- Priority: P0
+- Outcome: Maestro is **hosted inside cmux** rather than built as its own application. cmux supplies the window, tabs and splits, workspace selection and panel re-scoping, the file tree, the resource meter, branch and pull-request metadata, notifications, Attention, and the Nord theme. Maestro supplies what cmux deliberately does not: enforced worktree-per-Fleet, the live subagent tree, durable `Parked`/`Interrupted` intent, and sweep-on-launch. It runs as a **helper process inside a cmux pane**, which is measured to receive full control-socket access with no configuration change, no fork, and no Swift.
+- Open questions: (1) **Does cmux replace the four-route comparison or become a fifth route?** n-0003 is promoted and built, n-0004 through n-0006 are unstarted, and n-0007 exists to consume four reports that may never be written. This is the next product decision and it is not the loop's to take. (2) Slice steps 2 and 5 are **unexercised** - no live Copilot Session ran inside a Fleet worktree, so the tree was proven against sessions elsewhere on disk. (3) Teardown was **not measured on cmux at all**; the best-effort bar and the residual survivor count are carried from c-0012. (4) Custom sidebars (`~/.config/cmux/sidebars/`) are the richest rendering surface and remain **untested**, because they sit outside the approved isolation path. (5) cmux **auto-updates**; every measurement is bound to 0.64.22 and nothing yet re-tests on upgrade.
+- Evidence: [c-0021](./cycles/c-0021.md) prototype n-0011-c-0021 - enforced Fleets, a three-level subagent tree, and Fleet state rendered in cmux's own sidebar from an external process; [cmux-arch.md](../../../../v2/docs/reference/cmux-arch.md); [ghostty-arch.md](../../../../v2/docs/reference/ghostty-arch.md); [ccmux-arch.md](../../../../v2/docs/reference/ccmux-arch.md); [warp-arch.md](../../../../v2/docs/reference/warp-arch.md)
+- Links: refines n-0000; depends-on n-0002; informs n-0007; supersedes-candidate n-0004, n-0005, n-0006
+- First seen: c-0021
+- Former node id: none
+- Reinterpreted: c-0021 (created)
+- Promotion key: none
+- Tracker: none
+- Divergence: none
+- History: c-0021 created it by user redirect after four reference analyses (cmux, ccmux, Ghostty, Warp) and the user's own reframing - *"it's a terminal multiplexer at the end of the day… maybe we just customize one of these solutions"*. The cycle asked which shape to take and the loop's recommendation **changed mid-cycle on the user's own answer**: `own it (fork)` was recommended while verified-zero teardown was a P0, and was withdrawn in favour of `wrap it` the moment the user narrowed that bar to best effort, because the fork's whole justification was source access for teardown. The prototype then falsified the remaining objection: wrapping was assumed to require loosening cmux's automation security, and it does not - a pane-hosted helper is fully privileged. Two things were measured that no prior cycle knew: cmux's CLI already implements the resource meter and file tree this session had specified as work, and its `read-screen`/`send` surface makes it the **most** automatable host measured so far, inverting the ranking the c-0015 automation criterion implied. The node enters at fog `researched` on measured evidence rather than at `scouted`, matching the n-0002 precedent
+
 ## Active Frontier
 
 Every row lists **all** of its node's open questions. c-0018 found n-0002's row
@@ -269,7 +287,8 @@ than the node blocks.
 
 | Node | Fog | Maturity | Priority | Blocked by | Open questions |
 | --- | --- | --- | --- | --- | --- |
-| n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` on a live Session, and why - only the count was captured |
+| n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` on a live Session, and why - only the count was captured. **Deferred by user redirect in c-0021**; this was the deterministic selection. |
+| n-0011 | researched | decision-ready | P0 | none | (1) Does cmux **replace** the four-route comparison or become a fifth route. (2) Slice steps 2 and 5 unexercised - no live Copilot Session ran inside a Fleet worktree. (3) Teardown never measured on cmux. (4) Custom sidebars untested (outside the isolation path). (5) cmux auto-updates; measurements bound to 0.64.22 |
 | n-0004 | investigating | framed | P1 | n-0003 | (1) Can a WezTerm route satisfy process ownership at all. (2) Does `proto-v1/` shorten the distance or carry the architecture to abandon. (3) What is the **measured** Presentation Check ceiling - research-derived only, and measurable under permission granted in c-0018 |
 | n-0005 | investigating | framed | P1 | n-0003, n-0004 | Reduced to a bounded probe: does the WebdriverIO embedded-WebDriver path drive a packaged Tauri `.app` on macOS, and does the official Rust SDK binding remove the Node sidecar |
 | n-0006 | investigating | framed | P1 | n-0003, n-0004, n-0005 | Reduced to a bounded probe: what does the Copilot seam cost from Swift, given no Swift SDK binding exists |
@@ -382,6 +401,7 @@ on this session any more - the branch gate is.
 | n-0008 | unpromoted | none | none | never | none |
 | n-0009 | Story | maestro-graphical-agent-orchestrator/n-0009 | [Issue #30](https://github.com/jdylanmc/maestro/issues/30) | c-0019 | none |
 | n-0010 | unpromoted | none | none | never | none |
+| n-0011 | unpromoted | none | none | never | none |
 
 **First promotion in the session's history.** c-0019 published the Branch and two
 Stories under the tier map approved in the same cycle: Branch = a `discovery:map`

@@ -64,13 +64,13 @@
 
 - Exactly one Primary Agent per Session, a strict 1:1 binding. [c-0005](./cycles/c-0005.md)
 - The 1:1 binding is enforced by a lock rather than by convention: a second primary for the same Session is refused, and a lock-refused Session degrades to read-only. Modelled on the firstmate primary-harness home lock. [firstmate-arch.md](../../../../v2/docs/reference/firstmate-arch.md), [c-0005](./cycles/c-0005.md)
-- **No Agent process may outlive the application.** Closing Maestro terminates every Agent and Sub-agent it started, leaving no orphan, no daemon, and no background helper. **Observed violated in c-0006**: a detached `herdr server` daemon kept two Copilot Sessions and five Model Context Protocol servers alive for two days after the graphical host exited. [c-0005](./cycles/c-0005.md), [c-0006](./cycles/c-0006.md)
+- ~~**No Agent process may outlive the application.** Closing Maestro terminates every Agent and Sub-agent it started, leaving no orphan, no daemon, and no background helper.~~ **Narrowed in c-0021 by product decision.** The confirmed bar is now: **closing Maestro makes a best-effort attempt to stop every Agent and Sub-agent it started, and a sweep at next launch reaps whatever survived.** The absolute prohibition is retired as a P0 gate. *User: "what I don't want to happen is I close the UX and everything stays running. So long as cmux does a best attempt at shutting stuff down, that's OK. We don't have to force kill processes and stuff, that's unnecessary."* The c-0006 forensics are **not** withdrawn - **observed violated in c-0006**: a detached `herdr server` daemon kept two Copilot Sessions and five Model Context Protocol servers alive for two days after the graphical host exited. What changed is the disposition: the residual risk is now **accepted** rather than engineered out. **Recorded consequence, measured:** c-0012 showed a live Copilot Session leaves roughly five processes running when only `SIGTERM` is sent, so best-effort teardown alone is expected to leave strays, and **sweep-on-launch becomes the sole guarantee** rather than a backstop. This is the second reversal of a c-0006 requirement - c-0009 falsified its spawn model by measurement, c-0021 narrows its teardown guarantee by decision. [c-0005](./cycles/c-0005.md), [c-0006](./cycles/c-0006.md), [c-0012](./cycles/c-0012.md), [c-0021](./cycles/c-0021.md)
 - **Closing Maestro auto-Parks every Fleet** - state persisted, processes terminated, uncommitted work preserved - behind a pre-close summary naming any Fleet with in-flight work or uncommitted changes, acknowledged to proceed. Silent termination would make every Fleet `Interrupted` on next launch, rendering the confirmed Parked/Interrupted distinction decorative. Blocking the close was rejected because `Ambiguous` is a real liveness verdict and could trap the user in the application. [c-0008](./cycles/c-0008.md)
 - Persistence is of durable state, never of live processes. Data survives; processes do not. [c-0005](./cycles/c-0005.md)
 - **Ownership extends to the whole descendant tree, not to direct children.** The observed orphans were grandchildren - Model Context Protocol servers under Copilot Sessions under a daemon. Teardown operates on the process group, and correctness is judged by the tree, not by the processes Maestro spawned directly. [c-0006](./cycles/c-0006.md)
 - **Termination is verified and escalated, never fired and forgotten.** `SIGTERM` was observed to be ignored by wrapper processes that exited only after their children died. Teardown sends the signal, re-reads the process table, escalates to `SIGKILL` on timeout, and reports any survivor rather than assuming success. [c-0006](./cycles/c-0006.md)
 - **Reap on launch.** `SIGKILL`, a crash, and macOS Force Quit all bypass in-process cleanup, so graceful teardown cannot be the only defense. Maestro durably records the process-group identifiers it owns and reaps any survivor from a previous run at the next launch, before starting new work. [c-0006](./cycles/c-0006.md)
-- **No third-party dependency may supply the process lifetime.** Adopting a supervisor imports its lifetime model wholesale; `herdr` was adopted for convenience and its detachment became the product's observable behavior. Maestro owns its processes' lifetime directly, or it does not use the dependency. [c-0006](./cycles/c-0006.md)
+- ~~**No third-party dependency may supply the process lifetime.**~~ **Rewritten in c-0021, not demoted.** The c-0006 wording - "Maestro owns its processes' lifetime directly, or it does not use the dependency" - is **made false** by the c-0021 decision to host Maestro inside cmux, because cmux owns the pseudo-terminal and therefore the agent processes' lifetime. Rewriting it rather than deleting it preserves what the requirement was actually protecting against. The confirmed rule is now: **a dependency may supply the process lifetime only when its lifetime is visible to and endable by the operator.** `herdr` violated this because it was a detached background daemon with no user-visible surface, which is why its detachment silently became the product's observable behavior; cmux is a foreground application the operator can see, focus, and quit, and its agents are children of visible panes. That difference - not ownership - is the property that matters. **Retained obligation:** Maestro still records the process groups it knows about and sweeps them at launch, because a visible host does not make a crashed host's leftovers visible. [c-0006](./cycles/c-0006.md), [c-0021](./cycles/c-0021.md)
 - **Each Fleet is spawned detached, in its own process group.** ~~c-0006 required non-detached spawning;~~ **falsified by measurement in c-0009.** A non-detached child is not a process-group leader, so it shares the supervisor's group and cannot be signalled as a group at all - `process.kill(-pid)` returns `ESRCH` and every descendant survives even a graceful quit. Detachment is what makes complete teardown of a nested tree, and targeted per-Fleet cancellation, possible. [c-0009](./cycles/c-0009.md)
 - **Detachment is safe only when paired with durable ownership and a reaper.** Maestro records each Fleet's process-group identifier durably, terminates the group on quit with verification and escalation, and reaps any recorded group left over at next launch. Measured: with the reaper, zero survivors; without it, six. [c-0009](./cycles/c-0009.md)
 - **The application is accountable for every permission prompt its descendants raise.** macOS binds the responsible process at launch and descendants inherit it for their own lifetime, independent of whether the responsible process still exists, so prompts from binaries Maestro never authored are presented to the user under Maestro's name with no way to identify the real requester. Leaving a descendant alive is therefore a trust defect, not only a resource leak. [c-0006](./cycles/c-0006.md)
@@ -105,6 +105,8 @@
 
 - **File panes are read-only viewers with an "open in Visual Studio Code" action.** No in-app editor is built for the MVP. This closes the contradiction between Issue #12's deferral and the c-0005 wireframe, which specified a basic editor. [c-0008](./cycles/c-0008.md)
 
+- **The visual theme is Nord.** Confirmed by the user in c-0021 as a **P0**. Recorded as a product requirement rather than a preference because it constrains the host: a route must be able to present the whole surface - terminal, panels, sidebar, and chrome - in one coherent theme. **Measured the same cycle: cmux ships Nord built in**, in six variants (`Nord`, `Nord Light`, `Nord Wave`, `Nordfox`, and two further matches), inherited from Ghostty's theme set and settable with `cmux themes set Nord`. This P0 therefore costs nothing on the chosen route, which is why it was accepted without a cost question. [c-0021](./cycles/c-0021.md)
+
 ### Fleet Recap
 
 - **Maestro presents a `Recap` for a Fleet: a short account of what that Fleet was doing and where it got to, for a human returning without context.** Derived from the Fleet's own durable state and history rather than reported by its processes. Confirmed as domain vocabulary in [`CONTEXT.md`](../../../../CONTEXT.md) under a new `Account` group. [c-0019](./cycles/c-0019.md)
@@ -138,7 +140,7 @@
 - **The subagent tree is reconstructed by joining `subagent.started.data.toolCallId` to the `agentId` on the spawning agent's own `tool.*` event.** A root-spawned subagent's tool event carries a null `agentId`. [c-0010](./cycles/c-0010.md)
 - **`parentId` must never be used to build the tree.** It is a linear event-chain pointer, not a parent-agent link: in a measured 41,928-event session it held 41,927 distinct values, every one resolving to an event id and none to an `agentId`. Consecutive parallel *siblings* therefore appear as parent and child, and building on it yields a plausible but wholly fictional tree. [c-0010](./cycles/c-0010.md)
 - **`agentId` is a reliable identity for attribution.** In the same session the 132 ids appearing on `subagent.started` were exactly the 132 appearing on other events, so every event is attributable to the agent that produced it. [c-0010](./cycles/c-0010.md)
-- **The tree renders arbitrary depth, but must be optimised for breadth.** Measured real depth in the largest local session was 2, not the 16 a `parentId` reading suggests: 51 subagents root-spawned, 72 at depth 1, 9 at depth 2 - and 72 of 132 spawned by a single agent. Nesting is genuine but shallow; fan-out dominates. [c-0010](./cycles/c-0010.md)
+- **The tree renders arbitrary depth, but must be optimised for breadth.** Measured real depth in the largest local session was 2, not the 16 a `parentId` reading suggests: 51 subagents root-spawned, 72 at depth 1, 9 at depth 2 - and 72 of 132 spawned by a single agent. Nesting is genuine but shallow; fan-out dominates. **The depth figure is corrected in c-0021: nesting reaches at least 3.** A scan of all local sessions found seven with genuine nesting and one at depth 3 (`b7d9967c`, six subagents, 100% resolved). The requirement is unchanged - arbitrary depth, optimised for breadth - but the specific "maximum observed depth is 2" figure recorded by both c-0010 and c-0020 does not hold, and any renderer or assertion calibrated to it is calibrated wrong. [c-0010](./cycles/c-0010.md), [c-0021](./cycles/c-0021.md)
 - **Attention is an unmatched `permission.requested`**, plus `session.error` and `abort` as terminal states. This replaces `AT_RISK`, which is not computable from generic events. [c-0010](./cycles/c-0010.md)
 - **Attention pairs by `data.requestId`.** Both `permission.requested` and `permission.completed` carry `data.requestId`; the request additionally carries `data.permissionRequest.toolCallId`. The predicate is the set difference of requested and completed request identifiers. **Observed firing for the first time in c-0012**: request `dd7f6347` raised at 23:46:59.608Z on a genuinely blocked Session and still unmatched across two samples 25 s apart, and separately a full fire-and-clear cycle - requested 23:45:08.603Z, completed 23:45:09.728Z with `{"kind": "approved"}`. [c-0012](./cycles/c-0012.md)
 - **`permission.completed.data.result.kind` discriminates the outcome**, so Maestro can distinguish a human approval from a policy denial rather than only detecting presence. Observed values: `approved`, `denied-no-approval-rule-and-could-not-request-from-user`. [c-0012](./cycles/c-0012.md)
@@ -164,6 +166,97 @@
 - **`assistant.turn_end` must not be read as Attention.** It means the assistant yielded control, not that a human is required. [c-0010](./cycles/c-0010.md)
 - **`inbox_entries` is an intra-Fleet path, not an inter-Fleet one.** Across all 674 local session databases it holds 27 rows, every sender a `background-agent` or `sidekick-agent` reporting to its owning session - never a peer session. It is the subagent reporting channel and offers nothing for cross-Fleet messaging. [c-0010](./cycles/c-0010.md)
 - **`unread` must not be read as "the human has seen this."** All 27 observed rows carry `unread = 1`; the flag is never cleared in persisted state. [c-0010](./cycles/c-0010.md)
+
+## Priority index
+
+**Established in c-0021.** Until this cycle, priority existed only on discovery
+*nodes*; no requirement carried one, so every reading of "the P0 set" was
+re-derived from prose and could differ between cycles. The user re-ranked the
+whole index directly. Identifiers are stable and are the reference used by the
+Acceptance Slice, the harness, and every executive report.
+
+### P0 - confirmed by the user in c-0021
+
+| Id | Requirement |
+| --- | --- |
+| F0.1 | Named Fleets, each with its own Worktree and branch, **enforced** |
+| F0.4 | Real primary-agent chat against a live Copilot Session |
+| F0.5 | Live subagent tree with correct parentage |
+| F0.7 | The tree distinguishes `failed` from `completed` |
+| F0.9 | Selecting a Fleet re-scopes every panel together |
+| F0.12 | Pre-close summary naming Fleets with in-flight or uncommitted work |
+| F0.13 | Quit auto-Parks every Fleet |
+| F0.14 | Relaunch restores identity, history, Worktree, and recomputed Liveness |
+| F0.18 | **Sweep on launch** - reap recorded process groups from a previous run |
+| F0.20 | Directory tree with inline git information |
+| F0.22 | Read-only file viewers plus "open in Visual Studio Code" |
+| F0.24 | Processor and memory surfaced inside the Fleets panel |
+| F0.27 | **The visual theme is Nord** |
+| F1.3 | Tabs with vertical and horizontal splits |
+| F1.4 | Collapsible panels |
+| N0.1 | Best-effort teardown on quit (narrowed - see Lifecycle) |
+| N0.6 | Persistence is of durable state, never of live processes |
+| N0.14 | macOS is the supported platform |
+
+### P0-implied - mechanisms, not independent scope
+
+These are **not** a backlog. Each is the only known way a retained P0 is true, so
+none can be scheduled or dropped on its own. They were demoted in the user's
+re-rank and are reclassified here rather than left in P1, because listing a
+mechanism beside the requirement it implements invites deferring the mechanism
+and keeping the promise.
+
+| Id | Mechanism | Implements |
+| --- | --- | --- |
+| F0.2 | Branch-per-Fleet (a hard git constraint, not a policy) | F0.1 |
+| F0.3 | The primary agent window itself, bound 1:1 | F0.4 |
+| F0.6 | `parentId` must never build the tree | F0.5 |
+| F0.8 | Subscribe while `Alive`, reconstruct when `Parked`/`Dead` | F0.5 |
+| F0.11 | Attention is consumed from the runtime, not rebuilt | F0.10 |
+| F0.17 | Liveness classified from process evidence | F0.14 |
+| N0.2 | Ownership covers the descendant tree, not direct children | N0.1 |
+| N0.4 | Each Fleet in its own process group, recorded durably | N0.1, F0.18 |
+| N0.16 | Events read from `events.jsonl`, never `session.db` | F0.5 |
+
+### P1
+
+**Functional:** F0.10 Attention; F0.15 `Parked` vs `Interrupted`; F0.16 the two
+lifecycle axes; F0.19 three-column layout; F0.21 main-window content rules; F0.23
+admission control; F0.25 runtime-addressable session naming; F0.26 targeted
+cancellation; F1.1 **Fleet Recap**; F1.2 desktop notification on Attention; F1.5
+per-route executive report; F1.6 comparative technology evaluation.
+
+**Non-functional:** N0.3 verify-and-escalate teardown (**explicitly dropped to P1
+by the user**, not merely deprioritized); N0.7 durable state outside any
+worktree; N0.8 Park preserves uncommitted work; N0.9 the 1:1 lock; N0.12
+accountability for descendants' permission prompts; N0.13 the 8-Fleet ceiling;
+N0.15 generic runtime evidence only; N0.17 the SDK version pin; N1.1
+input-model continuity; N1.3 bounded per-worktree build state; N1.4 routes one at
+a time.
+
+### Retired - not demoted
+
+These were artifacts of the v2 Electron route and stop being requirements at all
+if Maestro is hosted rather than built: **N0.18** main-process authority
+boundary, **N0.19** the unsigned fuse-enabled build, **N0.11** distinct bundle
+identity. Recorded as retired-with-a-trigger: each returns if Maestro ever ships
+as its own application bundle.
+
+### Not product priorities
+
+**N0.20 through N0.27** - machine-first verification, the State Oracle, the
+Presentation Check, negative controls, the paired-falsification suite,
+measurement over assessment, and the user-interface automation criterion - are
+**verification method**, not product scope. They were carried in the same list as
+product requirements, which was a classification error made when the index was
+first derived. They are binding on how the loop judges a route and are not
+ranked against product capability.
+
+### Standing caveat
+
+Two P0 entries are **uncalibrated**: F0.24's meter and the retired-to-P1 F0.23
+admission control were both specified against an 8-Fleet ceiling that has never
+been measured against a repository large enough to bind it.
 
 ## Unresolved requirements
 
