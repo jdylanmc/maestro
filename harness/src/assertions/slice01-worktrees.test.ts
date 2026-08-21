@@ -67,10 +67,13 @@ describe('paired falsification', () => {
     try {
       await assert.rejects(
         () =>
-          verifyRoute([...slice1Assertions, alwaysPasses], {
-            repoRoot: good.repoRoot,
-            fleets: good.fleets,
-          }),
+          verifyRoute(
+            { stateOracle: [...slice1Assertions, alwaysPasses], presentationCheck: [] },
+            {
+              oracle: { repoRoot: good.repoRoot, fleets: good.fleets },
+              presentation: { fleets: good.fleets },
+            },
+          ),
         HarnessSelfCheckFailed,
         'one vacuous assertion must invalidate the whole report, not degrade it',
       );
@@ -87,10 +90,13 @@ describe('slice step 1 against a correct route', () => {
       { name: 'fleet-b', mode: 'own-branch' },
     ]);
     try {
-      const report = await verifyRoute(slice1Assertions, {
-        repoRoot: fixture.repoRoot,
-        fleets: fixture.fleets,
-      });
+      const report = await verifyRoute(
+        { stateOracle: slice1Assertions, presentationCheck: [] },
+        {
+          oracle: { repoRoot: fixture.repoRoot, fleets: fixture.fleets },
+          presentation: { fleets: fixture.fleets },
+        },
+      );
       assert.equal(report.route.passed, true, JSON.stringify(report.route.findings, null, 2));
       for (const finding of report.route.findings) {
         assert.ok(finding.result.evidence.length > 0, `${finding.assertionId} must carry evidence`);

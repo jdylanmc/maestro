@@ -17,6 +17,16 @@ export interface Evidence {
 
 export interface CheckResult {
   readonly ok: boolean;
+  /**
+   * True when this assertion could not be automated for the route under test and
+   * an operator must confirm it by hand.
+   *
+   * Pass or fail never depends on automation reach - a route checked only by the
+   * operator still passes if it behaves correctly - so a manual result does not
+   * fail the route. It is disclosed instead, and every disclosure lands in the
+   * route's executive report as named manual residue.
+   */
+  readonly manual?: boolean;
   /** Human-readable statement of what was observed, pass or fail. */
   readonly message: string;
   readonly evidence: readonly Evidence[];
@@ -31,15 +41,50 @@ export function fail(message: string, evidence: readonly Evidence[] = []): Check
 }
 
 /**
- * A world the harness can inspect. Deliberately minimal: the State Oracle reads
- * external ground truth, so it needs a repository path and the Fleets that are
- * claimed to exist. It never asks the application under test for anything.
+ * What a route *claims* about one Fleet.
+ *
+ * This is the one thing the route supplies, and it is deliberately not an answer
+ * to "did you succeed?". It is a set of identifiers - which Copilot Session this
+ * Fleet is bound to, which process group it owns - that the oracle then checks
+ * against external ground truth. A route that lies here fails harder, not softer,
+ * because every identifier is resolvable outside the application.
+ */
+export interface FleetClaim {
+  readonly name: string;
+  /** The Copilot `sessionId` the route claims is bound to this Fleet. */
+  readonly sessionId?: string;
+  /** The process-group id the route recorded when it spawned this Fleet's processes. */
+  readonly processGroupId?: number;
+}
+
+/**
+ * A world the harness can inspect. The State Oracle reads external ground truth
+ * only: git, `ps`, the runtime's own event log, and the SDK. It never asks the
+ * application under test what it believes.
  */
 export interface OracleContext {
   /** Absolute path to the git repository the route operates on. */
   readonly repoRoot: string;
   /** The Fleet names the route claims to have created. */
   readonly fleets: readonly string[];
+  /** Per-Fleet identifier claims, required by slice steps 2, 3, 5, and 6. */
+  readonly claims?: readonly FleetClaim[];
+  /** Root of the runtime's session state, normally `~/.copilot/session-state`. */
+  readonly sessionStateRoot?: string;
+  /**
+   * Whether the Fleets are expected to be torn down. Step 6 asserts zero
+   * survivors after a quit; before the quit the same process groups must be alive,
+   * and an assertion that cannot tell those apart is not testing teardown.
+   */
+  readonly phase?: 'running' | 'after-quit';
+}
+
+/** Look up a Fleet's claim, or `undefined` when the route made none. */
+export function claimFor(
+  context: OracleContext,
+  fleet: string,
+): FleetClaim | undefined {
+  return context.claims?.find((c) => c.name === fleet);
 }
 
 /** A situation an assertion must fail against, plus the means to tear it down. */
