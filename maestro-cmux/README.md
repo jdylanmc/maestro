@@ -108,11 +108,50 @@ session event log instead, by joining `subagent.started.data.toolCallId` to the
 `agentId` on the spawning agent's own `tool.*` event. That is Maestro's job, not
 this plugin's.
 
+## The sidebar
+
+[`sidebars/maestro.swift`](sidebars/maestro.swift) is a custom cmux sidebar
+that renders the hierarchy: workspace, then surface, then subagent tree.
+
+```sh
+cmux sidebar select maestro   # activate it as the left sidebar
+cmux sidebar open maestro     # or open it as a resizable pane
+```
+
+Surfaces are one line by default and expand on focus to show directory and
+branch. Selection is marked by an accent stripe. Expansion needs no `@State`,
+which the interpreter does not support: cmux persists workspace selection and
+surface focus, and both are in the binding set.
+
+**The interpreter fails silently, by design.** cmux's authoring contract states
+that unsupported syntax is skipped and never crashes, so `cmux sidebar validate`
+reporting `OK` says nothing about whether anything rendered. It has reported
+`OK` on a blank pane, and on one row where 41 were published. Debugging is
+bisection, not inspection, and changes are verified by reading the rendered
+accessibility tree. Constructs measured to fail silently are documented at the
+top of the file - read those comments before editing it.
+
+## Known limitations
+
+These are measured, not suspected, and each has an open issue.
+
+| Limitation | Effect |
+| --- | --- |
+| Subagent lifecycle events are written in a deferred burst near completion | A subagent is invisible for most of its runtime |
+| The tree is published into the workspace description, which persists | A finished subagent can stay on screen as running |
+| The event log is read as a bounded 8 MiB tail | Subagents are silently dropped on long sessions |
+| Sessions resolve by working directory and newest write | Two sessions in one directory can cross-attribute |
+
+The common failure shape is worth stating plainly: **each renders a plausible
+tree rather than an empty one.** A tree that shows nothing is obviously broken
+and gets fixed. A tree that is quietly incomplete, or four hours stale, gets
+trusted. Treat the tree as indicative until these close.
+
 ## Development
 
 ```sh
 npm run build
-npm test        # 80 tests: 68 upstream, 12 fail-open
+npm test        # 86 tests: 68 upstream, 12 fail-open, 6 tree wire format
 npm run check   # lint + test
 ```
 

@@ -1,8 +1,9 @@
 # Maestro repository instructions
 
-Maestro is exploring a terminal, multiplexer, and agent-orchestration architecture.
-The original launcher implementation is retained under `proto-v1/` as a working
-prototype, not the target architecture for v2.
+Maestro is an observability plugin that renders a Copilot session's subagent
+tree inside cmux. It observes and does not orchestrate. The original launcher
+implementation is retained under `proto-v1/` as a historical prototype, not the
+target architecture.
 
 - Never add secrets, credentials, tokens, session data, personal identifiers, employer configuration, internal endpoints, or machine-specific runtime state.
 - Keep coding-agent integrations optional. The v1 prototype must work with any executable adapter under `proto-v1/agents/`.
