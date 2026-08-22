@@ -57,6 +57,18 @@ def command(hook: str) -> str:
     )
 
 
+# Maestro publishes into cmux, and cmux is macOS only. There is nothing for
+# this plugin to do on Windows, so the PowerShell variant is an unconditional
+# no-op rather than a copy of the runner invocation.
+#
+# It cannot simply be omitted, and it must not be a bare `node ...` call. A
+# hook that exits non-zero DENIES the tool call, so a Windows session running
+# `node '<mac path>' <hook>` would hit MODULE_NOT_FOUND, exit 1, and deny every
+# tool call in the session - the exact failure that broke this machine three
+# times before the bash guard was written.
+POWERSHELL_NOOP = "exit 0"
+
+
 doc = {
     "version": 1,
     "hooks": {
@@ -64,7 +76,7 @@ doc = {
             {
                 "type": "command",
                 "bash": command(hook),
-                "powershell": f"node '{runner}' {hook}",
+                "powershell": POWERSHELL_NOOP,
                 "timeoutSec": 10,
             }
         ]
