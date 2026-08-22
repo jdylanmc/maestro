@@ -101,10 +101,30 @@ func anyRunning(_ d: String) -> Bool {
 /** Eyes open on even seconds while working; always shut when idle.
  *  Idle is deliberately motionless - stillness is the signal. */
 func eyesOpen(_ d: String, _ e: Int) -> Bool {
-    if anyRunning(d) {
+    if working(d) {
         return e % 2 == 0
     }
     return false
+}
+
+/** The Session itself is working, which is NOT the same as having a running
+ *  subagent.
+ *
+ *  Derived from the attention row, because that is the only turn-level signal
+ *  published today:
+ *
+ *    ""  no attention   -> mid-turn, the agent is doing something
+ *    "t" Your turn      -> the turn ended, the operator is next
+ *    "p" permission     -> blocked on the operator
+ *    "q" question       -> blocked on the operator
+ *
+ *  Blocked is deliberately NOT working: a stalled Session should sit still and
+ *  wear its badge rather than look busy. */
+func working(_ d: String) -> Bool {
+    if anyRunning(d) {
+        return true
+    }
+    return attnKind(d) == ""
 }
 
 /** The cued dot in the conducting wave, or none at all when idle.
