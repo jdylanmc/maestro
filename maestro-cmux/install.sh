@@ -40,6 +40,9 @@ import json, sys
 from pathlib import Path
 
 runner = sys.argv[1]
+# This list is the SOURCE OF TRUTH for hooks.json, which is generated rather
+# than shipped. Adding a hook to hooks.json by hand does nothing: the next
+# install regenerates the file from this list and silently drops it.
 hooks = [
     "sessionStart",
     "sessionEnd",
@@ -47,6 +50,13 @@ hooks = [
     "preToolUse",
     "postToolUse",
     "errorOccurred",
+    # Attention. `notification` carries notificationType, which discriminates a
+    # blocking permission_prompt or elicitation_dialog from noise; `agentStop`
+    # reports end_turn. Both are required because a session that is BLOCKED on
+    # the operator runs no tools, so no preToolUse/postToolUse hook fires while
+    # the state that most needs reporting is true.
+    "notification",
+    "agentStop",
 ]
 
 
@@ -89,7 +99,7 @@ PY
 
 echo "verifying the hook is silent and fails open from a foreign directory..."
 fail=0
-for hook in sessionStart sessionEnd userPromptSubmitted preToolUse postToolUse errorOccurred; do
+for hook in sessionStart sessionEnd userPromptSubmitted preToolUse postToolUse errorOccurred notification agentStop; do
   for payload in '{}' '{"garbage":true}' '' 'not json' '[]' 'null'; do
     out="$(cd / && printf '%s' "$payload" \
       | bash -c "command -v node >/dev/null 2>&1 || exit 0; node '$RUNNER' $hook >/dev/null 2>&1 || exit 0" 2>&1)"
@@ -104,7 +114,7 @@ if [ "$fail" -ne 0 ]; then
   echo "refusing to install: $fail combinations were not silent-and-zero" >&2
   exit 1
 fi
-echo "  42 hook/payload combinations: exit 0, no output"
+echo "  $((8 * 6)) hook/payload combinations: exit 0, no output"
 
 echo "installing into Copilot CLI..."
 copilot plugin install "$ROOT" 2>&1 | grep -v '^Warning' || true

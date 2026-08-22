@@ -96,6 +96,12 @@ func attnKind(_ d: String) -> String {
     return hits.count > 0 ? part(hits[0], 1) : ""
 }
 
+/** The raw attention row, so a tap can remove exactly it. */
+func attnRow(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    return hits.count > 0 ? hits[0] : ""
+}
+
 func attnLabel(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
     return hits.count > 0 ? nameOf(hits[0]) : ""
@@ -103,6 +109,15 @@ func attnLabel(_ d: String) -> String {
 
 func countOf(_ d: String, _ g: String) -> Int {
     return rowsOf(d).filter { part($0, 1) == g }.count
+}
+
+/** Attention pulse, 1 Hz. There is no animation system in this interpreter -
+ *  no `withAnimation`, `.animation`, `.transition`, or `symbolEffect` - and the
+ *  sidebar re-renders roughly once a second, so a value recomputed from `clock`
+ *  is the ONLY way to make anything move. This alternates rather than eases,
+ *  because there is no in-between frame to ease through. */
+func pulse(_ s: Int) -> Double {
+    return s % 2 == 0 ? 1.0 : 0.55
 }
 
 func spin(_ s: Int) -> String {
@@ -162,27 +177,64 @@ VStack(alignment: .leading, spacing: 0) {
                         }
                         Spacer(minLength: 3)
                         if let d = w.description {
+                            // Tapping an attention badge takes you to the
+                            // session that raised it AND clears the badge. It
+                            // is a pointer, not a record: once you are looking
+                            // at the prompt, the badge has done its job.
+                            //
+                            // Yellow, not red. A raised hand is a request, not
+                            // a failure - red reads as "something broke" for
+                            // what is a routine approval.
                             if attnKind(d) == "p" {
                                 HStack(spacing: 3) {
                                     Image(systemName: "hand.raised.fill").font(.system(size: 13))
                                     Text("ASK").font(.system(size: 13)).bold()
                                 }
-                                .foregroundColor(.red)
+                                .foregroundColor(.yellow)
+                                .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
+                                .opacity(pulse(clock.second))
                                 .fixedSize()
+                                .help(attnLabel(d))
+                                .onTapGesture {
+                                    cmux("workspace.select", workspace_id: w.id)
+                                    cmux("surface.focus", surface_id: ownerOf(d))
+                                    cmux("workspace.action",
+                                         workspace_id: w.id,
+                                         action: "set-description",
+                                         description: without(d, attnRow(d)))
+                                }
                             }
                             if attnKind(d) == "q" {
                                 HStack(spacing: 3) {
                                     Image(systemName: "questionmark.bubble.fill").font(.system(size: 13))
                                     Text("ASK").font(.system(size: 13)).bold()
                                 }
-                                .foregroundColor(.purple)
+                                .foregroundColor(.yellow)
+                                .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
+                                .opacity(pulse(clock.second))
                                 .fixedSize()
+                                .help(attnLabel(d))
+                                .onTapGesture {
+                                    cmux("workspace.select", workspace_id: w.id)
+                                    cmux("surface.focus", surface_id: ownerOf(d))
+                                    cmux("workspace.action",
+                                         workspace_id: w.id,
+                                         action: "set-description",
+                                         description: without(d, attnRow(d)))
+                                }
                             }
                             if attnKind(d) == "t" {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 11))
                                     .foregroundColor(.green)
                                     .fixedSize()
+                                    .help("Finished - your turn")
+                                    .onTapGesture {
+                                        cmux("workspace.action",
+                                             workspace_id: w.id,
+                                             action: "set-description",
+                                             description: without(d, attnRow(d)))
+                                    }
                             }
                             if countOf(d, ">") > 0 {
                                 HStack(spacing: 3) {
@@ -191,6 +243,7 @@ VStack(alignment: .leading, spacing: 0) {
                                         .font(.system(size: 12)).bold().monospacedDigit()
                                 }
                                 .foregroundColor(.green)
+                                .shadow(color: "#30D158", radius: 4, x: 0, y: 0)
                                 .fixedSize()
                             }
                             // No failed count. `subagent.failed` DOES NOT EXIST:
