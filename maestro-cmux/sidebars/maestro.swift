@@ -111,15 +111,6 @@ func countOf(_ d: String, _ g: String) -> Int {
     return rowsOf(d).filter { part($0, 1) == g }.count
 }
 
-/** Attention pulse, 1 Hz. There is no animation system in this interpreter -
- *  no `withAnimation`, `.animation`, `.transition`, or `symbolEffect` - and the
- *  sidebar re-renders roughly once a second, so a value recomputed from `clock`
- *  is the ONLY way to make anything move. This alternates rather than eases,
- *  because there is no in-between frame to ease through. */
-func pulse(_ s: Int) -> Double {
-    return s % 2 == 0 ? 1.0 : 0.55
-}
-
 /** Trailing path component, so a surface can show where it is working without
  *  spending the width a full path costs. Array indexing and arithmetic are
  *  fine inside a func body; only arithmetic as a bare modifier ARGUMENT is
@@ -183,7 +174,6 @@ VStack(alignment: .leading, spacing: 0) {
                                 }
                                 .foregroundColor(.yellow)
                                 .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
-                                .opacity(pulse(clock.second))
                                 .fixedSize()
                                 .help(attnLabel(d))
                                 .onTapGesture {
@@ -202,7 +192,6 @@ VStack(alignment: .leading, spacing: 0) {
                                 }
                                 .foregroundColor(.yellow)
                                 .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
-                                .opacity(pulse(clock.second))
                                 .fixedSize()
                                 .help(attnLabel(d))
                                 .onTapGesture {
