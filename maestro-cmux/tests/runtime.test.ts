@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   createRuntimeState,
-  describeActiveTools,
+  describeCurrentTool,
   reduceRuntimeState,
 } from "../src/runtime/reducer.js"
 import { buildPresentationSnapshot } from "../src/runtime/renderer.js"
@@ -22,7 +22,7 @@ const config = {
   debug: false,
 }
 
-test("runtime state tracks prompt, active tools, and completion", () => {
+test("runtime state tracks prompt, tool completion, and end of session", () => {
   let state = createRuntimeState("/tmp/project", "workspace-1", 1)
 
   state = reduceRuntimeState(
@@ -38,20 +38,8 @@ test("runtime state tracks prompt, active tools, and completion", () => {
   )
   assert.equal(state.phase, "thinking")
 
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.pre",
-      timestamp: 2,
-      cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: Run tests",
-    },
-    "workspace-1",
-  )
-  assert.equal(state.phase, "working")
-  assert.equal(describeActiveTools(state), "bash: Run tests")
-
+  // There is no tool.pre any more. postToolUse is the only per-tool evidence,
+  // so it has to carry the "working" signal the start hook used to carry.
   state = reduceRuntimeState(
     state,
     {
@@ -60,11 +48,16 @@ test("runtime state tracks prompt, active tools, and completion", () => {
       cwd: "/tmp/project",
       toolName: "bash",
       summary: "bash: Run tests",
+      parsedToolArgs: undefined,
       resultType: "success",
+      resultText: undefined,
     },
     "workspace-1",
   )
-  assert.equal(state.phase, "idle")
+  assert.equal(state.phase, "working")
+  assert.equal(describeCurrentTool(state), "bash: Run tests")
+  assert.equal(state.toolInvocations, 1)
+  assert.equal(state.completedTools, 1)
 
   state = reduceRuntimeState(
     state,
@@ -83,123 +76,66 @@ test("runtime state tracks prompt, active tools, and completion", () => {
   assert.equal(snapshot.progress, undefined)
 })
 
-test("tool.post stays working when other tools are still active", () => {
+// Without preToolUse there is no in-flight count to fall back to, so the only
+// thing that can return a session to idle mid-run is the end of the turn. If
+// tool.post went back to idle, an actively working session would flicker idle
+// between every single tool.
+test("a finished tool keeps the session working; agentStop is what ends it", () => {
   let state = createRuntimeState("/tmp/project", "workspace-1", 1)
 
-  // Start two tools
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.pre",
-      timestamp: 2,
-      cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: Run tests",
-    },
-    "workspace-1",
-  )
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.pre",
-      timestamp: 3,
-      cwd: "/tmp/project",
-      toolName: "grep",
-      summary: "grep: search",
-    },
-    "workspace-1",
-  )
-  assert.equal(state.phase, "working")
-  assert.deepEqual(state.activeTools, { bash: 1, grep: 1 })
+  for (const [timestamp, toolName] of [
+    [2, "bash"],
+    [3, "grep"],
+  ] as const) {
+    state = reduceRuntimeState(
+      state,
+      {
+        type: "tool.post",
+        timestamp,
+        cwd: "/tmp/project",
+        toolName,
+        summary: `${toolName}: work`,
+        parsedToolArgs: undefined,
+        resultType: "success",
+        resultText: undefined,
+      },
+      "workspace-1",
+    )
+    assert.equal(state.phase, "working")
+  }
 
-  // First tool completes — still working (grep still active)
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.post",
-      timestamp: 4,
-      cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: Run tests",
-      resultType: "success",
-    },
-    "workspace-1",
-  )
-  assert.equal(state.phase, "working")
+  assert.equal(state.toolInvocations, 2)
 
-  // Second tool completes — now idle
   state = reduceRuntimeState(
     state,
-    {
-      type: "tool.post",
-      timestamp: 5,
-      cwd: "/tmp/project",
-      toolName: "grep",
-      summary: "grep: search",
-      resultType: "success",
-    },
+    { type: "agent.stop", timestamp: 4, cwd: "/tmp/project", stopReason: "end_turn" },
     "workspace-1",
   )
   assert.equal(state.phase, "idle")
+  assert.equal(state.attention?.kind, "turn")
 })
 
-test("same tool invoked twice stays working until both complete", () => {
+// The progress bar reads toolInvocations. preToolUse used to increment it, so
+// moving the count to tool.post is what keeps the bar advancing at all.
+test("toolInvocations advances even though nothing reports a tool starting", () => {
   let state = createRuntimeState("/tmp/project", "workspace-1", 1)
+  assert.equal(state.toolInvocations, 0)
 
   state = reduceRuntimeState(
     state,
     {
-      type: "tool.pre",
+      type: "tool.post",
       timestamp: 2,
       cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: first",
-    },
-    "workspace-1",
-  )
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.pre",
-      timestamp: 3,
-      cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: second",
-    },
-    "workspace-1",
-  )
-  assert.deepEqual(state.activeTools, { bash: 2 })
-
-  // First bash completes — still working
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.post",
-      timestamp: 4,
-      cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: first",
+      toolName: "view",
+      summary: "view a.ts",
+      parsedToolArgs: undefined,
       resultType: "success",
+      resultText: undefined,
     },
     "workspace-1",
   )
-  assert.equal(state.phase, "working")
-  assert.deepEqual(state.activeTools, { bash: 1 })
-
-  // Second bash completes — idle
-  state = reduceRuntimeState(
-    state,
-    {
-      type: "tool.post",
-      timestamp: 5,
-      cwd: "/tmp/project",
-      toolName: "bash",
-      summary: "bash: second",
-      resultType: "success",
-    },
-    "workspace-1",
-  )
-  assert.equal(state.phase, "idle")
+  assert.equal(state.toolInvocations, 1)
 })
 
 test("reducer tracks file edits from edit tool", () => {
@@ -224,7 +160,7 @@ test("reducer tracks file edits from edit tool", () => {
   assert.equal(state.lastEditedFile, "/tmp/foo.ts")
 })
 
-test("renderer shows active tool status while work is in progress", () => {
+test("renderer shows the last tool while the session is working", () => {
   const state = {
     version: 1,
     cwd: "/tmp/project",
@@ -232,7 +168,6 @@ test("renderer shows active tool status while work is in progress", () => {
     updatedAt: 10,
     startedAt: 1,
     phase: "working",
-    activeTools: { bash: 1 },
     toolInvocations: 2,
     completedTools: 1,
     lastToolName: "bash",

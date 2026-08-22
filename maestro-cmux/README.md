@@ -40,7 +40,7 @@ Reproduced directly, same payload, upstream against this fork:
 $ echo '{"toolName":"bash","sessionId":"x","cwd":"/tmp"}' \
     | node dist/hook-runner.js preToolUse
 upstream  -> exit 1   # tool DENIED
-this fork -> exit 0   # tool ALLOWED, error still on stderr
+this fork -> exit 0   # tool ALLOWED, error goes to a log file
 ```
 
 ### The rule this fork enforces
@@ -48,8 +48,26 @@ this fork -> exit 0   # tool ALLOWED, error still on stderr
 > **An observer must never be able to veto the thing it observes.**
 
 This plugin draws status pills. It has no authority over whether a tool may run.
-`hook-runner.ts` therefore always exits 0, reports the failure on stderr, and
-lets Copilot proceed. A bug in this plugin stays a cosmetic bug.
+
+**Maestro does not register `preToolUse` at all.** It is the only hook Copilot
+treats as able to veto a tool call, so the authority is given up rather than
+merely left unused. Start of work comes from `userPromptSubmitted`; per-tool
+detail comes from `postToolUse`, one tool later, which is the whole cost.
+
+`hook-runner.ts` additionally always exits 0 and writes **nothing** to stdout or
+stderr - a diagnostic goes to a file, because Copilot reports a hook that emits
+anything as errored and denies the call even when it exited zero. A bug in this
+plugin stays a cosmetic bug.
+
+### Turning it off
+
+Either switch disables every Maestro hook completely - no parsing, no state, no
+diagnostics, no publishing:
+
+```bash
+export CMUX_COPILOT_HOOKS_DISABLED=1   # cmux's own switch; also stops cmux's hooks
+export MAESTRO_DISABLED=1              # stops only this plugin
+```
 
 That is enforced by `tests/fail-open.test.ts`, which asserts a zero exit for
 empty input, malformed JSON, an empty object, wrong key names, a missing field,

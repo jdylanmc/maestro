@@ -15,7 +15,6 @@ export function createRuntimeState(
     source: undefined,
     phase: "idle",
     lastPrompt: undefined,
-    activeTools: {},
     toolInvocations: 0,
     completedTools: 0,
     lastToolName: undefined,
@@ -48,44 +47,17 @@ export function attentionKindForNotification(notificationType: string): Attentio
   return undefined
 }
 
-export function countActiveTools(state: RuntimeState): number {
-  return Object.values(state.activeTools).reduce((sum, count) => sum + count, 0)
-}
-
-export function describeActiveTools(state: RuntimeState): string | undefined {
-  const total = countActiveTools(state)
-  if (total === 0) return undefined
-  if (total === 1) {
-    return state.lastToolSummary ?? state.lastToolName ?? "tool"
-  }
-  return `${total} tools`
-}
-
-function cloneActiveTools(activeTools: Record<string, number>): Record<string, number> {
-  return { ...activeTools }
-}
-
-function incrementToolCount(
-  activeTools: Record<string, number>,
-  toolName: string,
-): Record<string, number> {
-  const next = cloneActiveTools(activeTools)
-  next[toolName] = (next[toolName] ?? 0) + 1
-  return next
-}
-
-function decrementToolCount(
-  activeTools: Record<string, number>,
-  toolName: string,
-): Record<string, number> {
-  const next = cloneActiveTools(activeTools)
-  const current = next[toolName] ?? 0
-  if (current <= 1) {
-    delete next[toolName]
-  } else {
-    next[toolName] = current - 1
-  }
-  return next
+/**
+ * The label for the tool the session most recently touched.
+ *
+ * Maestro no longer registers `preToolUse`, so there is no in-flight tool to
+ * count: `postToolUse` reports a tool that has already finished. The status
+ * pill therefore names the LAST tool rather than the CURRENT one, which lags
+ * reality by one tool's latency and is the price of not holding veto authority
+ * over tool execution.
+ */
+export function describeCurrentTool(state: RuntimeState): string | undefined {
+  return state.lastToolSummary ?? state.lastToolName
 }
 
 export function reduceRuntimeState(
@@ -104,7 +76,6 @@ export function reduceRuntimeState(
         source: event.source,
         phase: event.initialPrompt ? "thinking" : "idle",
         lastPrompt: event.initialPrompt,
-        activeTools: {},
         toolInvocations: 0,
         completedTools: 0,
         lastToolName: undefined,
@@ -126,7 +97,7 @@ export function reduceRuntimeState(
         workspaceID,
         updatedAt: event.timestamp,
         startedAt: currentState.startedAt ?? event.timestamp,
-        phase: countActiveTools(currentState) > 0 ? "working" : "thinking",
+        phase: "thinking",
         lastPrompt: event.prompt,
         lastSessionEndReason: undefined,
         lastError: undefined,
@@ -134,26 +105,7 @@ export function reduceRuntimeState(
       }
     }
 
-    case "tool.pre": {
-      return {
-        ...currentState,
-        cwd: event.cwd,
-        workspaceID,
-        updatedAt: event.timestamp,
-        startedAt: currentState.startedAt ?? event.timestamp,
-        phase: "working",
-        activeTools: incrementToolCount(currentState.activeTools, event.toolName),
-        toolInvocations: currentState.toolInvocations + 1,
-        lastToolName: event.toolName,
-        lastToolSummary: event.summary,
-        lastResultType: undefined,
-        lastSessionEndReason: undefined,
-        attention: undefined,
-      }
-    }
-
     case "tool.post": {
-      const activeTools = decrementToolCount(currentState.activeTools, event.toolName)
       const isFileEdit =
         (event.toolName === "edit" || event.toolName === "create") && event.resultType === "success"
       const filePath =
@@ -164,8 +116,13 @@ export function reduceRuntimeState(
         workspaceID,
         updatedAt: event.timestamp,
         startedAt: currentState.startedAt ?? event.timestamp,
-        phase: countActiveTools({ ...currentState, activeTools }) > 0 ? "working" : "idle",
-        activeTools,
+        // A finished tool means the turn is still in progress: Copilot runs
+        // tools mid-turn and reports the end of the turn through `agentStop`,
+        // which is what returns the session to idle. Without `preToolUse` this
+        // is the only per-tool evidence Maestro receives, so it has to carry
+        // the "working" signal that the start hook used to carry.
+        phase: "working",
+        toolInvocations: currentState.toolInvocations + 1,
         completedTools: currentState.completedTools + 1,
         lastToolName: event.toolName,
         lastToolSummary: event.summary,
@@ -183,7 +140,6 @@ export function reduceRuntimeState(
         workspaceID,
         updatedAt: event.timestamp,
         phase: event.reason === "complete" ? "done" : event.reason === "error" ? "error" : "idle",
-        activeTools: {},
         lastSessionEndReason: event.reason,
         attention: undefined,
       }
@@ -236,7 +192,6 @@ export function reduceRuntimeState(
         workspaceID,
         updatedAt: event.timestamp,
         phase: "idle",
-        activeTools: {},
         attention: { kind: "turn", label: "Your turn", since: event.timestamp },
       }
     }

@@ -90,7 +90,7 @@ test("answering clears attention", () => {
   assert.equal(reduceRuntimeState(blocked, prompt).attention, undefined)
 
   const tool = parseHookInput(
-    "preToolUse",
+    "postToolUse",
     JSON.stringify({ timestamp: 5, cwd: CWD, toolName: "bash", toolArgs: "{}" }),
   )
   assert.equal(reduceRuntimeState(blocked, tool).attention, undefined)

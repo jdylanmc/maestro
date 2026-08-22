@@ -60,7 +60,7 @@ async function renderState(
 
   await logger.log("debug", "renderState", {
     phase: state.phase,
-    activeTools: state.activeTools,
+    lastTool: state.lastToolSummary,
     snapshotStatus: snapshot.status?.text,
     hasProgress: !!snapshot.progress,
   })
@@ -113,13 +113,6 @@ async function emitEventEffects(
     case "user.prompt": {
       if (config.logPrompts) {
         await logEvent(cmux, "info", `${projectLabel}: prompt - ${summarizeText(event.prompt, 88)}`)
-      }
-      break
-    }
-
-    case "tool.pre": {
-      if (config.logToolCalls) {
-        await logEvent(cmux, "progress", `${projectLabel}: running ${event.summary}`)
       }
       break
     }
@@ -209,6 +202,23 @@ export async function processHook(
   rawInput: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
+  // The operator kill switches. One environment variable disables every
+  // Maestro hook completely - no parsing, no state, no diagnostics, no
+  // publishing - so a misbehaving plugin can be silenced in one step without
+  // editing configuration or uninstalling.
+  //
+  // There are two on purpose. `CMUX_COPILOT_HOOKS_DISABLED` is cmux's OWN
+  // documented switch, already guarding its native Copilot hooks, so the
+  // obvious way to turn off Copilot integration turns Maestro off too.
+  // `MAESTRO_DISABLED` silences only this plugin, leaving cmux's native
+  // integration running.
+  //
+  // This check comes FIRST, before the config and logger, because "disabled"
+  // has to mean it did nothing at all, not that it did the work quietly.
+  if (env.CMUX_COPILOT_HOOKS_DISABLED === "1" || env.MAESTRO_DISABLED === "1") {
+    return
+  }
+
   const config = loadConfig(env)
   const logger = createLogger(config.debug)
 

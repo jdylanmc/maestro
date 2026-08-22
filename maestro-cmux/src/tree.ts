@@ -53,12 +53,13 @@ export const RETAIN_MS = 15 * 60 * 1000
  * `pendingRequests()`.
  *
  * Deriving it matters for a structural reason, not a stylistic one. A hook
- * cannot report a blocked Session: measured ordering is
- * `tool.execution_start` -> `preToolUse` -> `permission.requested`, so the hook
- * fires BEFORE the request exists, and while the operator is being waited on no
- * hook fires at all. A stored flag therefore depends on a clearing hook that may
- * never run. The log does not have that problem - whichever hook happens to fire
- * next recomputes the truth.
+ * cannot report a blocked Session: measured ordering was
+ * `tool.execution_start` -> `preToolUse` -> `permission.requested`, so even the
+ * tool-start hook fired BEFORE the request existed, and while the operator is
+ * being waited on no hook fires at all. That ordering is now moot - Maestro no
+ * longer registers `preToolUse` - which only strengthens the point: a stored
+ * flag depends on a clearing hook that may never run. The log does not have
+ * that problem - whichever hook happens to fire next recomputes the truth.
  *
  * Only `permission` is derivable. An elicitation and a finished turn are not
  * permission events, so they still arrive through their hooks.

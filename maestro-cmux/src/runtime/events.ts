@@ -6,7 +6,6 @@ import type {
   HookName,
   NotificationHookInput,
   PostToolUseHookInput,
-  PreToolUseHookInput,
   SessionEndHookInput,
   SessionEndReason,
   SessionStartHookInput,
@@ -20,11 +19,6 @@ export type CopilotHookEvent =
   | ({ type: "session.start" } & SessionStartHookInput)
   | ({ type: "session.end" } & SessionEndHookInput)
   | ({ type: "user.prompt" } & UserPromptSubmittedHookInput)
-  | ({
-      type: "tool.pre"
-      summary: string
-      parsedToolArgs: Record<string, unknown> | undefined
-    } & Omit<PreToolUseHookInput, "toolArgs">)
   | ({
       type: "tool.post"
       summary: string
@@ -212,21 +206,6 @@ export function parseHookInput(hookName: HookName, rawInput: string): CopilotHoo
       }
     }
 
-    case "preToolUse": {
-      const toolName = expectString(parsed, "toolName", context)
-      const toolArgs = expectString(parsed, "toolArgs", context)
-      const parsedToolArgs = parseJsonObjectString(toolArgs)
-
-      return {
-        type: "tool.pre",
-        timestamp: expectNumber(parsed, "timestamp", context),
-        cwd: expectString(parsed, "cwd", context),
-        toolName,
-        parsedToolArgs,
-        summary: describeToolCall(toolName, parsedToolArgs),
-      }
-    }
-
     case "postToolUse": {
       const toolName = expectString(parsed, "toolName", context)
       const toolArgs = expectString(parsed, "toolArgs", context)
@@ -261,8 +240,9 @@ export function parseHookInput(hookName: HookName, rawInput: string): CopilotHoo
 
     case "notification": {
       // `title` is optional on purpose. An unrecognised notificationType must
-      // degrade to "no attention", never to a thrown error - this hook runs in
-      // the same runner as preToolUse.
+      // degrade to "no attention", never to a thrown error - this hook shares a
+      // runner with every other hook, and a throw here is a diagnostic, not a
+      // denial, only because the runner forces exit 0.
       return {
         type: "notification",
         timestamp: expectNumber(parsed, "timestamp", context),
@@ -280,5 +260,12 @@ export function parseHookInput(hookName: HookName, rawInput: string): CopilotHoo
         stopReason: optionalString(parsed, "stopReason"),
       }
     }
+
+    // A hook name this plugin does not handle - `preToolUse` above all, which
+    // is deliberately not registered. Throwing here is safe precisely because
+    // the runner forces exit 0 and writes nothing: an unknown hook becomes a
+    // no-op with a diagnostic, never a denied tool call.
+    default:
+      throw new Error(`Unsupported hook: ${String(hookName)}`)
   }
 }

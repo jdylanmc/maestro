@@ -46,7 +46,6 @@ test("working with single tool shows tool summary", () => {
     state({
       phase: "working",
       startedAt: 1,
-      activeTools: { edit: 1 },
       toolInvocations: 1,
       completedTools: 0,
       lastToolName: "edit",
@@ -62,22 +61,21 @@ test("working with single tool shows tool summary", () => {
   assert.ok(snap.progress)
 })
 
-test("working with multiple tools shows tool count", () => {
+test("working falls back to the last tool name when there is no summary", () => {
   const snap = buildPresentationSnapshot(
     state({
       phase: "working",
       startedAt: 1,
-      activeTools: { bash: 1, edit: 1 },
       toolInvocations: 3,
       completedTools: 1,
       lastToolName: "edit",
-      lastToolSummary: "edit: Update file",
+      lastToolSummary: undefined,
     }),
     config,
     "proj",
     10,
   )
-  assert.equal(snap.status?.text, "working: 2 tools")
+  assert.equal(snap.status?.text, "working: edit")
   assert.equal(snap.status?.icon, "terminal")
   assert.equal(snap.status?.color, "#f59e0b")
   assert.ok(snap.progress)
@@ -137,7 +135,6 @@ test("working with progressEnabled false has status but no progress", () => {
     state({
       phase: "working",
       startedAt: 1,
-      activeTools: { bash: 1 },
       toolInvocations: 1,
       completedTools: 0,
       lastToolName: "bash",

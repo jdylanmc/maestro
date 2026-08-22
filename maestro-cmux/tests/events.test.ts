@@ -45,20 +45,17 @@ test("parseHookInput — userPromptSubmitted: returns event with prompt", () => 
   assert.equal(event.type === "user.prompt" && event.prompt, "fix the bug")
 })
 
-test("parseHookInput — preToolUse: parses toolArgs and generates summary", () => {
-  const toolArgs = JSON.stringify({ description: "List files in dir" })
+// preToolUse is the only hook Copilot treats as able to veto a tool call, and
+// Maestro must not be able to. It is no longer registered, and the parser no
+// longer knows it: a payload arriving under that name is an unknown hook.
+test("parseHookInput — preToolUse is not a hook this plugin understands", () => {
   const raw = JSON.stringify({
     timestamp: 1700000003,
     cwd: "/tmp",
     toolName: "bash",
-    toolArgs,
+    toolArgs: "{}",
   })
-  const event = parseHookInput("preToolUse", raw)
-  assert.equal(event.type, "tool.pre")
-  if (event.type === "tool.pre") {
-    assert.deepEqual(event.parsedToolArgs, { description: "List files in dir" })
-    assert.equal(event.summary, "bash: List files in dir")
-  }
+  assert.throws(() => parseHookInput("preToolUse" as never, raw))
 })
 
 test("parseHookInput — postToolUse: extracts resultType and resultText", () => {

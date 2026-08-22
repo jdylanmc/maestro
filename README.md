@@ -45,8 +45,10 @@ Copilot treats a non-zero exit from a `preToolUse` hook as a denial. An
 unmaintained third-party plugin exited non-zero on a payload it did not
 recognise and refused every tool call in a live session, `pwd` included.
 
-Maestro's hooks always exit zero and emit nothing, enforced by tests with a
-negative control that fails if the runner never executed.
+Maestro does not register `preToolUse` at all, and its hooks always exit zero
+and emit nothing - enforced by tests with a negative control that fails if the
+runner never executed. Setting `CMUX_COPILOT_HOOKS_DISABLED=1` or
+`MAESTRO_DISABLED=1` turns every hook into a silent no-op.
 
 ## Documentation
 

@@ -1,12 +1,12 @@
 import { summarizeTextWithFallback } from "../text.js"
 import type { PluginConfig, PresentationSnapshot, RuntimeState } from "../types.js"
 import { estimateProgress } from "./progress.js"
-import { describeActiveTools } from "./reducer.js"
+import { describeCurrentTool } from "./reducer.js"
 
 function buildProgressLabel(state: RuntimeState, projectLabel: string): string {
-  const activeTool = describeActiveTools(state)
-  if (activeTool) {
-    return `${projectLabel}: ${activeTool}`
+  const tool = state.phase === "working" ? describeCurrentTool(state) : undefined
+  if (tool) {
+    return `${projectLabel}: ${tool}`
   }
 
   if (state.phase === "thinking") {
@@ -32,8 +32,8 @@ export function buildPresentationSnapshot(
     }
   }
 
-  const activeTool = describeActiveTools(state)
-  if (activeTool) {
+  if (state.phase === "working") {
+    const tool = describeCurrentTool(state)
     const progress = config.progressEnabled
       ? {
           value: estimateProgress(state, "working", now),
@@ -42,7 +42,7 @@ export function buildPresentationSnapshot(
       : undefined
     return {
       status: {
-        text: `working: ${activeTool}`,
+        text: tool ? `working: ${tool}` : "working",
         icon: "terminal",
         color: "#f59e0b",
       },

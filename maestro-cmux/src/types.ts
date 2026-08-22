@@ -2,11 +2,20 @@ export type TransportMode = "cli" | "socket" | "auto"
 export type LogLevel = "debug" | "info" | "warn" | "error"
 export type SidebarLogLevel = "info" | "progress" | "success" | "warning" | "error"
 export type RuntimePhase = "idle" | "thinking" | "working" | "done" | "error"
+/**
+ * The hooks Maestro registers.
+ *
+ * `preToolUse` is DELIBERATELY absent, and must stay absent. It is the only
+ * hook Copilot treats as able to veto a tool call, and an observability plugin
+ * has no business holding that authority - the upstream `copilot-cmux` plugin
+ * took a live session down through exactly this hook, refusing every tool call
+ * including `pwd`. Start-of-work is derived from `userPromptSubmitted`, and
+ * per-tool detail from `postToolUse`.
+ */
 export type HookName =
   | "sessionStart"
   | "sessionEnd"
   | "userPromptSubmitted"
-  | "preToolUse"
   | "postToolUse"
   | "errorOccurred"
   | "notification"
@@ -114,7 +123,6 @@ export interface RuntimeState {
   source: SessionStartSource | undefined
   phase: RuntimePhase
   lastPrompt: string | undefined
-  activeTools: Record<string, number>
   toolInvocations: number
   completedTools: number
   lastToolName: string | undefined
@@ -159,13 +167,6 @@ export interface UserPromptSubmittedHookInput {
   timestamp: number
   cwd: string
   prompt: string
-}
-
-export interface PreToolUseHookInput {
-  timestamp: number
-  cwd: string
-  toolName: string
-  toolArgs: string
 }
 
 export interface ToolResult {

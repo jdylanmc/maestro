@@ -7,7 +7,6 @@ const HOOK_NAMES = new Set<HookName>([
   "sessionStart",
   "sessionEnd",
   "userPromptSubmitted",
-  "preToolUse",
   "postToolUse",
   "errorOccurred",
   "notification",
@@ -42,9 +41,12 @@ main().catch((error: unknown) => {
   // Two properties are required, and having only the first is what made this
   // fork necessary twice:
   //
-  //   1. Exit zero. Copilot treats a non-zero exit from `preToolUse` as a
-  //      denial, so upstream's `exitCode = 1` denied every tool call in a
-  //      session whenever it met a payload shape it did not recognise.
+  //   1. Exit zero. Copilot treats a non-zero exit from a tool-gating hook as
+  //      a denial, so upstream's `exitCode = 1` denied every tool call in a
+  //      session whenever it met a payload shape it did not recognise. Maestro
+  //      no longer registers `preToolUse` at all, which removes the authority
+  //      rather than merely declining to use it - but this guard stays, since
+  //      an errored hook is reported however it is registered.
   //
   //   2. Emit nothing on stdout or stderr. Exiting zero is NOT sufficient:
   //      Copilot reports `hook errored` and denies the call for a hook that
