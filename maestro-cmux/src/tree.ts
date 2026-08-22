@@ -172,18 +172,33 @@ export function flatten(subs: Map<string, Subagent>): Array<[number, Subagent]> 
 }
 
 /**
- * `<depth>|<status>|<name>|<kind>` per line.
+ * Render the tree as indented text.
  *
  * cmux's interpreted sidebars bind only to cmux's own model - they cannot read
  * files or start processes - so the tree travels through the workspace
- * description, which is the widest free-text field available.
+ * description, the widest free-text field available.
+ *
+ * The format is deliberately readable as-is rather than a machine encoding,
+ * because the stock cmux sidebar renders the description verbatim. A reader
+ * without the custom sidebar installed should see a tree, not a data format:
+ *
+ *     > folk-lyricist
+ *     > comic-lyricist
+ *       v research-scan
+ *     x lint-fixer
+ *
+ * Depth is two spaces per level, status is the leading glyph, and the custom
+ * sidebar recovers both by counting indentation and reading the first
+ * non-space character.
  */
+const GLYPH: Record<SubagentStatus, string> = { run: ">", ok: "v", fail: "x" }
+
 export function encodeTree(subs: Map<string, Subagent>): string {
   const clean = (v: string, n: number) =>
-    v.replace(/[|\n\r]/g, " ").trim().slice(0, n)
+    v.replace(/[\n\r]/g, " ").trim().slice(0, n)
   return flatten(subs)
     .slice(0, 60)
-    .map(([depth, s]) => `${depth}|${s.status}|${clean(s.name, 48)}|${clean(s.kind, 24)}`)
+    .map(([depth, s]) => `${"  ".repeat(Math.min(depth, 6))}${GLYPH[s.status]} ${clean(s.name, 44)}`)
     .join("\n")
 }
 
