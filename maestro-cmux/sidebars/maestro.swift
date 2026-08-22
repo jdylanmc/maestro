@@ -166,25 +166,70 @@ VStack(alignment: .leading, spacing: 0) {
                     }
 
                     ForEach(w.tabs.prefix(8)) { t in
-                        HStack(spacing: 6) {
-                            Spacer().frame(width: 12)
-                            Image(systemName: "terminal")
-                                .imageScale(.small)
-                                .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
-                            Text(t.title)
-                                .font(.caption)
-                                .foregroundColor(t.focused && w.selected ? .primary : .secondary)
-                                .lineLimit(1).truncationMode(.tail)
-                            Spacer(minLength: 4)
-                            if let dir = t.directory {
-                                Text(baseName(dir))
-                                    .font(.system(size: 9)).fontDesign(.monospaced)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                                    .fixedSize()
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Spacer().frame(width: 12)
+                                Image(systemName: "terminal")
+                                    .imageScale(.small)
+                                    .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                                Text(t.title)
+                                    .font(.caption)
+                                    .foregroundColor(t.focused && w.selected ? .primary : .secondary)
+                                    .lineLimit(1).truncationMode(.tail)
+                                Spacer(minLength: 4)
+                                if let dir = t.directory {
+                                    Text(baseName(dir))
+                                        .font(.system(size: 9)).fontDesign(.monospaced)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                        .fixedSize()
+                                }
+                            }
+
+                            // Detail lines exist only for the focused surface, so the
+                            // default view stays one line per card. Focus is persisted
+                            // by cmux, so this needs no @State - which the interpreter
+                            // does not support.
+                            if t.focused && w.selected {
+                                if let dir = t.directory {
+                                    HStack(spacing: 4) {
+                                        Spacer().frame(width: 30)
+                                        Text(dir)
+                                            .font(.system(size: 9)).fontDesign(.monospaced)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1).truncationMode(.tail)
+                                        Spacer(minLength: 0)
+                                    }
+                                }
+                                if let tb = t.branch {
+                                    HStack(spacing: 4) {
+                                        Spacer().frame(width: 30)
+                                        Image(systemName: "arrow.triangle.branch")
+                                            .font(.system(size: 8))
+                                            .foregroundColor(.secondary)
+                                        Text(tb)
+                                            .font(.system(size: 9)).fontDesign(.monospaced)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                        if t.dirty {
+                                            Circle().fill(.orange).frame(width: 3, height: 3).fixedSize()
+                                        }
+                                        Spacer(minLength: 0)
+                                    }
+                                }
                             }
                         }
                         .padding(4)
+                        .background {
+                            if t.focused && w.selected {
+                                Capsule().fill(.quaternary)
+                            }
+                        }
+                        .overlay(alignment: .leading) {
+                            if t.focused && w.selected {
+                                Capsule().fill(.accentColor).frame(width: 3)
+                            }
+                        }
                         .onTapGesture {
                             cmux("workspace.select", workspace_id: w.id)
                             cmux("surface.focus", surface_id: t.id)
