@@ -84,6 +84,46 @@ func without(_ d: String, _ row: String) -> String {
         .reduce("") { $0 == "" ? $1 : $0 + "¦" + $1 }
 }
 
+/** Terminal cursor blink, 1 Hz off the monotonic epoch. */
+func blinkCursor(_ e: Int) -> Bool {
+    return e % 2 == 0
+}
+
+/** Any subagent still marked running.
+ *
+ *  This is the fallback working signal. `latestAt` is a native binding but is
+ *  NOT populated for Copilot surfaces on this build - measured empty on every
+ *  workspace - so it cannot be relied on. */
+func anyRunning(_ d: String) -> Bool {
+    return rowsOf(d).filter { part($0, 1) == ">" }.count > 0
+}
+
+/** Eyes open on even seconds while working; always shut when idle.
+ *  Idle is deliberately motionless - stillness is the signal. */
+func eyesOpen(_ d: String, _ e: Int) -> Bool {
+    if anyRunning(d) {
+        return e % 2 == 0
+    }
+    return false
+}
+
+/** The cued dot in the conducting wave, or none at all when idle.
+ *
+ *  Driven by EPOCH and held for two ticks per phase. `clock.second` wraps at
+ *  60 and jerks once a minute, and a one-tick-per-phase sequence shows the
+ *  sidebar's ~1s refresh drift as a visible stutter. Two ticks absorbs it.
+ *
+ *  Takes the raw description rather than a precomputed Bool: a NESTED function
+ *  call used as an argument - cued(anyRunning(d), ...) - renders NOTHING. The
+ *  head drew and the baton and dots silently vanished, which read as the wrong
+ *  icon rather than as a failure. Keep arguments flat: bindings and literals. */
+func cued(_ d: String, _ e: Int, _ i: Int) -> Bool {
+    if anyRunning(d) {
+        return ((e / 2) + i) % 3 == 0
+    }
+    return false
+}
+
 /** Subagents hang off their owning Copilot surface, so they indent one level
  *  deeper than the tab row they belong to. */
 func treeIndent(_ row: String) -> Int {
@@ -278,9 +318,108 @@ VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Spacer().frame(width: 12)
-                                Image(systemName: "terminal")
-                                    .imageScale(.small)
-                                    .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                                // Four surface states, and one rule: motion means
+                                // work is happening. An idle Session is dimmed and
+                                // completely still, so a moving icon is always worth
+                                // looking at.
+                                //
+                                // cmux exposes no kind on a tab - the binding set is
+                                // id, title, focused, pinned, directory, branch,
+                                // ports - so the only non-heuristic way to know a
+                                // surface runs Copilot is the owner row this plugin
+                                // publishes. Branching on title or directory shape
+                                // was rejected as heuristic identity, the same
+                                // mistake as #33.
+                                //
+                                // Known limit: the workspace description carries ONE
+                                // owner, so with two Copilot Sessions in a single
+                                // workspace only the most recent publisher is marked.
+                                if let d = w.description {
+                                    if ownerOf(d) == t.id {
+                                        if anyRunning(d) {
+                                            ZStack {
+                                                Capsule().fill(.accentColor).frame(width: 4, height: 15)
+                                                    .rotationEffect(.degrees(45)).offset(x: -11, y: -6)
+                                                if cued(d, clock.epoch, 0) {
+                                                    Circle().fill(.accentColor).frame(width: 6, height: 6).offset(x: 10, y: -7)
+                                                } else {
+                                                    Circle().fill(.secondary).frame(width: 5, height: 5).offset(x: 10, y: -7).opacity(0.35)
+                                                }
+                                                if cued(d, clock.epoch, 1) {
+                                                    Circle().fill(.accentColor).frame(width: 6, height: 6).offset(x: 12, y: 1)
+                                                } else {
+                                                    Circle().fill(.secondary).frame(width: 5, height: 5).offset(x: 12, y: 1).opacity(0.35)
+                                                }
+                                                if cued(d, clock.epoch, 2) {
+                                                    Circle().fill(.accentColor).frame(width: 6, height: 6).offset(x: 10, y: 9)
+                                                } else {
+                                                    Circle().fill(.secondary).frame(width: 5, height: 5).offset(x: 10, y: 9).opacity(0.35)
+                                                }
+                                                Circle().fill(.primary).frame(width: 4, height: 4).offset(x: -3, y: -13)
+                                                Rectangle().fill(.primary).frame(width: 2, height: 4).offset(x: -3, y: -9)
+                                                RoundedRectangle(cornerRadius: 5).fill(.primary).frame(width: 17, height: 14).offset(x: -3)
+                                                RoundedRectangle(cornerRadius: 3).fill(.black).frame(width: 11, height: 7).offset(x: -3)
+                                                if eyesOpen(d, clock.epoch) {
+                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: -6)
+                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: 0)
+                                                } else {
+                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: -6)
+                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: 0)
+                                                }
+                                            }.frame(width: 30, height: 28)
+                                        } else {
+                                            ZStack {
+                                                RoundedRectangle(cornerRadius: 2).fill(.primary).frame(width: 3, height: 5).offset(x: -8)
+                                                RoundedRectangle(cornerRadius: 2).fill(.primary).frame(width: 3, height: 5).offset(x: 8)
+                                                Circle().fill(.primary).frame(width: 4, height: 4).offset(y: -10)
+                                                Rectangle().fill(.primary).frame(width: 2, height: 4).offset(y: -7)
+                                                RoundedRectangle(cornerRadius: 5).fill(.primary).frame(width: 17, height: 14)
+                                                RoundedRectangle(cornerRadius: 3).fill(.black).frame(width: 11, height: 8)
+                                                if eyesOpen(d, clock.epoch) {
+                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: -3)
+                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: 3)
+                                                } else {
+                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: -3)
+                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: 3)
+                                                }
+                                            }.frame(width: 24, height: 24)
+                                        }
+                                    } else {
+                                        if let dir = t.directory {
+                                            HStack(spacing: 1) {
+                                                Text(">").font(.system(size: 11)).fontDesign(.monospaced)
+                                                    .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                                                if blinkCursor(clock.epoch) {
+                                                    Text("_").font(.system(size: 11)).fontDesign(.monospaced).foregroundColor(.secondary)
+                                                } else {
+                                                    Text(" ").font(.system(size: 11)).fontDesign(.monospaced).foregroundColor(.secondary)
+                                                }
+                                            }.frame(width: 22)
+                                        } else {
+                                            Image(systemName: "globe")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                                                .frame(width: 22, height: 22)
+                                        }
+                                    }
+                                } else {
+                                    if let dir = t.directory {
+                                        HStack(spacing: 1) {
+                                            Text(">").font(.system(size: 11)).fontDesign(.monospaced)
+                                                .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                                            if blinkCursor(clock.epoch) {
+                                                Text("_").font(.system(size: 11)).fontDesign(.monospaced).foregroundColor(.secondary)
+                                            } else {
+                                                Text(" ").font(.system(size: 11)).fontDesign(.monospaced).foregroundColor(.secondary)
+                                            }
+                                        }.frame(width: 22)
+                                    } else {
+                                        Image(systemName: "globe")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                                            .frame(width: 22, height: 22)
+                                    }
+                                }
                                 Text(t.title)
                                     .font(.caption)
                                     .foregroundColor(t.focused && w.selected ? .primary : .secondary)
