@@ -1,101 +1,221 @@
 // Maestro - what your agents are actually doing.
 //
-// The subagent tree arrives through the workspace description, which the
-// plugin writes as indented text:
+// The subagent tree arrives through the workspace description as ONE line,
+// rows separated by a literal delimiter, each row three space-separated parts:
 //
-//     > folk-lyricist
-//       v research-scan
-//     x lint-fixer
+//     0 > folk-lyricist¦1 v research-scan¦0 x lint-fixer
+//     ^ ^ ^
+//     | | name
+//     | status: > running, v done, x failed
+//     depth
 //
-// Two spaces per level, a leading glyph for status.
+// NEVER REINTRODUCE NEWLINES. The description carries them faithfully - 23
+// lines and 432 characters measured, stored intact - but this interpreter has
+// no working way to split on one. `split(separator: "\n")` does not interpret
+// the escape and returns the whole string as one element; the entire tree
+// rendered as a single truncated row. `whereSeparator: { $0.isNewline }`
+// renders nothing at all. Splitting on a literal, like " " or the row
+// delimiter, works. qucooln/cmux-conductor-sidebar reaches the same
+// conclusion: it never splits a multi-line string, keeping its state on one
+// line and reading it with `hasPrefix` and `contains`.
 //
-// Two constraints learned the hard way, both from the authoring guide:
-//   - optional fields are ABSENT, not null, so every access uses `if let`.
-//     Filtering the collection on `description != nil` yields an empty sidebar.
-//   - modifier arguments must be literals or tokens. A computed
-//     `.padding(.leading, depth * 9)` renders nothing at all, silently, so
-//     indentation is carried as text instead.
+// COLORS are semantic, never literal, so the pane follows the appearance and
+// accent instead of assuming the theme is still Nord.
+//
+// Other interpreter behaviours that fail SILENTLY - `cmux sidebar validate`
+// reports OK on a sidebar that renders nothing:
+//   - Optional fields are ABSENT, not null. Filtering the collection on
+//     `description != nil` yields an empty sidebar; use `if let` in the loop.
+//   - Arithmetic as a bare modifier ARGUMENT renders nothing
+//     (`.padding(.leading, depth * 9)`). Arithmetic inside a function body or
+//     a string interpolation is fine, and so are ternaries.
+//   - `.frame(width: 0)` DOES NOT HIDE A VIEW. Six running subagents rendered
+//     a red xmark that was supposed to be zero-width. Branch with if/else to
+//     choose between views; never collapse one to zero width.
 
-func glyphSymbol(_ g: String) -> String {
-    return g == "v" ? "checkmark" : g == "x" ? "xmark" : "circle.fill"
+func part(_ row: String, _ i: Int) -> String {
+    let p = row.split(separator: " ").map { String($0) }
+    return p.count > i ? p[i] : ""
 }
 
-func glyphTint(_ g: String) -> String {
-    return g == "v" ? "#A3BE8C" : g == "x" ? "#BF616A" : "#EBCB8B"
+func nameOf(_ row: String) -> String {
+    return row.split(separator: " ").map { String($0) }.dropFirst(2)
+        .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
 }
 
-func indentOf(_ line: String) -> String {
-    return line.hasPrefix("      ") ? "      "
-         : line.hasPrefix("    ") ? "    "
-         : line.hasPrefix("  ") ? "  "
-         : ""
+func rowsOf(_ d: String) -> [String] {
+    return d.split(separator: "¦").map { String($0) }
 }
 
-func labelOf(_ parts: [String]) -> String {
-    return parts.dropFirst().reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
+/** Only rows that still want attention. A completed subagent is history: it
+ *  collapses into the done count on the workspace row, because a finished
+ *  29-agent run otherwise buries every other workspace in the sidebar. */
+func liveRows(_ d: String) -> [String] {
+    return rowsOf(d).filter { part($0, 1) != "v" }
 }
 
-VStack(alignment: .leading, spacing: 8) {
+func countOf(_ d: String, _ g: String) -> Int {
+    return rowsOf(d).filter { part($0, 1) == g }.count
+}
+
+func spin(_ s: Int) -> String {
+    return ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"][s % 10]
+}
+
+func indent(_ row: String) -> Int {
+    let d = part(row, 0)
+    return d == "0" ? 12 : d == "1" ? 26 : d == "2" ? 40 : d == "3" ? 54 : 68
+}
+
+VStack(alignment: .leading, spacing: 0) {
 
     HStack(spacing: 6) {
         Image(systemName: "point.3.connected.trianglepath.dotted")
-            .foregroundColor("#88C0D0")
-        Text("Maestro").font(.headline)
+            .imageScale(.small).foregroundColor(.accentColor)
+        Text("Maestro").font(.title3).bold()
         Spacer()
-        Text("\(workspaces.count)")
-            .font(.caption).monospacedDigit().foregroundColor(.secondary)
-    }
-    Divider()
+    }.padding(6)
 
-    ForEach(workspaces) { w in
+    Spacer().frame(height: 8)
+
+    ScrollView {
         VStack(alignment: .leading, spacing: 2) {
+            Reorderable(workspaces, move: "workspace.reorder") { w in
+                VStack(alignment: .leading, spacing: 3) {
 
-            Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
-                HStack(spacing: 6) {
-                    Text(w.selected ? "●" : "○")
-                        .font(.system(size: 9))
-                        .foregroundColor(w.selected ? "#88C0D0" : "#4C566A")
-                    Text(w.title)
-                        .font(.system(size: 12))
-                        .fontWeight(w.selected ? .semibold : .regular)
-                        .lineLimit(1)
-                    Spacer()
-                }
-            }
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder.fill")
+                            .imageScale(.small)
+                            .foregroundColor(w.selected ? .accentColor : .secondary)
+                        Text(w.title)
+                            .font(.callout).bold()
+                            .lineLimit(1).truncationMode(.tail).layoutPriority(1)
+                        if w.pinned {
+                            Image(systemName: "pin.fill")
+                                .imageScale(.small)
+                                .foregroundColor(.orange)
+                                .rotationEffect(.degrees(45))
+                        }
+                        Spacer(minLength: 3)
+                        if let d = w.description {
+                            if countOf(d, ">") > 0 {
+                                HStack(spacing: 3) {
+                                    Text(spin(clock.second)).font(.system(size: 9)).bold()
+                                    Text("\(countOf(d, ">"))")
+                                        .font(.system(size: 9)).bold().monospacedDigit()
+                                }
+                                .foregroundColor(.orange)
+                                .padding(2)
+                                .background { Capsule().fill(.quaternary) }
+                                .fixedSize()
+                            }
+                            if countOf(d, "x") > 0 {
+                                Text("\(countOf(d, "x"))")
+                                    .font(.system(size: 9)).bold().monospacedDigit()
+                                    .foregroundColor(.red)
+                                    .padding(2)
+                                    .background { Capsule().fill(.quaternary) }
+                                    .fixedSize()
+                            }
+                            if countOf(d, "v") > 0 {
+                                Text("\(countOf(d, "v"))")
+                                    .font(.system(size: 9)).monospacedDigit()
+                                    .foregroundColor(.secondary)
+                                    .fixedSize()
+                            }
+                        }
+                        if w.index < 9 {
+                            Text("⌘\(w.index + 1)")
+                                .font(.system(size: 8)).foregroundColor(.secondary)
+                                .fixedSize()
+                        }
+                    }
+                    .padding(4)
+                    .onTapGesture { cmux("workspace.select", workspace_id: w.id) }
+                    .contextMenu {
+                        Button("Move to Top") { cmux("workspace.action", action: "move_top", workspace_id: w.id) }
+                        Button("Move Up") { cmux("workspace.action", action: "move_up", workspace_id: w.id) }
+                        Button("Move Down") { cmux("workspace.action", action: "move_down", workspace_id: w.id) }
+                        Button(w.pinned ? "Unpin" : "Pin") { cmux("workspace.action", action: w.pinned ? "unpin" : "pin", workspace_id: w.id) }
+                        Button("Mark as Read") { cmux("workspace.action", action: "mark_read", workspace_id: w.id) }
+                        Button("New Tab") { cmux("surface.create", workspace_id: w.id, focus: true) }
+                        Button("Close Workspace") { cmux("workspace.close", workspace_id: w.id) }
+                    }
 
-            if let b = w.branch {
-                HStack(spacing: 4) {
-                    Text("   ")
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 9)).foregroundColor("#4C566A")
-                    Text(b)
-                        .font(.system(size: 10)).fontDesign(.monospaced)
-                        .foregroundColor(.secondary).lineLimit(1)
-                    Spacer()
-                }
-            }
-
-            if let d = w.description {
-                ForEach(d.split(separator: "\n")) { line in
-                    let parts = line.split(separator: " ")
-                    if parts.count > 1 {
+                    if let b = w.branch {
                         HStack(spacing: 4) {
-                            Text("   " + indentOf(String(line)))
-                                .font(.system(size: 11)).fontDesign(.monospaced)
-                            Image(systemName: glyphSymbol(String(parts[0])))
-                                .font(.system(size: 8))
-                                .foregroundColor(glyphTint(String(parts[0])))
-                            Text(labelOf(parts.map { String($0) }))
-                                .font(.system(size: 11))
-                                .lineLimit(1)
-                            Spacer()
+                            Spacer().frame(width: 12)
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.system(size: 9)).foregroundColor(.secondary)
+                            Text(b)
+                                .font(.system(size: 10)).fontDesign(.monospaced)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1).truncationMode(.tail)
+                            if w.dirty {
+                                Circle().fill(.orange).frame(width: 4, height: 4).fixedSize()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+
+                    ForEach(w.tabs.prefix(8)) { t in
+                        HStack(spacing: 6) {
+                            Spacer().frame(width: 12)
+                            Image(systemName: "terminal")
+                                .imageScale(.small)
+                                .foregroundColor(t.focused && w.selected ? .accentColor : .secondary)
+                            Text(t.title)
+                                .font(.caption)
+                                .foregroundColor(t.focused && w.selected ? .primary : .secondary)
+                                .lineLimit(1).truncationMode(.tail)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(5)
+                        .background(.quaternary)
+                        .cornerRadius(7)
+                        .onTapGesture {
+                            cmux("workspace.select", workspace_id: w.id)
+                            cmux("surface.focus", surface_id: t.id)
+                        }
+                    }
+
+                    if let d = w.description {
+                        ForEach(liveRows(d).prefix(10)) { row in
+                            HStack(spacing: 6) {
+                                Spacer().frame(width: indent(row))
+                                if part(row, 1) == ">" {
+                                    Text(spin(clock.second))
+                                        .font(.system(size: 11)).bold()
+                                        .foregroundColor(.orange)
+                                        .frame(width: 12)
+                                } else {
+                                    Image(systemName: part(row, 1) == "v" ? "checkmark" : "xmark")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(part(row, 1) == "v" ? .green : .red)
+                                        .frame(width: 12)
+                                }
+                                Text(nameOf(row))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(part(row, 1) == "v" ? .secondary : .primary)
+                                    .lineLimit(1).truncationMode(.tail)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(4)
+                            .background(.quaternary)
+                            .cornerRadius(6)
+                        }
+                        if liveRows(d).count > 10 {
+                            HStack(spacing: 6) {
+                                Spacer().frame(width: 12)
+                                Text("+ \(liveRows(d).count - 10) more")
+                                    .font(.caption2).foregroundColor(.secondary)
+                                Spacer(minLength: 0)
+                            }.padding(4)
                         }
                     }
                 }
+                .padding(2)
             }
         }
-        .padding(.vertical, 3)
     }
-
-    Spacer()
-}.padding(10)
+}

@@ -172,34 +172,41 @@ export function flatten(subs: Map<string, Subagent>): Array<[number, Subagent]> 
 }
 
 /**
- * Render the tree as indented text.
+ * Render the tree as a single line.
  *
  * cmux's interpreted sidebars bind only to cmux's own model - they cannot read
  * files or start processes - so the tree travels through the workspace
  * description, the widest free-text field available.
  *
- * The format is deliberately readable as-is rather than a machine encoding,
- * because the stock cmux sidebar renders the description verbatim. A reader
- * without the custom sidebar installed should see a tree, not a data format:
+ * NEWLINES CANNOT BE USED. The description carries them faithfully - measured,
+ * 23 lines and 432 characters stored intact - but the sidebar interpreter has
+ * no working way to split on one: the `\n` escape is not interpreted, and
+ * `whereSeparator: { $0.isNewline }` renders nothing at all. Every published
+ * tree collapsed into a single truncated row.
  *
- *     > folk-lyricist
- *     > comic-lyricist
- *       v research-scan
- *     x lint-fixer
+ * So rows are separated by a literal delimiter and depth is an explicit token
+ * rather than indentation, which the sidebar recovers with the same
+ * space-splitting that is known to work:
  *
- * Depth is two spaces per level, status is the leading glyph, and the custom
- * sidebar recovers both by counting indentation and reading the first
- * non-space character.
+ *     0 > folk-lyricist¦1 v research-scan¦0 x lint-fixer
+ *
+ * Verified against qucooln/cmux-conductor-sidebar, which likewise never splits
+ * a multi-line string - it keeps its state on one line and reads it with
+ * `hasPrefix` and `contains`.
  */
 const GLYPH: Record<SubagentStatus, string> = { run: ">", ok: "v", fail: "x" }
 
+/** Row separator. Any character a subagent name cannot contain would do; this
+ *  one is visually quiet if a stock sidebar renders the description raw. */
+export const ROW_SEP = "¦"
+
 export function encodeTree(subs: Map<string, Subagent>): string {
   const clean = (v: string, n: number) =>
-    v.replace(/[\n\r]/g, " ").trim().slice(0, n)
+    v.replace(/[\n\r¦]/g, " ").replace(/\s+/g, " ").trim().slice(0, n)
   return flatten(subs)
     .slice(0, 60)
-    .map(([depth, s]) => `${"  ".repeat(Math.min(depth, 6))}${GLYPH[s.status]} ${clean(s.name, 44)}`)
-    .join("\n")
+    .map(([depth, s]) => `${Math.min(depth, 6)} ${GLYPH[s.status]} ${clean(s.name, 44)}`)
+    .join(ROW_SEP)
 }
 
 export interface TreeSummary {
