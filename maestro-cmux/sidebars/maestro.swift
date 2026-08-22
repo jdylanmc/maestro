@@ -192,27 +192,25 @@ VStack(alignment: .leading, spacing: 0) {
                             // does not support.
                             if t.focused && w.selected {
                                 if let dir = t.directory {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: 5) {
                                         Spacer().frame(width: 30)
                                         Text(dir)
                                             .font(.system(size: 9)).fontDesign(.monospaced)
                                             .foregroundColor(.secondary)
                                             .lineLimit(1).truncationMode(.tail)
-                                        Spacer(minLength: 0)
-                                    }
-                                }
-                                if let tb = t.branch {
-                                    HStack(spacing: 4) {
-                                        Spacer().frame(width: 30)
-                                        Image(systemName: "arrow.triangle.branch")
-                                            .font(.system(size: 8))
-                                            .foregroundColor(.secondary)
-                                        Text(tb)
-                                            .font(.system(size: 9)).fontDesign(.monospaced)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
-                                        if t.dirty {
-                                            Circle().fill(.orange).frame(width: 3, height: 3).fixedSize()
+                                        if let tb = t.branch {
+                                            Image(systemName: "arrow.triangle.branch")
+                                                .font(.system(size: 8))
+                                                .foregroundColor(.secondary)
+                                                .fixedSize()
+                                            Text(tb)
+                                                .font(.system(size: 9)).fontDesign(.monospaced)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                                .fixedSize()
+                                            if t.dirty {
+                                                Circle().fill(.orange).frame(width: 3, height: 3).fixedSize()
+                                            }
                                         }
                                         Spacer(minLength: 0)
                                     }
@@ -222,12 +220,12 @@ VStack(alignment: .leading, spacing: 0) {
                         .padding(4)
                         .background {
                             if t.focused && w.selected {
-                                Capsule().fill(.quaternary)
+                                Rectangle().fill(.secondary).opacity(0.07)
                             }
                         }
                         .overlay(alignment: .leading) {
                             if t.focused && w.selected {
-                                Capsule().fill(.accentColor).frame(width: 3)
+                                Rectangle().fill(.accentColor).frame(width: 2)
                             }
                         }
                         .onTapGesture {
