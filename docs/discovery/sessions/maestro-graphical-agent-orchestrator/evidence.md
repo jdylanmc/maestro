@@ -1935,3 +1935,89 @@ failure above. The check costs one `curl`.
 **no `VSplitView`** and **no `GeometryReader`**, and `.frame` exposes `width`,
 `height`, and `maxWidth` but no `maxHeight` - so no view can know or claim a
 proportion of the sidebar's height. Bound lists by row count instead.
+
+## c-0029 prototype - cmux's Copilot hooks install, but only after Copilot moves them
+
+Run 2026-08-22, on this machine, against `cmux` at `/opt/homebrew/bin/cmux` and
+Copilot CLI 1.0.81-3. Every claim below was measured, not read.
+
+### The installer refuses a stock Copilot CLI
+
+```
+$ cmux hooks copilot install --yes
+Error: /Users/dylan/.copilot/config.json exists but is not valid JSON.
+       Fix or remove it before installing hooks.
+```
+
+Copilot writes `config.json` as **JSONC** - it opens with two `//` lines that
+Copilot itself authors ("This file is managed automatically"). cmux parses it as
+**strict JSON**. So `cmux hooks copilot install` fails on a default, untouched
+Copilot installation. Stripping exactly those two comment lines leaves valid
+JSON and the install succeeds:
+
+```
+Copilot hooks installed at /Users/dylan/.copilot/config.json
+```
+
+cmux rewrote the whole file through `NSJSONSerialization`: keys sorted, slashes
+escaped, no trailing newline. Every pre-existing value survived (15 top-level
+keys, 4 plugins, login intact).
+
+### Copilot relocates the hooks on its next launch
+
+A fresh headless session (`copilot -p ... --allow-all-tools`) **succeeded** -
+exit 0, correct answer. But afterwards:
+
+- `config.json` was rewritten by Copilot, its `//` header restored, byte size
+  back to the pre-install 6605, and the `hooks` key **gone**.
+- `settings.json` now carries all five cmux hook entries verbatim.
+
+Copilot did not discard the integration; it **migrated it to the correct file**.
+`hooks` is a `settings.json` key on this version, not a `config.json` key. cmux
+writes to the file Copilot no longer owns hooks in, and Copilot silently repairs
+the mistake on first run. The integration therefore works, but only after one
+Copilot launch, and `cmux hooks copilot uninstall` will very likely fail to find
+what it installed.
+
+### Both hook sources coexist
+
+They never collide, because they live in different files under different
+casing conventions:
+
+| Source | File | Event keys |
+| --- | --- | --- |
+| Maestro plugin | `installed-plugins/_direct/maestro-cmux/hooks.json` | `sessionStart`, `preToolUse`, `postToolUse`, `userPromptSubmitted`, `sessionEnd`, `errorOccurred` |
+| cmux | `~/.copilot/settings.json` | `SessionStart`, `PreToolUse`, `Stop`, `Notification`, `SessionEnd` |
+
+The plugin file was untouched by the install and by Copilot's rewrite.
+
+### cmux's hooks are fail-open, like Maestro's
+
+Each command is guarded by `[ -n "$CMUX_SURFACE_ID" ]` and by
+`$CMUX_COPILOT_HOOKS_DISABLED != 1`, resolves the CLI through
+`CMUX_BUNDLED_CLI_PATH` then `command -v`, and falls through to
+`cat >/dev/null; echo '{}'`. Executed outside cmux, all five returned
+**exit 0 and `{}`**. `CMUX_COPILOT_HOOKS_DISABLED=1` is a documented kill switch
+Maestro should mirror.
+
+### What is still unmeasured
+
+`~/.cmuxterm/` still holds only `events.jsonl`; no
+`copilot-hook-sessions.json` exists yet, because every session run here was
+outside cmux. The lifecycle values, the session store, and whether
+`set-status` / `log` / `set-progress` actually **render** all require a Copilot
+session started inside a cmux terminal. A Copilot session outside cmux cannot
+drive the CLI at all:
+
+```
+$ cmux list-status
+Error: ERROR: Access denied - only processes started inside cmux can connect
+```
+
+### Rollback
+
+`~/.copilot/_maestro-backups/config.json.pre-cmux-hooks.<timestamp>` holds the
+pre-install file. Copilot's own rewrite already restored `config.json` to
+semantically identical content, so rollback is now only
+`cmux hooks copilot uninstall` plus removing the `hooks` key from
+`settings.json` by hand if that command misses it.
