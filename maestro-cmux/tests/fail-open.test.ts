@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
+import { existsSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
@@ -44,6 +45,12 @@ for (const [label, payload] of unparseable) {
       0,
       `exit ${result.status} would DENY the tool call. stderr: ${result.stderr}`,
     )
+    // Exiting zero is not sufficient. Copilot reports "hook errored" and denies
+    // the call for a hook that writes ANYTHING to stdout or stderr. The first
+    // version of this fork exited 0, kept its stderr message, and still broke
+    // every session it was installed into.
+    assert.equal(result.stdout, "", `stdout must be empty, got: ${result.stdout}`)
+    assert.equal(result.stderr, "", `stderr must be empty, got: ${result.stderr}`)
   })
 }
 
@@ -59,6 +66,8 @@ test("every hook fails open on an unparseable payload", () => {
   for (const hook of hooks) {
     const result = runHook(hook, '{"garbage":true}')
     assert.equal(result.status, 0, `${hook} exited ${result.status}; must be 0`)
+    assert.equal(result.stdout, "", `${hook} wrote to stdout: ${result.stdout}`)
+    assert.equal(result.stderr, "", `${hook} wrote to stderr: ${result.stderr}`)
   }
 })
 
@@ -73,12 +82,29 @@ test("an unknown hook name still exits 0", () => {
 // running - for instance if the path were wrong and node failed to load it. This
 // proves the runner is actually executing and actually reporting the failure it
 // is being asked to survive.
-test("negative control: the runner really runs and reports the error", () => {
-  const result = runHook("preToolUse", '{"tool":"bash"}')
+test("negative control: the runner really runs and really fails", () => {
+  // Without this the assertions above would pass trivially if the runner never
+  // executed at all - a wrong path, a missing build - since a process that
+  // cannot start also produces no output.
+  //
+  // The failure is proven through the diagnostic FILE rather than stderr,
+  // because stderr must stay empty. Diagnostics are opt-in, so enable them.
+  const logPath = join(process.env.TMPDIR ?? "/tmp", "maestro-cmux.log")
+  const before = existsSync(logPath) ? readFileSync(logPath, "utf8").length : 0
+
+  const result = spawnSync(process.execPath, [runner, "preToolUse"], {
+    input: '{"tool":"bash"}',
+    encoding: "utf8",
+    env: { ...process.env, CMUX_WORKSPACE_ID: "", COPILOT_CMUX_DEBUG: "1" },
+  })
+
   assert.equal(result.status, 0)
-  assert.match(
-    result.stderr,
-    /\[maestro-cmux\] error:/,
-    "expected the failure to be reported on stderr; if this is empty the runner never executed and the fail-open assertions above are vacuous",
+  assert.equal(result.stdout, "")
+  assert.equal(result.stderr, "")
+
+  const after = existsSync(logPath) ? readFileSync(logPath, "utf8") : ""
+  assert.ok(
+    after.length > before,
+    "the runner produced no diagnostic, so it never executed and every fail-open assertion above is vacuous",
   )
 })

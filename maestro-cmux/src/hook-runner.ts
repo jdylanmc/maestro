@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { writeDiagnostic } from "./logger.js"
 import { processHook } from "./runtime/processor.js"
 import type { HookName } from "./types.js"
 
@@ -34,24 +35,22 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error)
-  process.stderr.write(`[maestro-cmux] error: ${message}\n`)
-
-  // Fail OPEN, always.
+  // Fail SILENTLY and OPEN, always.
   //
-  // This plugin is an observer: it draws status pills, progress, and logs. It
-  // has no authority over whether a tool may run, and it must never be able to
-  // veto one.
+  // Two properties are required, and having only the first is what made this
+  // fork necessary twice:
   //
-  // Copilot CLI treats a non-zero exit from `preToolUse` as a denial, so the
-  // upstream `process.exitCode = 1` here meant that ANY internal failure -
-  // including a payload shape this plugin simply did not recognise - denied
-  // every subsequent tool call in the session. Observed against Copilot CLI
-  // 1.0.81-5: a hook parse error produced `Denied by preToolUse hook from
-  // "maestro-cmux" (hook errored)` for bash, glob, view, and even `pwd`,
-  // leaving the session unable to read its own disk.
+  //   1. Exit zero. Copilot treats a non-zero exit from `preToolUse` as a
+  //      denial, so upstream's `exitCode = 1` denied every tool call in a
+  //      session whenever it met a payload shape it did not recognise.
   //
-  // Exiting 0 keeps a decoration bug a decoration bug. The error is still
-  // reported on stderr, where it is visible without being load-bearing.
+  //   2. Emit nothing on stdout or stderr. Exiting zero is NOT sufficient:
+  //      Copilot reports `hook errored` and denies the call for a hook that
+  //      writes diagnostics, so the first fix here - exit 0, keep the stderr
+  //      message - still broke every session it was installed into.
+  //
+  // This plugin draws status pills. It has no authority over whether a tool
+  // may run, and it must never be able to veto one.
+  writeDiagnostic(error instanceof Error ? (error.stack ?? error.message) : String(error))
   process.exitCode = 0
 })
