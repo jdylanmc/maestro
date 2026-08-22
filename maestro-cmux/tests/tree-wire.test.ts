@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
-import { ROW_SEP, encodeTree, type Subagent } from "../src/tree.js"
+import { encodeTree, ROW_SEP, type Subagent } from "../src/tree.js"
 
 /**
  * The sidebar interpreter cannot split on a newline. `split(separator: "\n")`

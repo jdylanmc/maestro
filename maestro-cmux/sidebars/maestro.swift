@@ -47,11 +47,44 @@ func rowsOf(_ d: String) -> [String] {
     return d.split(separator: "¦").map { String($0) }
 }
 
-/** Only rows that still want attention. A completed subagent is history: it
- *  collapses into the done count on the workspace row, because a finished
- *  29-agent run otherwise buries every other workspace in the sidebar. */
+/** Subagent rows, running and recently finished alike.
+ *
+ *  A finished row is NOT dropped here any more. The plugin retires it after
+ *  RETAIN_MS (15 minutes), so a completed subagent greys out and lingers
+ *  instead of vanishing the instant it lands - which made short-lived work
+ *  impossible to see at all.
+ *
+ *  Attention rows (depth token "!") are NOT subagents and are excluded; they
+ *  are rendered on the workspace row instead. Without this they would draw as
+ *  tree rows with a "p" glyph. */
 func liveRows(_ d: String) -> [String] {
-    return rowsOf(d).filter { part($0, 1) != "v" }
+    return rowsOf(d).filter { part($0, 0) != "!" && part($0, 0) != "@" }
+}
+
+/** The surface id that owns this workspace's subagent tree, or "" when the
+ *  plugin did not publish one. See encodeOwner in src/tree.ts. */
+func ownerOf(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "@" }
+    return hits.count > 0 ? part(hits[0], 2) : ""
+}
+
+/** Subagents hang off their owning Copilot surface, so they indent one level
+ *  deeper than the tab row they belong to. */
+func treeIndent(_ row: String) -> Int {
+    let d = part(row, 0)
+    return d == "0" ? 44 : d == "1" ? 61 : d == "2" ? 79 : d == "3" ? 97 : 114
+}
+
+/** The attention kind a workspace is publishing: "p" permission, "q" question,
+ *  "t" finished turn, "" none. See encodeAttention in src/tree.ts. */
+func attnKind(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    return hits.count > 0 ? part(hits[0], 1) : ""
+}
+
+func attnLabel(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    return hits.count > 0 ? nameOf(hits[0]) : ""
 }
 
 func countOf(_ d: String, _ g: String) -> Int {
@@ -64,7 +97,7 @@ func spin(_ s: Int) -> String {
 
 func indent(_ row: String) -> Int {
     let d = part(row, 0)
-    return d == "0" ? 28 : d == "1" ? 44 : d == "2" ? 60 : d == "3" ? 76 : 92
+    return d == "0" ? 31 : d == "1" ? 48 : d == "2" ? 66 : d == "3" ? 84 : 101
 }
 
 /** Trailing path component, so a surface can show where it is working without
@@ -78,14 +111,8 @@ func baseName(_ p: String) -> String {
 
 VStack(alignment: .leading, spacing: 0) {
 
-    HStack(spacing: 6) {
-        Image(systemName: "point.3.connected.trianglepath.dotted")
-            .imageScale(.small).foregroundColor(.accentColor)
-        Text("Maestro").font(.title3).bold()
-        Spacer()
-    }.padding(6)
-
-    Spacer().frame(height: 8)
+    // No title row. The pane's own tab already reads "maestro", so a header
+    // here spent ~40pt of vertical space restating it.
 
     ScrollView {
         VStack(alignment: .leading, spacing: 2) {
@@ -97,7 +124,7 @@ VStack(alignment: .leading, spacing: 0) {
                             .imageScale(.small)
                             .foregroundColor(w.selected ? .accentColor : .secondary)
                         Text(w.title)
-                            .font(.callout).bold()
+                            .font(.body).bold()
                             .lineLimit(1).truncationMode(.tail).layoutPriority(1)
                         if w.pinned {
                             Image(systemName: "pin.fill")
@@ -107,11 +134,11 @@ VStack(alignment: .leading, spacing: 0) {
                         }
                         if let b = w.branch {
                             Image(systemName: "arrow.triangle.branch")
-                                .font(.system(size: 9))
+                                .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                                 .fixedSize()
                             Text(b)
-                                .font(.system(size: 10)).fontDesign(.monospaced)
+                                .font(.system(size: 11)).fontDesign(.monospaced)
                                 .foregroundColor(.secondary)
                                 .lineLimit(1).truncationMode(.tail)
                                 .fixedSize()
@@ -121,35 +148,58 @@ VStack(alignment: .leading, spacing: 0) {
                         }
                         Spacer(minLength: 3)
                         if let d = w.description {
-                            if countOf(d, ">") > 0 {
+                            if attnKind(d) == "p" {
                                 HStack(spacing: 3) {
-                                    Text(spin(clock.second)).font(.system(size: 9)).bold()
-                                    Text("\(countOf(d, ">"))")
-                                        .font(.system(size: 9)).bold().monospacedDigit()
+                                    Image(systemName: "hand.raised.fill").font(.system(size: 13))
+                                    Text("ASK").font(.system(size: 13)).bold()
                                 }
-                                .foregroundColor(.orange)
-                                .padding(2)
-                                .background { Capsule().fill(.quaternary) }
+                                .foregroundColor(.red)
                                 .fixedSize()
                             }
-                            if countOf(d, "x") > 0 {
-                                Text("\(countOf(d, "x"))")
-                                    .font(.system(size: 9)).bold().monospacedDigit()
-                                    .foregroundColor(.red)
-                                    .padding(2)
-                                    .background { Capsule().fill(.quaternary) }
+                            if attnKind(d) == "q" {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "questionmark.bubble.fill").font(.system(size: 13))
+                                    Text("ASK").font(.system(size: 13)).bold()
+                                }
+                                .foregroundColor(.purple)
+                                .fixedSize()
+                            }
+                            if attnKind(d) == "t" {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.green)
                                     .fixedSize()
                             }
+                            if countOf(d, ">") > 0 {
+                                HStack(spacing: 3) {
+                                    Text(spin(clock.second)).font(.system(size: 12)).bold()
+                                    Text("\(countOf(d, ">"))")
+                                        .font(.system(size: 12)).bold().monospacedDigit()
+                                }
+                                .foregroundColor(.green)
+                                .fixedSize()
+                            }
+                            // No failed count. `subagent.failed` DOES NOT EXIST:
+                            // measured across 60 recent sessions, 133
+                            // `subagent.started` and 132 `subagent.completed`
+                            // were emitted and zero `subagent.failed`. Nor does
+                            // `subagent.completed` carry a success flag - its
+                            // payload is toolCallId, agentName,
+                            // agentDisplayName, model, totalToolCalls,
+                            // totalTokens, durationMs. Subagent failure is not
+                            // observable, so a failure badge can only ever be
+                            // rendered from a hand-written fixture, which is
+                            // exactly how it survived this long.
                             if countOf(d, "v") > 0 {
                                 Text("\(countOf(d, "v"))")
-                                    .font(.system(size: 9)).monospacedDigit()
+                                    .font(.system(size: 12)).monospacedDigit()
                                     .foregroundColor(.secondary)
                                     .fixedSize()
                             }
                         }
                         if w.index < 9 {
                             Text("⌘\(w.index + 1)")
-                                .font(.system(size: 8)).foregroundColor(.secondary)
+                                .font(.system(size: 9)).foregroundColor(.secondary)
                                 .fixedSize()
                         }
                     }
@@ -179,7 +229,7 @@ VStack(alignment: .leading, spacing: 0) {
                                 Spacer(minLength: 4)
                                 if let dir = t.directory {
                                     Text(baseName(dir))
-                                        .font(.system(size: 9)).fontDesign(.monospaced)
+                                        .font(.system(size: 10)).fontDesign(.monospaced)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
                                         .fixedSize()
@@ -195,16 +245,16 @@ VStack(alignment: .leading, spacing: 0) {
                                     HStack(spacing: 5) {
                                         Spacer().frame(width: 30)
                                         Text(dir)
-                                            .font(.system(size: 9)).fontDesign(.monospaced)
+                                            .font(.system(size: 10)).fontDesign(.monospaced)
                                             .foregroundColor(.secondary)
                                             .lineLimit(1).truncationMode(.tail)
                                         if let tb = t.branch {
                                             Image(systemName: "arrow.triangle.branch")
-                                                .font(.system(size: 8))
+                                                .font(.system(size: 9))
                                                 .foregroundColor(.secondary)
                                                 .fixedSize()
                                             Text(tb)
-                                                .font(.system(size: 9)).fontDesign(.monospaced)
+                                                .font(.system(size: 10)).fontDesign(.monospaced)
                                                 .foregroundColor(.secondary)
                                                 .lineLimit(1)
                                                 .fixedSize()
@@ -232,39 +282,46 @@ VStack(alignment: .leading, spacing: 0) {
                             cmux("workspace.select", workspace_id: w.id)
                             cmux("surface.focus", surface_id: t.id)
                         }
-                    }
 
-                    if let d = w.description {
-                        ForEach(liveRows(d).prefix(10)) { row in
-                            HStack(spacing: 6) {
-                                Spacer().frame(width: indent(row))
-                                if part(row, 1) == ">" {
-                                    Text(spin(clock.second))
-                                        .font(.system(size: 11)).bold()
-                                        .foregroundColor(.orange)
-                                        .frame(width: 12)
-                                } else {
-                                    Image(systemName: part(row, 1) == "v" ? "checkmark" : "xmark")
-                                        .font(.system(size: 9))
-                                        .foregroundColor(part(row, 1) == "v" ? .green : .red)
-                                        .frame(width: 12)
+                            // The subagent tree belongs to the Copilot session
+                            // that produced it, not to the workspace. It renders
+                            // inside this tab only when the plugin published
+                            // this surface as the owner.
+                            if let d = w.description {
+                                if ownerOf(d) == t.id {
+                                    ForEach(liveRows(d).prefix(10)) { row in
+                                        HStack(spacing: 6) {
+                                            Spacer().frame(width: treeIndent(row))
+                                            if part(row, 1) == ">" {
+                                                Text(spin(clock.second))
+                                                    .font(.system(size: 12)).bold()
+                                                    .foregroundColor(.green)
+                                                    .frame(width: 12)
+                                            } else {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.secondary)
+                                                    .frame(width: 12)
+                                            }
+                                            Text(nameOf(row))
+                                                .font(.system(size: 12))
+                                                .foregroundColor(part(row, 1) == "v" ? .secondary : .primary)
+                                                .lineLimit(1).truncationMode(.tail)
+                                            Spacer(minLength: 0)
+                                        }
+                                        .padding(4)
+                                    }
+                                    if liveRows(d).count > 10 {
+                                        HStack(spacing: 6) {
+                                            Spacer().frame(width: 44)
+                                            Text("+ \(liveRows(d).count - 10) more")
+                                                .font(.caption2).foregroundColor(.secondary)
+                                            Spacer(minLength: 0)
+                                        }
+                                        .padding(4)
+                                    }
                                 }
-                                Text(nameOf(row))
-                                    .font(.system(size: 11))
-                                    .foregroundColor(part(row, 1) == "v" ? .secondary : .primary)
-                                    .lineLimit(1).truncationMode(.tail)
-                                Spacer(minLength: 0)
                             }
-                            .padding(4)
-                        }
-                        if liveRows(d).count > 10 {
-                            HStack(spacing: 6) {
-                                Spacer().frame(width: 12)
-                                Text("+ \(liveRows(d).count - 10) more")
-                                    .font(.caption2).foregroundColor(.secondary)
-                                Spacer(minLength: 0)
-                            }.padding(4)
-                        }
                     }
                 }
                 .padding(2)

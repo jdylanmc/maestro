@@ -10,6 +10,8 @@ const HOOK_NAMES = new Set<HookName>([
   "preToolUse",
   "postToolUse",
   "errorOccurred",
+  "notification",
+  "agentStop",
 ])
 
 async function readStdin(): Promise<string> {

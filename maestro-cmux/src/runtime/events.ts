@@ -1,8 +1,10 @@
 import { basename } from "node:path"
 import { summarizeText } from "../text.js"
 import type {
+  AgentStopHookInput,
   ErrorOccurredHookInput,
   HookName,
+  NotificationHookInput,
   PostToolUseHookInput,
   PreToolUseHookInput,
   SessionEndHookInput,
@@ -31,6 +33,8 @@ export type CopilotHookEvent =
       resultText: string | undefined
     } & Omit<PostToolUseHookInput, "toolArgs" | "toolResult">)
   | ({ type: "error.occurred" } & ErrorOccurredHookInput)
+  | ({ type: "notification" } & NotificationHookInput)
+  | ({ type: "agent.stop" } & AgentStopHookInput)
 
 function expectObject(value: unknown, context: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -221,6 +225,28 @@ export function parseHookInput(hookName: HookName, rawInput: string): CopilotHoo
           name: optionalString(error, "name"),
           stack: optionalString(error, "stack"),
         },
+      }
+    }
+
+    case "notification": {
+      // `title` is optional on purpose. An unrecognised notificationType must
+      // degrade to "no attention", never to a thrown error - this hook runs in
+      // the same runner as preToolUse.
+      return {
+        type: "notification",
+        timestamp: expectNumber(parsed, "timestamp", context),
+        cwd: expectString(parsed, "cwd", context),
+        notificationType: expectString(parsed, "notificationType", context),
+        title: optionalString(parsed, "title"),
+      }
+    }
+
+    case "agentStop": {
+      return {
+        type: "agent.stop",
+        timestamp: expectNumber(parsed, "timestamp", context),
+        cwd: expectString(parsed, "cwd", context),
+        stopReason: optionalString(parsed, "stopReason"),
       }
     }
   }

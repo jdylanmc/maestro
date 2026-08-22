@@ -1,4 +1,4 @@
-import type { RuntimeState } from "../types.js"
+import type { Attention, AttentionKind, RuntimeState } from "../types.js"
 import type { CopilotHookEvent } from "./events.js"
 
 export function createRuntimeState(
@@ -25,7 +25,26 @@ export function createRuntimeState(
     lastEditedFile: undefined,
     lastError: undefined,
     lastSessionEndReason: undefined,
+    attention: undefined,
   }
+}
+
+/**
+ * Map a Copilot `notificationType` onto an attention kind.
+ *
+ * Measured values, one session: `permission_prompt` (135), `agent_idle` (7),
+ * `elicitation_dialog` (2), `shell_completed` (1),
+ * `shell_detached_completed` (1).
+ *
+ * Only the two that BLOCK the session are attention. `agent_idle` is a
+ * subagent going quiet, which the tree already shows, and the two `shell_*`
+ * values are completions the operator did not ask to be told about. An
+ * unrecognised value returns undefined and is ignored rather than guessed at.
+ */
+export function attentionKindForNotification(notificationType: string): AttentionKind | undefined {
+  if (notificationType === "permission_prompt") return "permission"
+  if (notificationType === "elicitation_dialog") return "question"
+  return undefined
 }
 
 export function countActiveTools(state: RuntimeState): number {
@@ -94,6 +113,7 @@ export function reduceRuntimeState(
         lastEditedFile: undefined,
         lastError: undefined,
         lastSessionEndReason: undefined,
+        attention: undefined,
       }
     }
 
@@ -108,6 +128,7 @@ export function reduceRuntimeState(
         lastPrompt: event.prompt,
         lastSessionEndReason: undefined,
         lastError: undefined,
+        attention: undefined,
       }
     }
 
@@ -125,6 +146,7 @@ export function reduceRuntimeState(
         lastToolSummary: event.summary,
         lastResultType: undefined,
         lastSessionEndReason: undefined,
+        attention: undefined,
       }
     }
 
@@ -148,6 +170,7 @@ export function reduceRuntimeState(
         lastResultType: event.resultType,
         filesEdited: isFileEdit ? currentState.filesEdited + 1 : currentState.filesEdited,
         lastEditedFile: isFileEdit && filePath ? filePath : currentState.lastEditedFile,
+        attention: undefined,
       }
     }
 
@@ -160,6 +183,7 @@ export function reduceRuntimeState(
         phase: event.reason === "complete" ? "done" : event.reason === "error" ? "error" : "idle",
         activeTools: {},
         lastSessionEndReason: event.reason,
+        attention: undefined,
       }
     }
 
@@ -174,6 +198,44 @@ export function reduceRuntimeState(
           message: event.error.message,
           name: event.error.name,
         },
+      }
+    }
+
+    case "notification": {
+      const kind = attentionKindForNotification(event.notificationType)
+      if (!kind) return { ...currentState, cwd: event.cwd, workspaceID }
+      const attention: Attention = {
+        kind,
+        // The hook's own `title` is a safe, already-human label ("Permission
+        // needed", "Information requested"). `message` is NOT - for a
+        // permission prompt it is the full command line.
+        label: event.title ?? (kind === "permission" ? "Permission needed" : "Question"),
+        since: event.timestamp,
+      }
+      return {
+        ...currentState,
+        cwd: event.cwd,
+        workspaceID,
+        updatedAt: event.timestamp,
+        attention,
+      }
+    }
+
+    case "agent.stop": {
+      // Do not let a finished turn overwrite a live blocking prompt. agentStop
+      // and notification can both be outstanding, and `permission`/`question`
+      // outrank `turn` because only they cost anything by being missed.
+      if (currentState.attention && currentState.attention.kind !== "turn") {
+        return { ...currentState, cwd: event.cwd, workspaceID, updatedAt: event.timestamp }
+      }
+      return {
+        ...currentState,
+        cwd: event.cwd,
+        workspaceID,
+        updatedAt: event.timestamp,
+        phase: "idle",
+        activeTools: {},
+        attention: { kind: "turn", label: "Your turn", since: event.timestamp },
       }
     }
   }

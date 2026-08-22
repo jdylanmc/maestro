@@ -9,9 +9,33 @@ export type HookName =
   | "preToolUse"
   | "postToolUse"
   | "errorOccurred"
+  | "notification"
+  | "agentStop"
 export type SessionStartSource = "new" | "resume" | "startup"
 export type SessionEndReason = "complete" | "error" | "abort" | "timeout" | "user_exit"
 export type ToolResultType = "success" | "failure" | "denied"
+
+/**
+ * Why a session is waiting on the human.
+ *
+ * `permission` and `question` are blocking - the session cannot proceed until
+ * the operator answers. `turn` is not blocking; the agent simply finished and
+ * has nothing else to do. They are ranked in that order when several could
+ * apply, because only the first two cost the operator anything by being missed.
+ */
+export type AttentionKind = "permission" | "question" | "turn"
+
+export interface Attention {
+  kind: AttentionKind
+  /**
+   * A short human label. NEVER the underlying command text: a permission
+   * prompt's `message` carries the full command line, which routinely contains
+   * tokens, hostnames, and paths that must not be published to a surface that
+   * may be screenshotted or committed.
+   */
+  label: string
+  since: number
+}
 
 export interface PluginConfig {
   cmuxBin: string
@@ -105,6 +129,7 @@ export interface RuntimeState {
       }
     | undefined
   lastSessionEndReason: SessionEndReason | undefined
+  attention: Attention | undefined
 }
 
 export interface SessionStartHookInput {
@@ -154,4 +179,28 @@ export interface ErrorOccurredHookInput {
     name: string | undefined
     stack: string | undefined
   }
+}
+
+/**
+ * Copilot's `notification` hook.
+ *
+ * `notificationType` is the discriminator that matters. Measured values in one
+ * session: `permission_prompt` (135), `agent_idle` (7), `elicitation_dialog`
+ * (2), `shell_completed` (1), `shell_detached_completed` (1).
+ *
+ * `message` is deliberately NOT carried through to any published surface. For a
+ * permission prompt it is the full command text.
+ */
+export interface NotificationHookInput {
+  timestamp: number
+  cwd: string
+  notificationType: string
+  title: string | undefined
+}
+
+/** Copilot's `agentStop` hook. The only measured `stopReason` is `end_turn`. */
+export interface AgentStopHookInput {
+  timestamp: number
+  cwd: string
+  stopReason: string | undefined
 }

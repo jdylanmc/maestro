@@ -4,8 +4,8 @@ import { createCmuxClient } from "../cmux/client.js"
 import { detectCmuxEnvironment } from "../cmux/detect.js"
 import { loadConfig } from "../config.js"
 import { createLogger } from "../logger.js"
-import { summarize } from "../tree.js"
 import { summarizeText } from "../text.js"
+import { summarize } from "../tree.js"
 import type {
   CmuxClient,
   HookLogger,
@@ -226,6 +226,8 @@ export async function processHook(
     workspaceID: environment.workspaceID,
   })
 
+  let attention: RuntimeState["attention"]
+
   await withRuntimeState(event.cwd, environment.workspaceID, async (currentState) => {
     await logger.log("debug", "inside withRuntimeState callback", {
       hasCurrentState: currentState !== null,
@@ -243,8 +245,33 @@ export async function processHook(
     })
 
     await emitEventEffects(cmux, config, projectLabel, previousState, nextState, event, logger)
+    attention = nextState.attention
     return nextState
   })
+
+  // Mark the workspace unread when it starts waiting on the operator.
+  //
+  // This is cmux's own attention affordance, so it renders in the stock UI as
+  // well as in Maestro's sidebar, and cmux clears it itself when the workspace
+  // is focused - which is exactly the moment the operator has in fact seen it.
+  // `set-color` was rejected: it would silently overwrite a colour the operator
+  // chose, and there is no way to restore one we did not record.
+  if (attention && attention.kind !== "turn") {
+    await new Promise<void>((resolve) => {
+      execFile(
+        config.cmuxBin,
+        [
+          "workspace-action",
+          "--action",
+          "mark-unread",
+          "--workspace",
+          environment.workspaceID ?? "",
+        ],
+        { timeout: 4000 },
+        () => resolve(),
+      )
+    })
+  }
 
   // Publish the subagent tree.
   //
@@ -256,19 +283,29 @@ export async function processHook(
   // It runs last, after the pills and logs the rest of the plugin emits, and it
   // cannot fail the hook: a thrown error here would deny a tool call.
   try {
-    const tree = summarize(event.cwd)
+    const tree = summarize(event.cwd, attention, environment.surfaceID)
     if (tree) {
       await new Promise<void>((resolve) => {
         execFile(
           config.cmuxBin,
-          ["workspace-action", "--action", "set-description",
-           "--description", tree.encoded, "--workspace", environment.workspaceID ?? ""],
+          [
+            "workspace-action",
+            "--action",
+            "set-description",
+            "--description",
+            tree.encoded,
+            "--workspace",
+            environment.workspaceID ?? "",
+          ],
           { timeout: 4000 },
           () => resolve(),
         )
       })
       await logger.log("debug", "tree published", {
-        total: tree.total, running: tree.running, failed: tree.failed,
+        total: tree.total,
+        running: tree.running,
+        failed: tree.failed,
+        attention: tree.attention?.kind,
       })
     }
   } catch (error) {
