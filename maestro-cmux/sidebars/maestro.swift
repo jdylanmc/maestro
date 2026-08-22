@@ -67,6 +67,15 @@ func indent(_ row: String) -> Int {
     return d == "0" ? 28 : d == "1" ? 44 : d == "2" ? 60 : d == "3" ? 76 : 92
 }
 
+/** Trailing path component, so a surface can show where it is working without
+ *  spending the width a full path costs. Array indexing and arithmetic are
+ *  fine inside a func body; only arithmetic as a bare modifier ARGUMENT is
+ *  silently skipped by the interpreter. */
+func baseName(_ p: String) -> String {
+    let parts = p.split(separator: "/").map { String($0) }
+    return parts.count > 0 ? parts[parts.count - 1] : p
+}
+
 VStack(alignment: .leading, spacing: 0) {
 
     HStack(spacing: 6) {
@@ -166,7 +175,14 @@ VStack(alignment: .leading, spacing: 0) {
                                 .font(.caption)
                                 .foregroundColor(t.focused && w.selected ? .primary : .secondary)
                                 .lineLimit(1).truncationMode(.tail)
-                            Spacer(minLength: 0)
+                            Spacer(minLength: 4)
+                            if let dir = t.directory {
+                                Text(baseName(dir))
+                                    .font(.system(size: 9)).fontDesign(.monospaced)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
                         }
                         .padding(4)
                         .onTapGesture {
