@@ -1,6 +1,7 @@
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { StringDecoder } from "node:string_decoder"
 import type { Attention, AttentionKind } from "./types.js"
 
 /**
@@ -15,10 +16,6 @@ import type { Attention, AttentionKind } from "./types.js"
  */
 
 const SESSIONS = join(homedir(), ".copilot", "session-state")
-
-/** Read at most this much of the tail of an event log. One local session was
- *  195 MB; hooks have a 10 second budget and run on every tool call. */
-const TAIL_BYTES = 8 * 1024 * 1024
 
 export type SubagentStatus = "run" | "ok" | "fail"
 
@@ -71,15 +68,9 @@ export const RETAIN_MS = 15 * 60 * 1000
  */
 export function detectAttention(logPath: string): Attention | undefined {
   try {
-    const text = readTail(logPath)
     const open = new Map<string, { at: number; tool: string | undefined }>()
     const toolOf = new Map<string, string>()
-    let first = true
-    for (const line of text.split("\n")) {
-      if (first) {
-        first = false
-        if (text.length >= TAIL_BYTES) continue
-      }
+    for (const line of readLines(logPath)) {
       if (!line) continue
       let e: { type?: string; data?: Record<string, unknown>; timestamp?: string }
       try {
@@ -184,15 +175,32 @@ export function findSessionDir(cwd: string): string | null {
   }
 }
 
-function readTail(path: string): string {
+const READ_CHUNK_BYTES = 64 * 1024
+
+/** Iterate a JSONL file without retaining the whole session log in memory. */
+function* readLines(path: string): Generator<string> {
   const fd = openSync(path, "r")
+  const decoder = new StringDecoder("utf8")
+  const buffer = Buffer.allocUnsafe(READ_CHUNK_BYTES)
+  let pending = ""
   try {
-    const size = statSync(path).size
-    const start = size > TAIL_BYTES ? size - TAIL_BYTES : 0
-    const length = size - start
-    const buf = Buffer.allocUnsafe(length)
-    readSync(fd, buf, 0, length, start)
-    return buf.toString("utf8")
+    while (true) {
+      const bytesRead = readSync(fd, buffer, 0, buffer.length, null)
+      if (bytesRead === 0) break
+      const text = pending + decoder.write(buffer.subarray(0, bytesRead))
+      let lineStart = 0
+      for (
+        let newline = text.indexOf("\n");
+        newline !== -1;
+        newline = text.indexOf("\n", lineStart)
+      ) {
+        yield text.slice(lineStart, newline)
+        lineStart = newline + 1
+      }
+      pending = text.slice(lineStart)
+    }
+    pending += decoder.end()
+    if (pending) yield pending
   } finally {
     closeSync(fd)
   }
@@ -213,62 +221,53 @@ function readTail(path: string): string {
 export function buildTree(logPath: string): Map<string, Subagent> {
   const subs = new Map<string, Subagent>()
   const owner = new Map<string, string | null>()
-  let text: string
   try {
-    text = readTail(logPath)
-  } catch {
-    return subs
-  }
-
-  let first = true
-  for (const line of text.split("\n")) {
-    // A tailed read almost certainly starts mid-line.
-    if (first) {
-      first = false
-      if (text.length >= TAIL_BYTES) continue
-    }
-    if (!line) continue
-    let e: {
-      type?: string
-      agentId?: string | null
-      data?: Record<string, unknown>
-    }
-    try {
-      e = JSON.parse(line)
-    } catch {
-      continue
-    }
-    const d = e.data ?? {}
-    if (e.type === "tool.execution_start") {
-      const tc = d.toolCallId as string | undefined
-      if (tc && !owner.has(tc)) owner.set(tc, e.agentId ?? null)
-    } else if (e.type === "subagent.started") {
-      const aid = e.agentId
-      if (!aid) continue
-      subs.set(aid, {
-        name: (d.agentDisplayName as string) || (d.agentName as string) || "subagent",
-        kind: (d.agentName as string) || "",
-        status: "run",
-        parent: null,
-        tools: 0,
-        doneAt: undefined,
-        // toolCallId is resolved to a parent below.
-        ...({ tc: d.toolCallId } as object),
-      } as Subagent)
-    } else if (e.type === "subagent.completed") {
-      // There is NO `subagent.failed`. Measured across 60 recent sessions: 133
-      // `subagent.started`, 132 `subagent.completed`, zero failures. Nor does
-      // the completion payload carry a success flag, so a subagent that fails
-      // is indistinguishable from one that succeeds.
-      const aid = e.agentId
-      const s = aid ? subs.get(aid) : undefined
-      if (s) {
-        s.status = "ok"
-        s.tools = (d.totalToolCalls as number) ?? 0
-        const ts = Date.parse((e as { timestamp?: string }).timestamp ?? "")
-        s.doneAt = Number.isFinite(ts) ? ts : Date.now()
+    for (const line of readLines(logPath)) {
+      if (!line) continue
+      let e: {
+        type?: string
+        agentId?: string | null
+        data?: Record<string, unknown>
+      }
+      try {
+        e = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const d = e.data ?? {}
+      if (e.type === "tool.execution_start") {
+        const tc = d.toolCallId as string | undefined
+        if (tc && !owner.has(tc)) owner.set(tc, e.agentId ?? null)
+      } else if (e.type === "subagent.started") {
+        const aid = e.agentId
+        if (!aid) continue
+        subs.set(aid, {
+          name: (d.agentDisplayName as string) || (d.agentName as string) || "subagent",
+          kind: (d.agentName as string) || "",
+          status: "run",
+          parent: null,
+          tools: 0,
+          doneAt: undefined,
+          // toolCallId is resolved to a parent below.
+          ...({ tc: d.toolCallId } as object),
+        } as Subagent)
+      } else if (e.type === "subagent.completed") {
+        // There is NO `subagent.failed`. Measured across 60 recent sessions: 133
+        // `subagent.started`, 132 `subagent.completed`, zero failures. Nor does
+        // the completion payload carry a success flag, so a subagent that fails
+        // is indistinguishable from one that succeeds.
+        const aid = e.agentId
+        const s = aid ? subs.get(aid) : undefined
+        if (s) {
+          s.status = "ok"
+          s.tools = (d.totalToolCalls as number) ?? 0
+          const ts = Date.parse((e as { timestamp?: string }).timestamp ?? "")
+          s.doneAt = Number.isFinite(ts) ? ts : Date.now()
+        }
       }
     }
+  } catch {
+    return subs
   }
 
   for (const s of subs.values()) {

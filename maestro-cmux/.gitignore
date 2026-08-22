@@ -5,4 +5,5 @@ npm-debug.log*
 tests/**/*.js
 tests/**/*.js.map
 tests/**/*.d.ts
+.maestro-tree-test-*
 hooks.json
