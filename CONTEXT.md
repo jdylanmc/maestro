@@ -1,27 +1,21 @@
 # Maestro
 
-Maestro is a macOS application for running several units of agent work at the
-same time and keeping them visible and controllable. It concerns itself with
-what the work is, who is doing it, whether it is still running, and where it is
-happening.
+Maestro makes agent work visible inside a terminal the operator already uses. It
+reads a Copilot session's own event log and shows what that session delegated to,
+live. It concerns itself with what the work is, who is doing it, and when it
+wants its human.
 
 ## Language
 
 ### Units of work
 
-**Fleet**
-
-One unit of parallel work: a named, durable body of work on a single feature,
-carried out by one Copilot Session and the subagents it delegates to. A Fleet
-outlives the processes that serve it.
-
-Discouraged aliases: `Session` (structural sense), `Workspace`, `Squadron`
-
 **Session**
 
-A Copilot conversation, named and resumable by the runtime. Exactly one serves a
-Fleet at a time. Defined by the Copilot runtime; this domain borrows the term
-and does not redefine it.
+A Copilot conversation, named and resumable by the runtime, together with the
+subagents it delegates to. The unit Maestro observes. Defined by the Copilot
+runtime; this domain borrows the term and does not redefine it.
+
+Discouraged aliases: `Fleet`, `Workspace`, `Squadron`
 
 **Task**
 
@@ -31,11 +25,6 @@ are also Tasks.
 
 ### Participants
 
-**Primary Agent**
-
-What a Fleet's Session is called on screen. A presentation term, not a distinct
-participant.
-
 **Agent**
 
 A selectable persona or configuration. Reserved for the Copilot meaning; it
@@ -43,65 +32,41 @@ never means a running participant.
 
 **subagent**
 
-A delegated agent working under a Fleet's Session, with its own observable
-start, activity, and completion.
+A delegated agent working under a Session, with its own observable start,
+activity, and completion.
 
 Discouraged aliases: `Sub-agent`, `Squad Mate`, `swarm agent`
 
 **subagent tree**
 
-The nested hierarchy of a Fleet's subagents and their descendants.
+The nested hierarchy of a Session's subagents and their descendants. Maestro's
+reason to exist: the runtime records it but presents it nowhere.
 
 Discouraged aliases: `Sub-agent tree`, `Squadron`, `Swarm`
 
 ### Condition
 
-**Parked**
-
-A Fleet deliberately stopped: state preserved, processes ended, uncommitted work
-kept. Not teardown.
-
-**Interrupted**
-
-A Fleet stopped unintentionally, leaving work dangling. Distinguishable from
-Parked.
-
 **Liveness**
 
-Whether a Fleet's processes are observed to be `Alive`, `Dead`, or `Ambiguous`.
-Independent of whether the Fleet is Parked or Interrupted, and never assumed.
+Whether a Session's processes are observed to be `Alive`, `Dead`, or
+`Ambiguous`. Observed from process evidence, never assumed and never persisted
+as truth.
 
 **Attention**
 
-A Fleet observed to want its human: blocked on an unanswered permission
+A Session observed to want its human: blocked on an unanswered permission
 request, stopped by an error or an abort, or finished and unacknowledged.
-Observed per Fleet and never inferred from another Fleet.
+Observed per Session and never inferred from another Session.
 
 Discouraged aliases: `AT_RISK`
 
 ### Place
 
-**Worktree**
-
-The isolated checkout a Fleet works in. Every Fleet has exactly one of its own,
-which implies its own branch. Fleets never share a checkout.
-
 **Host Application**
 
-The application a Fleet's Session runs inside. It owns the lifetime of the
-Fleet's processes and is the identity the operating system attributes their
-permission prompts to. Maestro may be the Host Application or may run inside
-another one.
+The application a Session runs inside. It owns the lifetime of the Session's
+processes and is the identity the operating system attributes their permission
+prompts to. Maestro runs inside a Host Application rather than being one.
 
 Discouraged aliases: `host` (bare - reserved for the machine), `shell`,
 `harness`, `container`
-
-### Account
-
-**Recap**
-
-A short account of what a Fleet was doing and where it got to, produced for a
-human returning to it without context. Derived from the Fleet's durable state
-and history rather than reported by its processes.
-
-Discouraged aliases: `Orientation`, `status`, `summary`

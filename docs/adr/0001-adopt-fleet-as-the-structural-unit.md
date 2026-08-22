@@ -9,7 +9,14 @@ plain literal nouns.
 
 ## Status
 
-Accepted.
+**Superseded by [0004](./0004-retire-fleet.md).**
+
+The collision this decision solved is gone, because the concept it created is
+gone. Maestro's scope narrowed to observing a Copilot session rather than owning
+a unit of work around one, so there is no longer a structural unit distinct from
+the runtime's own `Session` for `Fleet` to name. The reasoning below is kept
+because the collision it describes was real and the rename was correct while the
+unit existed.
 
 ## Considered Options
 
