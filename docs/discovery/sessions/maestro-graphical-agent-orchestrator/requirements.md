@@ -221,6 +221,45 @@
 - **`inbox_entries` is an intra-Fleet path, not an inter-Fleet one.** Across all 674 local session databases it holds 27 rows, every sender a `background-agent` or `sidekick-agent` reporting to its owning session - never a peer session. It is the subagent reporting channel and offers nothing for cross-Fleet messaging. [c-0010](./cycles/c-0010.md)
 - **`unread` must not be read as "the human has seen this."** All 27 observed rows carry `unread = 1`; the flag is never cleared in persisted state. [c-0010](./cycles/c-0010.md)
 
+## Scope, settled in c-0025
+
+**Maestro is an observability plugin. It makes agent work visible inside a
+terminal the operator already uses.**
+
+Asked what Maestro's scope is, the user chose this reading over the alternative
+that the product was still an orchestrator being built in stages. The decision
+retires most of what the sections below specify, and those sections are kept -
+struck through where superseded - because each was confirmed on evidence and the
+record of a reversal is worth more than a tidy document.
+
+**In scope.** Read the Copilot session's own event log and render the subagent
+tree, live, with status. Surface what the runtime already reports: activity,
+progress, and `Attention`.
+
+**Out of scope, as of this cycle.** Enforcing worktree isolation. Durable
+`Parked` versus `Interrupted` intent. Sweeping leftover processes. A command
+surface of any size. Being an application: the routes to Electron, Tauri, Swift,
+WezTerm, and Zellij are retired along with the comparative evaluation that would
+have chosen between them.
+
+**Why this is a destination rather than a retreat.** The session's Destination
+was to find the smallest empirical sequence that could prove or falsify the MVP
+contract. It did both: the contract was larger than the problem, and the host
+supplies nearly all of it. Of the eighteen P0 requirements confirmed in c-0021,
+cmux already provides eleven, two became configuration in c-0024, and the tree
+is the only one the ecosystem does not have - measured across 190+ projects, none
+of which renders a genuine parent-child agent hierarchy.
+
+**What is left to build is one thing.** The subagent tree, read from
+`events.jsonl` by the join confirmed in c-0010 and revalidated in c-0020 and
+c-0024, published into the Host Application. Everything else is configuration.
+
+**The domain has not been updated to match.** `Fleet` is defined in
+[`CONTEXT.md`](../../../../CONTEXT.md) as "one feature, one Worktree, one Copilot
+Session, its subagent tree, and its durable state", and two of those five
+properties are now unenforced. That is material vocabulary change, it belongs to
+`/domain-mapping`, and it is staged rather than applied here.
+
 ## Priority index
 
 **Established in c-0021.** Until this cycle, priority existed only on discovery

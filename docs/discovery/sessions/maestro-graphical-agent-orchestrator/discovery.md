@@ -2,16 +2,16 @@
 schema-version: 1
 session: maestro-graphical-agent-orchestrator
 state-root: docs/discovery
-revision: 25
+revision: 26
 anchor: https://github.com/jdylanmc/maestro/issues/1
 anchor-revision: 2026-08-20T19:52:31Z
 anchor-status: unchanged
 question-group-size: 12
 last-question-group-size: 12
-last-cycle: c-0024
+last-cycle: c-0025
 cycle-state: complete
-state-digest: 7d12ac78c87427648b1def796c5c2e48993a16e3887baa2c896a5fd9d1a0bbb2
-root-map-digest: 414c5a3e4a811a980bf10eaff30240b20ecc65023ee15b51dd6f62b8ff9edd88
+state-digest: ec46f0f1effa0d6a8d6c512627505ac3f4d60ae756677e487d02351d8c764fdf
+root-map-digest: 6a7f8a45512f17a2ef451ca191606226b04fa7d8ee7cb2393da06be51528934b
 root-lexicon-digest: 996bd740e483473691d06862dd280b3ac5929e3c4dfbea7ac4ecf803307c5ed5
 digest-tool: shasum -a 256
 digest-status: verified
@@ -121,9 +121,10 @@ isolation, and restart reconciliation.
 ### n-0003 - v2 Electron MVP
 
 - Parent: n-0000
-- Fog: promoted
+- Fog: invalidated
 - Maturity: promotion-ready
 - Priority: P0
+- Retired: c-0025 - v2 Electron MVP - **retired in c-0025.** Built and promoted; the application it was a route to will not be shipped. Its executive report stands as evidence.
 - Outcome: The first route driven to a complete MVP, executing n-0001's acceptance slice end to end and producing its executive report. Chosen to lead on evidence rather than version order: it is the only route carrying measured results.
 - Open questions: **Both prior questions are answered.** Packaging preserves supervision (c-0012, measured), and the real `BrowserWindow` seam was already exercised in c-0009. n-0008 was settled in c-0013, so one blocker is gone; the Acceptance Harness (n-0009) is the last one it cannot clear itself. **The signed-and-notarized question was retired in c-0016 by scoping it out**: the MVP ships an unsigned, fuse-enabled `.app`, so this node now holds **no open question of its own** and is gated solely on n-0009. **n-0009 cleared in c-0017, so this node has no remaining gate**: it passes all eleven leaf conditions, with the Acceptance Harness as its verification seam and a `feasible-with-constraint` disposition - the constraint being that a build manipulating Electron fuses must re-sign afterwards. What blocks it now is not its own state but its **branch**: n-0000, whose maturity c-0018 corrected upward to `decision-ready` after finding the `researched` value was a twelve-cycle-old artifact rather than a judgment. **c-0018 also confirmed this route runs first and alone**: both it and n-0004 are committed, but strictly one at a time, so the shared Acceptance Harness is validated against one route before it is asked to judge a second.
 - Evidence: [c-0003](./cycles/c-0003.md) runtime/state boundary probe; [c-0004](./cycles/c-0004.md) deferral of real installation; [c-0005](./cycles/c-0005.md) confirmation of Electron as the first route; [c-0009](./cycles/c-0009.md) prototype reaching zero survivors across three process groups on quit; [c-0012](./cycles/c-0012.md) packaged `.app` measured at zero survivors on graceful quit, nine survivors on Force Quit without a reaper, and zero after reap-on-launch; [Issue #4](https://github.com/jdylanmc/maestro/issues/4)
@@ -138,9 +139,10 @@ isolation, and restart reconciliation.
 ### n-0004 - v1.1 WezTerm MVP
 
 - Parent: n-0000
-- Fog: investigating
+- Fog: invalidated
 - Maturity: framed
 - Priority: P1
+- Retired: c-0025 - v1.1 WezTerm MVP - **retired in c-0025.** An alternative Host Application; cmux is settled.
 - Outcome: The second route driven to a complete MVP against the same acceptance slice, with its own executive report. **Committed unconditionally in c-0018** - *"You can build Electron and WezTerm variants now"* - so it is no longer a route whose scope depends on how the Electron route turns out. It remains **sequenced after** n-0003 rather than concurrent with it, because the Acceptance Harness is shared and unbuilt, and building it against two routes at once would let it be shaped by whichever route is easier to instrument, which is the exact bias the State Oracle exists to prevent.
 - Open questions: Can a WezTerm-hosted route satisfy the process-ownership requirement at all? v1.0's detached `herdr server` daemon is the original violation, so this route starts holding the defect that produced the requirement. Does `proto-v1/` shorten the distance to completion, or does it carry the architecture that has to be abandoned? **And the one that is newly answerable:** what is this route's *measured* Presentation Check ceiling? The ~40-50% figure and the missing macOS accessibility tree come from c-0016 **delegated research**, which is untrusted-evidence class, and they feed a fixed rubric criterion for a route now committed to completion. c-0018 obtained standing permission to measure it directly - *"I do not use WezTerm actively on this computer so you may experiment with it's capabilities"* - so the ceiling can be moved from research to measurement under a prototype gate.
 - Evidence: [c-0006](./cycles/c-0006.md) live orphan-process forensics; `proto-v1/` preserved v1.0 implementation; [Issue #26](https://github.com/jdylanmc/maestro/issues/26); [Issue #27](https://github.com/jdylanmc/maestro/issues/27); [Issue #28](https://github.com/jdylanmc/maestro/issues/28)
@@ -156,9 +158,10 @@ isolation, and restart reconciliation.
 ### n-0005 - v3 Tauri/Rust feasibility probe
 
 - Parent: n-0000
-- Fog: investigating
+- Fog: invalidated
 - Maturity: framed
 - Priority: P1
+- Retired: c-0025 - v3 Tauri/Rust feasibility probe - **retired in c-0025.**
 - Outcome: **Reduced in c-0018 from a complete MVP to a bounded feasibility probe**, under a `delegated-to-loop` disposition after the user committed n-0003 and n-0004 and handed this route back to the loop. The probe answers one decisive question and still produces an executive report, which c-0011 requires of every route including a rejected one. **The decisive question: does the WebdriverIO embedded-WebDriver path actually drive a packaged Tauri `.app` on macOS, and does the official Rust SDK binding remove the Node sidecar?** Research established both halves of why this is the right question. Playwright is out entirely on macOS - `WKWebView` exposes no Chrome DevTools Protocol - and Tauri's own documentation states that driving `tauri-driver` directly supports only Windows and Linux. The working path, `@wdio/tauri-service`, embeds a W3C WebDriver server **inside the application binary**, so this route must modify the product to make it testable, which no other route does. Offsetting that, GitHub publishes an **official Rust SDK** binding for Copilot, so a Tauri route can consume the seam natively with no Node sidecar - an advantage no cycle had counted.
 - Open questions: The decisive question above. Everything beyond it is deliberately out of the probe's scope.
 - Evidence: [c-0018](./cycles/c-0018.md) delegated research on macOS user-interface automation and Copilot SDK language bindings; [Issue #23](https://github.com/jdylanmc/maestro/issues/23)
@@ -174,9 +177,10 @@ isolation, and restart reconciliation.
 ### n-0006 - v4 native macOS Swift feasibility probe
 
 - Parent: n-0000
-- Fog: investigating
+- Fog: invalidated
 - Maturity: framed
 - Priority: P1
+- Retired: c-0025 - v4 native macOS Swift feasibility probe - **retired in c-0025.**
 - Outcome: **Reduced in c-0018 from a complete MVP to a bounded feasibility probe**, under the same `delegated-to-loop` disposition as n-0005, and still producing an executive report. **The decisive question: what does the Copilot seam cost from Swift, given there is no Swift SDK?** Research established the asymmetry that makes this route unlike the other three. Its verification story is the **best** of the four - `XCUITest` is Apple's first-class framework and `XCUIApplication` drives an already-packaged `.app` by bundle identifier or file URL, with no test target compiled into the product, which is the exact opposite of what Tauri requires. But GitHub publishes official Copilot SDK bindings for TypeScript, Python, Go, Rust, Java, and .NET, and **none for Swift**, so this route must spawn a Node or Rust sidecar and speak JSON-RPC, or hand-roll the wire protocol against no published specification. Known macOS costs on the verification side: the test runner needs Accessibility permission, an active graphical session, and there is no per-run sandbox reset.
 - Open questions: The decisive question above. Everything beyond it is deliberately out of the probe's scope.
 - Evidence: [c-0018](./cycles/c-0018.md) delegated research on macOS user-interface automation and Copilot SDK language bindings; [Issue #24](https://github.com/jdylanmc/maestro/issues/24)
@@ -192,9 +196,10 @@ isolation, and restart reconciliation.
 ### n-0007 - Comparative technology evaluation
 
 - Parent: n-0000
-- Fog: investigating
+- Fog: invalidated
 - Maturity: vague
 - Priority: P1
+- Retired: c-0025 - Comparative technology evaluation - **cancelled in c-0025**, not deferred. It consumes one executive report per register row to select a stack; the stack is selected and the remaining reports will never be written.
 - Outcome: The terminal deliverable: an analysis selecting which stack is best suited to this problem, consuming **one per-route executive report per row of the route register in `requirements.md`** rather than re-deriving the comparison. A rejected stack is an input to this evaluation, not an absence from it - the reason a stack could not build the app is itself a finding. **The literal count was removed in c-0023** after being wrong in three consecutive cycles: four (c-0011), corrected to five (c-0022), superseded to six (c-0023) when Zellij was added. The register is now the only place a route count exists. Two axes recorded in c-0022 also bear directly on this node: the seam is a property of the **route class** - terminal-hosted routes use the Copilot CLI, application routes use the SDK - so "SDK language-binding cost" applies to only three rows; and each route implements the contract in **its host's idiom**, which means the evaluation compares what the design *becomes* on each stack rather than how faithfully each stack reproduces one design. The Acceptance Slice and the fixed five-section report shape are unchanged, and are what keep the comparison like-for-like under that principle.
 - Open questions: **Partly answered in c-0015.** The user fixed one criterion before any route shipped - **user-interface automation capability** - on the stated reasoning that automated regression checks are the work that follows the MVP. The remaining question is what else the rubric holds and how the criteria weigh against each other. Recorded honestly: this criterion is **not neutral** between the routes. A component-driven web stack reaches Storybook and Playwright directly, Swift uses XCUITest, and a terminal surface exposes very little to any of them - so naming it predicts part of the ranking. **One clause of that reasoning was falsified in c-0018:** "Tauri reaches Playwright through WebDriver" is wrong on macOS. Playwright cannot drive `WKWebView` at all, and Tauri's own documentation excludes macOS from `tauri-driver`; the working path embeds a WebDriver server inside the application binary. The criterion's *shape* survives - the routes still separate on automation reach - but the predicted ordering shifts, because Swift turns out to have the strongest automation story of the four rather than a middling one. That is a legitimate product decision, recorded as one rather than presented as a neutral measurement.
 - Evidence: [c-0015](./cycles/c-0015.md) fixed the user-interface-automation criterion and made each route's automation reach the evidence for it; [c-0011](./cycles/c-0011.md)
@@ -282,9 +287,10 @@ isolation, and restart reconciliation.
 ### n-0012 - Zellij candidate route
 
 - Parent: n-0000
-- Fog: scouted
+- Fog: invalidated
 - Maturity: framed
 - Priority: P1
+- Retired: c-0025 - Zellij candidate route - **retired in c-0025**, never measured.
 - Outcome: Evaluate Zellij as a host, on the hypothesis that it trades in the opposite direction to cmux: **less given away, but far deeper extensibility, and open**. Zellij plugins are WebAssembly modules that render **first-class user-interface panes** - Zellij's own interface is built with the same system - so a Fleet panel and a subagent tree would be native components rather than a script drawing into a terminal pane. It is **MIT licensed** and ships **session resurrection**, which restores panes, tabs, and running commands across terminal closure and reboot.
 - Open questions: (1) **How much does it cost to rebuild what cmux gives free?** Zellij has no agent awareness at all - no Attention, no agent hooks, no notifications, no resource meter, no file tree, no workspace metadata - so eight of c-0022's nine "already delivered" items move back into the build column. (2) **Does the plugin API actually reach a live subagent tree**, and is a Rust/WebAssembly plugin a proportionate way to render one? (3) **What is the measured automation ceiling?** As a multiplexer inside a host terminal it owns no window and exposes **no accessibility tree of its own** - the property that capped the WezTerm route - so its Presentation Check surface is its CLI and plugin API instead, and that is unmeasured. (4) **Is session resurrection usable as Park?** It is the first candidate host shipping anything in that neighbourhood, and c-0022 identified durable lifecycle state as the largest remaining build item. (5) Does hosting inside a host terminal reopen the input-model requirement, since the operator's own terminal keeps its keymap and Zellij layers its own on top.
 - Evidence: [c-0023](./cycles/c-0023.md) bounded read-only research - `brew info zellij` (0.45.0, MIT, one dependency) plus delegated web research on the plugin system, themes, and session resurrection. **No Zellij was run; nothing here is measured.**
@@ -299,38 +305,30 @@ isolation, and restart reconciliation.
 
 ## Active Frontier
 
-Every row lists **all** of its node's open questions. c-0018 found n-0002's row
-carrying one of two, which mattered because selection reads this table rather
-than the node blocks.
+**c-0025 emptied most of this table.** Maestro's scope settled as an
+observability plugin, which retired every route node, the comparative
+evaluation, and the orchestration requirements they existed to compare.
 
 | Node | Fog | Maturity | Priority | Blocked by | Open questions |
 | --- | --- | --- | --- | --- | --- |
-| n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` on a live Session, and why - only the count was captured. **Deferred by user redirect in c-0021**; this was the deterministic selection. |
-| n-0011 | researched | decision-ready | P0 | none | (1) ~~replace or join~~ **settled c-0022: joins and leads.** (2) Slice steps 2 and 5 unexercised - no live Copilot Session ran inside a Fleet worktree. (3) Teardown never measured on cmux. (4) Custom sidebars untested (outside the isolation path). (5) cmux auto-updates; measurements bound to 0.64.22. (6) Durable lifecycle state is the largest remaining build item, because cmux holds no durable intent |
-| n-0004 | investigating | framed | P1 | n-0003 | (1) Can a WezTerm route satisfy process ownership at all. (2) Does `proto-v1/` shorten the distance or carry the architecture to abandon. (3) What is the **measured** Presentation Check ceiling - research-derived only, and measurable under permission granted in c-0018 |
-| n-0005 | investigating | framed | P1 | n-0003, n-0004 | Reduced to a bounded probe: does the WebdriverIO embedded-WebDriver path drive a packaged Tauri `.app` on macOS, and does the official Rust SDK binding remove the Node sidecar |
-| n-0006 | investigating | framed | P1 | n-0003, n-0004, n-0005 | Reduced to a bounded probe: what does the Copilot seam cost from Swift, given no Swift SDK binding exists |
-| n-0007 | investigating | vague | P1 | n-0003, n-0004, n-0005, n-0006 | What the rubric holds beyond the user-interface-automation criterion, and how criteria weigh - now including SDK language-binding availability, a second axis found in c-0018 |
-| n-0010 | scouted | framed | P1 | none | (1) What a Recap is derived from, and whether the runtime's event stream suffices. (2) Generated on demand or maintained continuously. (3) Whether a *useful* Recap is machine-checkable at all |
-| n-0012 | scouted | framed | P1 | none | (1) Cost of rebuilding what cmux gives free - Zellij has no agent awareness at all. (2) Does the WebAssembly plugin API reach a live subagent tree, proportionately. (3) Measured automation ceiling - no accessibility tree of its own, CLI and plugin API instead. (4) Is session resurrection usable as Park. (5) Input-model cost of layering a keymap inside the operator's own terminal |
+| n-0002 | researched | decision-ready | P0 | none | Which processes survive `SIGTERM` on a live Session, and why - only the count was captured. **Now moot in practice**: Maestro no longer owns process lifetime. Kept because the measurement is real and cheap to finish. |
+| n-0010 | scouted | framed | P1 | none | Fleet Recap. (1) What it is derived from. (2) On demand or maintained. (3) Whether a *useful* Recap is machine-checkable. **Depends on the `Fleet` retirement question now in `/domain-mapping`'s hands.** |
+| n-0011 | decision-ready | promotion-ready | P0 | none | The surviving product. (1) The tree misses **73.4% of subagents** on logs over 8 MiB - measured across 2,050 real subagents - because of tail truncation; the fix is incremental reads against the existing state store. (2) Session resolution picks by most-recent-write, so two sessions sharing a `cwd` publish each other's trees. (3) `preToolUse` is registered and does not need to be; dropping it removes the only path by which this plugin can deny a tool call. (4) No kill switch. (5) Custom sidebar untested end to end. |
 
-**Five nodes are off the frontier.** **n-0008 left it in c-0020** at fog `cleared` and maturity `decision-ready`, holding one quota-gated accepted unknown and nothing else; it is not promotable, because it is provider understanding rather than work.
+**Six nodes were retired in c-0025** and are off the frontier permanently:
+n-0003 (Electron, built), n-0004 (WezTerm), n-0005 (Tauri), n-0006 (Swift), and
+n-0012 (Zellij) were routes to an application that will not be built; n-0007,
+the comparative evaluation, was cancelled rather than deferred, because the
+reports it consumes will never be written.
 
-**Four nodes were already off it.** n-0003 (v2 Electron MVP) and n-0009
-(Acceptance Harness) are at fog `promoted` - published in c-0019 as
-[#29](https://github.com/jdylanmc/maestro/issues/29) and
-[#30](https://github.com/jdylanmc/maestro/issues/30). n-0000 and n-0001 are at
-fog `cleared`: n-0000 was promoted as the Branch and holds no questions, and
-n-0001's specification content became the acceptance criteria of both Stories
-rather than a work item of its own.
+**n-0008** and **n-0009** were already off it. n-0009, the Acceptance Harness,
+is at fog `promoted` against [#30](https://github.com/jdylanmc/maestro/issues/30)
+and now has no six-step slice to verify; its disposition is a tracker question
+rather than a discovery one.
 
-**The shape of the frontier has changed.** For eighteen cycles it was a list of
-things blocking an MVP that did not exist. It is now a list of things that
-follow one: n-0004 through n-0007 are the remaining routes and the evaluation
-that consumes them, n-0002 and n-0008 are provider questions that gate no
-committed work, and n-0010 is a P1 product capability deliberately excluded
-from MVP scope. **No row on this table blocks [#29](https://github.com/jdylanmc/maestro/issues/29)
-or [#30](https://github.com/jdylanmc/maestro/issues/30).**
+**The shape of the frontier has changed a third time.** It was a list of things
+blocking an MVP that did not exist, then a list of things following one, and it
+is now a **defect list against one shipped plugin**.
 
 ## Priority Debt
 

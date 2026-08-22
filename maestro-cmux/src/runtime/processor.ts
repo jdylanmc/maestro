@@ -1,8 +1,10 @@
+import { execFile } from "node:child_process"
 import { basename } from "node:path"
 import { createCmuxClient } from "../cmux/client.js"
 import { detectCmuxEnvironment } from "../cmux/detect.js"
 import { loadConfig } from "../config.js"
 import { createLogger } from "../logger.js"
+import { summarize } from "../tree.js"
 import { summarizeText } from "../text.js"
 import type {
   CmuxClient,
@@ -243,6 +245,35 @@ export async function processHook(
     await emitEventEffects(cmux, config, projectLabel, previousState, nextState, event, logger)
     return nextState
   })
+
+  // Publish the subagent tree.
+  //
+  // This is the part of Maestro that cmux does not provide and that nothing in
+  // its ecosystem provides either: a genuine parent-child view of what a
+  // session has delegated to. The Copilot hook surface carries no subagent
+  // events, so the tree is read from the session's own event log.
+  //
+  // It runs last, after the pills and logs the rest of the plugin emits, and it
+  // cannot fail the hook: a thrown error here would deny a tool call.
+  try {
+    const tree = summarize(event.cwd)
+    if (tree) {
+      await new Promise<void>((resolve) => {
+        execFile(
+          config.cmuxBin,
+          ["workspace-action", "--action", "set-description",
+           "--description", tree.encoded, "--workspace", environment.workspaceID ?? ""],
+          { timeout: 4000 },
+          () => resolve(),
+        )
+      })
+      await logger.log("debug", "tree published", {
+        total: tree.total, running: tree.running, failed: tree.failed,
+      })
+    }
+  } catch (error) {
+    await logger.log("debug", "tree publish failed", { error: String(error) })
+  }
 
   await logger.log("debug", "processHook complete", { hookName })
 }

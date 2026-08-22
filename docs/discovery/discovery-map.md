@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0024
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0025
 ---
 
 # Primary Discovery Map - Maestro
@@ -76,4 +76,7 @@ restart behavior.
 - **An observer must never be able to veto the thing it observes.** Copilot treats a non-zero `preToolUse` exit as a denial; an unmaintained status plugin exited non-zero on an unrecognised payload and refused every tool call in a live session, `pwd` included. Maestro's hooks always exit zero. (c-0024)
 - **A green suite is not evidence of compatibility.** That plugin's 68 tests passed before and after, because they only exercised the payload shape it assumed. Third occurrence of the class, after c-0016 and c-0021. (c-0016, c-0021, c-0024)
 - **Maestro is three surfaces, and only two are host-shaped:** a Copilot CLI plugin, a pane-hosted helper, and a Fleet core of git, a state file, and the process table that needs no Host Application. It **presents** as a plugin and is **not built** as one, which is what keeps the route register meaningful. The presentation seam is a backend interface built now, because retrofitting one is painful. (c-0024)
+- **Maestro's scope settled in c-0025: it is an observability plugin.** It makes agent work visible inside a terminal the operator already uses, and builds nothing else. Retired with that decision: enforced worktree isolation, durable `Parked`/`Interrupted` intent, sweep-on-launch, any command surface, and every route to a standalone application. The comparative technology evaluation is **cancelled**, not deferred - the stack is chosen, so the reports it would consume will never be written. (c-0025)
+- **This is a destination, not a retreat.** The session set out to find the smallest sequence that could prove or falsify the MVP contract. It did both: the contract was larger than the problem, and the Host Application supplies nearly all of it. Of eighteen P0 requirements, cmux provides eleven, two became configuration, and the tree is the only one the ecosystem lacks. (c-0025)
+- **`Fleet` may no longer name anything.** It is defined as one feature, one Worktree, one Copilot Session, its subagent tree, and its durable state - and two of those five are now unenforced, leaving it indistinguishable from "a Copilot session in a cmux workspace". Retiring a term whose referent dissolved is the `Workspace` (c-0007) and `Orientation` (c-0019) pattern a third time. Staged for `/domain-mapping`; not applied. (c-0025)
 - **The subagent tree is unclaimed.** Two surveys of 190+ ecosystem projects found nothing that enforces one worktree per workspace, nothing that separates a deliberate stop from a crash, and nothing that renders a genuine parent-child agent hierarchy. (c-0024)
