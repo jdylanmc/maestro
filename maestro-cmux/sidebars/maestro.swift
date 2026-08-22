@@ -73,7 +73,9 @@ func ownerOf(_ d: String) -> String {
  *  There is no hover state to lean on: the upstream sidebar guide is explicit
  *  that "input is limited to forwarded clicks (no hover, focus, or keyboard)".
  *  So a finished agent cannot be crossed out on hover - it is simply tappable,
- *  and tapping removes it.
+ *  and tapping removes it. Only rows with the "v" glyph get this tap: running
+ *  and failed work is not dismissible, and encodeTree in src/tree.ts would
+ *  republish it within seconds anyway.
  *
  *  `reduce` is used to rejoin because it is the same construct `nameOf` already
  *  relies on; `joined(separator:)` is undocumented here and untested. */
@@ -346,33 +348,63 @@ VStack(alignment: .leading, spacing: 0) {
                             // this surface as the owner.
                             if let d = w.description {
                                 if ownerOf(d) == t.id {
+                                    // Only a FINISHED agent is dismissible, and
+                                    // only it carries the dismissing tap. The
+                                    // backend refuses to hide running or failed
+                                    // work (see encodeTree in src/tree.ts), so an
+                                    // unconditional tap here would blank a row
+                                    // that reappears on the next publish - the
+                                    // sidebar lying about state it does not own.
+                                    // Live rows take the same tap as their tab:
+                                    // focus the surface that is doing the work.
                                     ForEach(liveRows(d).prefix(10)) { row in
-                                        HStack(spacing: 6) {
-                                            Spacer().frame(width: treeIndent(row))
-                                            if part(row, 1) == ">" {
-                                                ProgressView()
-                                                    .scaleEffect(0.42)
-                                                    .frame(width: 12, height: 12)
-                                                    .tint(.green)
-                                            } else {
+                                        if part(row, 1) == "v" {
+                                            HStack(spacing: 6) {
+                                                Spacer().frame(width: treeIndent(row))
                                                 Image(systemName: "checkmark")
                                                     .font(.system(size: 10))
                                                     .foregroundColor(.secondary)
                                                     .frame(width: 12)
+                                                Text(nameOf(row))
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                                    .lineLimit(1).truncationMode(.tail)
+                                                Spacer(minLength: 0)
                                             }
-                                            Text(nameOf(row))
-                                                .font(.system(size: 12))
-                                                .foregroundColor(part(row, 1) == "v" ? .secondary : .primary)
-                                                .lineLimit(1).truncationMode(.tail)
-                                            Spacer(minLength: 0)
-                                        }
-                                        .padding(4)
-                                        .help(part(row, 1) == "v" ? "Click to dismiss" : nameOf(row))
-                                        .onTapGesture {
-                                            cmux("workspace.action",
-                                                 workspace_id: w.id,
-                                                 action: "set-description",
-                                                 description: without(d, row))
+                                            .padding(4)
+                                            .help("Click to dismiss")
+                                            .onTapGesture {
+                                                cmux("workspace.action",
+                                                     workspace_id: w.id,
+                                                     action: "set-description",
+                                                     description: without(d, row))
+                                            }
+                                        } else {
+                                            HStack(spacing: 6) {
+                                                Spacer().frame(width: treeIndent(row))
+                                                if part(row, 1) == ">" {
+                                                    ProgressView()
+                                                        .scaleEffect(0.42)
+                                                        .frame(width: 12, height: 12)
+                                                        .tint(.green)
+                                                } else {
+                                                    Image(systemName: "xmark")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(.red)
+                                                        .frame(width: 12)
+                                                }
+                                                Text(nameOf(row))
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.primary)
+                                                    .lineLimit(1).truncationMode(.tail)
+                                                Spacer(minLength: 0)
+                                            }
+                                            .padding(4)
+                                            .help(nameOf(row))
+                                            .onTapGesture {
+                                                cmux("workspace.select", workspace_id: w.id)
+                                                cmux("surface.focus", surface_id: t.id)
+                                            }
                                         }
                                     }
                                     if liveRows(d).count > 10 {
