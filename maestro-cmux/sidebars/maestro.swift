@@ -64,7 +64,7 @@ func spin(_ s: Int) -> String {
 
 func indent(_ row: String) -> Int {
     let d = part(row, 0)
-    return d == "0" ? 12 : d == "1" ? 26 : d == "2" ? 40 : d == "3" ? 54 : 68
+    return d == "0" ? 28 : d == "1" ? 44 : d == "2" ? 60 : d == "3" ? 76 : 92
 }
 
 VStack(alignment: .leading, spacing: 0) {
@@ -95,6 +95,20 @@ VStack(alignment: .leading, spacing: 0) {
                                 .imageScale(.small)
                                 .foregroundColor(.orange)
                                 .rotationEffect(.degrees(45))
+                        }
+                        if let b = w.branch {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                                .fixedSize()
+                            Text(b)
+                                .font(.system(size: 10)).fontDesign(.monospaced)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1).truncationMode(.tail)
+                                .fixedSize()
+                            if w.dirty {
+                                Circle().fill(.orange).frame(width: 4, height: 4).fixedSize()
+                            }
                         }
                         Spacer(minLength: 3)
                         if let d = w.description {
@@ -142,22 +156,6 @@ VStack(alignment: .leading, spacing: 0) {
                         Button("Close Workspace") { cmux("workspace.close", workspace_id: w.id) }
                     }
 
-                    if let b = w.branch {
-                        HStack(spacing: 4) {
-                            Spacer().frame(width: 12)
-                            Image(systemName: "arrow.triangle.branch")
-                                .font(.system(size: 9)).foregroundColor(.secondary)
-                            Text(b)
-                                .font(.system(size: 10)).fontDesign(.monospaced)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1).truncationMode(.tail)
-                            if w.dirty {
-                                Circle().fill(.orange).frame(width: 4, height: 4).fixedSize()
-                            }
-                            Spacer(minLength: 0)
-                        }
-                    }
-
                     ForEach(w.tabs.prefix(8)) { t in
                         HStack(spacing: 6) {
                             Spacer().frame(width: 12)
@@ -170,9 +168,7 @@ VStack(alignment: .leading, spacing: 0) {
                                 .lineLimit(1).truncationMode(.tail)
                             Spacer(minLength: 0)
                         }
-                        .padding(5)
-                        .background(.quaternary)
-                        .cornerRadius(7)
+                        .padding(4)
                         .onTapGesture {
                             cmux("workspace.select", workspace_id: w.id)
                             cmux("surface.focus", surface_id: t.id)
@@ -201,8 +197,6 @@ VStack(alignment: .leading, spacing: 0) {
                                 Spacer(minLength: 0)
                             }
                             .padding(4)
-                            .background(.quaternary)
-                            .cornerRadius(6)
                         }
                         if liveRows(d).count > 10 {
                             HStack(spacing: 6) {
