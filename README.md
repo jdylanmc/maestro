@@ -31,10 +31,11 @@ session activity, an event-log reader that reconstructs the subagent tree, and
 a custom cmux sidebar that renders it. See its
 [README](maestro-cmux/README.md), including current limitations.
 
-[`proto-v1/`](proto-v1/) preserves the original WezTerm and Herdr launcher as a
-historical prototype. It is not the current architecture and is not maintained.
-Its detached-daemon process model is the founding defect this project was
-started to understand.
+That plugin is the whole of the live surface. Everything else is history.
+
+[`archive/`](archive/) holds the retired prototypes that preceded it. They are
+kept for their evidence, not their code, and nothing in `maestro-cmux/` reads
+them. See [archive/README.md](archive/README.md).
 
 ## The rule that shapes the design
 
