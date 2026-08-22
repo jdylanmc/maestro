@@ -120,15 +120,6 @@ func pulse(_ s: Int) -> Double {
     return s % 2 == 0 ? 1.0 : 0.55
 }
 
-func spin(_ s: Int) -> String {
-    return ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"][s % 10]
-}
-
-func indent(_ row: String) -> Int {
-    let d = part(row, 0)
-    return d == "0" ? 31 : d == "1" ? 48 : d == "2" ? 66 : d == "3" ? 84 : 101
-}
-
 /** Trailing path component, so a surface can show where it is working without
  *  spending the width a full path costs. Array indexing and arithmetic are
  *  fine inside a func body; only arithmetic as a bare modifier ARGUMENT is
@@ -238,7 +229,17 @@ VStack(alignment: .leading, spacing: 0) {
                             }
                             if countOf(d, ">") > 0 {
                                 HStack(spacing: 3) {
-                                    Text(spin(clock.second)).font(.system(size: 12)).bold()
+                                    // A REAL loader. ProgressView resolves to a
+                                    // native AXBusyIndicator (NSProgressIndicator),
+                                    // which animates at native framerate on its
+                                    // own. Everything hand-drawn here is capped at
+                                    // 1 fps: `clock.epoch` is SECONDS - measured,
+                                    // 1787427474, ten digits - so a value
+                                    // recomputed per tick can never be smooth.
+                                    ProgressView()
+                                        .scaleEffect(0.45)
+                                        .frame(width: 14, height: 14)
+                                        .tint(.green)
                                     Text("\(countOf(d, ">"))")
                                         .font(.system(size: 12)).bold().monospacedDigit()
                                 }
@@ -360,10 +361,10 @@ VStack(alignment: .leading, spacing: 0) {
                                         HStack(spacing: 6) {
                                             Spacer().frame(width: treeIndent(row))
                                             if part(row, 1) == ">" {
-                                                Text(spin(clock.second))
-                                                    .font(.system(size: 12)).bold()
-                                                    .foregroundColor(.green)
-                                                    .frame(width: 12)
+                                                ProgressView()
+                                                    .scaleEffect(0.42)
+                                                    .frame(width: 12, height: 12)
+                                                    .tint(.green)
                                             } else {
                                                 Image(systemName: "checkmark")
                                                     .font(.system(size: 10))
