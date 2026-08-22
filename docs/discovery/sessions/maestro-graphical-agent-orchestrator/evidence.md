@@ -1871,3 +1871,67 @@ path none of them found. Licensing: `cmux-agent-mcp` is PolyForm Strict (no comm
 - Both surveys are delegated research, which this loop classes as untrusted evidence; only the cmux
   and Copilot measurements above are first-hand.
 - All measurements are bound to cmux 0.64.22 (102) and Copilot CLI 1.0.81-5.
+
+## c-0026 - The custom sidebar interpreter fails silently, by design
+
+**This section is the operating manual for the sidebar surface. Read it before
+writing or debugging a line of `maestro.swift`.** Four separate debugging rounds
+were spent rediscovering what cmux already documents.
+
+### The governing rule
+
+cmux's own authoring contract states it plainly:
+
+> "unsupported syntax is skipped ... and even deeply nested or pathological
+> source is rendered best-effort, never crashes"
+
+The interpreter is a **documented growing subset** of SwiftUI. It does not
+report what it dropped. Consequences, all confirmed by measurement:
+
+- **`cmux sidebar validate` passing means nothing about rendering.** It reported
+  `OK maestro [swift] ... 1 valid, 0 invalid` on a sidebar that rendered a blank
+  pane, on one that rendered a single row where 23 were published, and on one
+  where a whole tree section was missing. This is correct, specified behaviour.
+- **A silent failure is scoped to the smallest enclosing view**, so an
+  unsupported construct deletes its subtree while everything around it renders
+  normally. That reads as a data bug and is not one.
+- **Debugging is therefore bisection, not inspection.** Remove or branch one
+  construct at a time. Reason about the published data separately, from the
+  stored description, never from what the pane shows.
+
+### The four constructs measured to fail silently
+
+| # | Construct | Observed | Use instead |
+| --- | --- | --- | --- |
+| 1 | `filter { $0.description != nil }` | Empty sidebar. Optional fields are **absent**, not null. | `if let d = w.description { }` inside the loop |
+| 2 | Arithmetic as a bare modifier **argument**, e.g. `.padding(.leading, depth * 9)` | Nothing renders. Arithmetic inside a function body or a `"\(...)"` interpolation is fine. | A ternary, or precompute in a `func` |
+| 3 | `split(separator: "\n")` | Returns the whole string as **one** element - the `\n` escape is not interpreted. `whereSeparator: { $0.isNewline }` renders nothing at all. **A 23-line tree became one truncated row while cmux stored all 432 bytes intact.** | A single-line wire format split on a literal delimiter |
+| 4 | `.frame(width: 0)` to hide a view | **Does not hide.** Six running subagents drew a red `xmark` that was supposed to be zero-width. | `if/else` branching between the two views |
+
+Rule 3 is the expensive one: it is indistinguishable from a publishing bug. The
+only way it was caught was reading the stored description out of
+`~/Library/Application Support/cmux/session-com.cmuxterm.app.json` and finding
+41 rows present while the pane showed 1.
+
+### Corollary for the next cycle
+
+Before treating any third-party host's behaviour as unknown, **check whether the
+host publishes its own contract.** cmux exposes both through its CLI:
+
+```
+cmux docs sidebars   # -> docs/custom-sidebars.md   (bindings, views, modifiers, limits)
+cmux docs api        # -> docs/cli-contract.md      (every verb, every namespace)
+```
+
+Neither had been read in the 27 hours the plugin existed. Reading them settled
+three of five open capability questions outright and explained every silent
+failure above. The check costs one `curl`.
+
+### Documented as unsupported - do not attempt
+
+`@State` and every two-way control (`TextField`, `Toggle`, `Slider`, `Picker`);
+`switch`; custom `struct`/`View`; gradients; navigation (`sheet`, `popover`,
+`NavigationStack`); `.keyboardShortcut`; `AsyncImage`/`.resizable`. There is
+**no `VSplitView`** and **no `GeometryReader`**, and `.frame` exposes `width`,
+`height`, and `maxWidth` but no `maxHeight` - so no view can know or claim a
+proportion of the sidebar's height. Bound lists by row count instead.
