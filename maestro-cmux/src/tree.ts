@@ -47,6 +47,115 @@ export interface Subagent {
  */
 export const RETAIN_MS = 15 * 60 * 1000
 
+/**
+ * Attention, DERIVED from the event log rather than stored.
+ *
+ * The predicate is the runtime's own: a `permission.requested` with no
+ * `permission.completed` sharing its `requestId`. Measured firing and clearing
+ * in c-0012, again on cmux in c-0024, and documented verbatim by the SDK's
+ * `pendingRequests()`.
+ *
+ * Deriving it matters for a structural reason, not a stylistic one. A hook
+ * cannot report a blocked Session: measured ordering is
+ * `tool.execution_start` -> `preToolUse` -> `permission.requested`, so the hook
+ * fires BEFORE the request exists, and while the operator is being waited on no
+ * hook fires at all. A stored flag therefore depends on a clearing hook that may
+ * never run. The log does not have that problem - whichever hook happens to fire
+ * next recomputes the truth.
+ *
+ * Only `permission` is derivable. An elicitation and a finished turn are not
+ * permission events, so they still arrive through their hooks.
+ *
+ * NEVER read `fullCommandText` or the notification `message` here: both are the
+ * full command line. The tool name is the most that is safe to publish.
+ */
+export function detectAttention(logPath: string): Attention | undefined {
+  try {
+    const text = readTail(logPath)
+    const open = new Map<string, { at: number; tool: string | undefined }>()
+    const toolOf = new Map<string, string>()
+    let first = true
+    for (const line of text.split("\n")) {
+      if (first) {
+        first = false
+        if (text.length >= TAIL_BYTES) continue
+      }
+      if (!line) continue
+      let e: { type?: string; data?: Record<string, unknown>; timestamp?: string }
+      try {
+        e = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const d = e.data ?? {}
+      if (e.type === "tool.execution_start") {
+        const tc = d.toolCallId as string | undefined
+        const tn = d.toolName as string | undefined
+        if (tc && tn) toolOf.set(tc, tn)
+      } else if (e.type === "permission.requested") {
+        const id = d.requestId as string | undefined
+        if (!id) continue
+        const pr = (d.permissionRequest ?? d.promptRequest ?? {}) as Record<string, unknown>
+        const tc = pr.toolCallId as string | undefined
+        const ts = Date.parse(e.timestamp ?? "")
+        open.set(id, {
+          at: Number.isFinite(ts) ? ts : Date.now(),
+          tool: tc ? toolOf.get(tc) : undefined,
+        })
+      } else if (e.type === "permission.completed") {
+        const id = d.requestId as string | undefined
+        if (id) open.delete(id)
+      }
+    }
+    if (open.size === 0) return undefined
+    // Oldest outstanding request is the one the operator has been waiting on.
+    let best: { at: number; tool: string | undefined } | undefined
+    for (const v of open.values()) if (!best || v.at < best.at) best = v
+    if (!best) return undefined
+    return {
+      kind: "permission",
+      label: best.tool ? `Approve ${best.tool}` : "Permission needed",
+      since: best.at,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Resolve the Session's event log exactly, falling back to the heuristic only
+ * when the runtime gave us nothing to be exact with.
+ *
+ * Order matters and is measured:
+ *   1. `transcriptPath` - `agentStop` names the log file outright.
+ *   2. `sessionId` - every other hook carries it, and it IS the directory name.
+ *   3. `cwd` + newest mtime - the original guess, kept only as a last resort.
+ *
+ * Step 3 alone silently bound the wrong Session in a live measurement, because
+ * `workspace.yaml` can record a cwd the Session is not actually running in.
+ */
+export function resolveSessionLog(
+  cwd: string,
+  sessionId?: string,
+  transcriptPath?: string,
+): string | null {
+  try {
+    if (transcriptPath && statSync(transcriptPath).isFile()) return transcriptPath
+  } catch {
+    /* fall through */
+  }
+  if (sessionId && /^[A-Za-z0-9._-]+$/.test(sessionId)) {
+    const direct = join(SESSIONS, sessionId, "events.jsonl")
+    try {
+      if (statSync(direct).isFile()) return direct
+    } catch {
+      /* fall through */
+    }
+  }
+  const dir = findSessionDir(cwd)
+  return dir ? join(dir, "events.jsonl") : null
+}
+
 /** Locate the session whose working directory is `cwd`, most recent first. */
 export function findSessionDir(cwd: string): string | null {
   try {
@@ -348,11 +457,20 @@ export function summarize(
   attention?: Attention,
   surfaceID?: string,
   dismissed: ReadonlySet<string> = new Set(),
+  sessionId?: string,
+  transcriptPath?: string,
 ): TreeSummary | null {
   try {
-    const dir = findSessionDir(cwd)
-    const subs = dir ? buildTree(join(dir, "events.jsonl")) : new Map<string, Subagent>()
-    if (subs.size === 0 && !attention) return null
+    const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
+    const subs = log ? buildTree(log) : new Map<string, Subagent>()
+
+    // Derived Attention wins over anything a hook stored. A blocking prompt that
+    // the log says is still outstanding is true regardless of which hook last
+    // ran; a stored flag is only as fresh as its clearing hook.
+    const derived = log ? detectAttention(log) : undefined
+    const effective = derived ?? (attention?.kind === "permission" ? undefined : attention)
+
+    if (subs.size === 0 && !effective) return null
     let running = 0
     let failed = 0
     for (const s of subs.values()) {
@@ -361,10 +479,10 @@ export function summarize(
     }
     const rows = [
       ...(surfaceID ? [encodeOwner(surfaceID)] : []),
-      ...(attention ? [encodeAttention(attention)] : []),
+      ...(effective ? [encodeAttention(effective)] : []),
       ...(subs.size > 0 ? [encodeTree(subs, Date.now(), dismissed)] : []),
     ]
-    return { total: subs.size, running, failed, attention, encoded: rows.join(ROW_SEP) }
+    return { total: subs.size, running, failed, attention: effective, encoded: rows.join(ROW_SEP) }
   } catch {
     return null
   }

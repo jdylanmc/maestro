@@ -14,7 +14,7 @@ import type {
   RuntimeState,
   SidebarLogLevel,
 } from "../types.js"
-import { type CopilotHookEvent, parseHookInput } from "./events.js"
+import { type CopilotHookEvent, parseHookInput, parseSessionIdentity } from "./events.js"
 import { createRuntimeState, reduceRuntimeState } from "./reducer.js"
 import { buildPresentationSnapshot } from "./renderer.js"
 import { cleanupStaleStateFiles, withRuntimeState } from "./state-store.js"
@@ -215,6 +215,7 @@ export async function processHook(
   await logger.log("debug", "processHook starting", { hookName })
 
   const event = parseHookInput(hookName, rawInput)
+  const identity = parseSessionIdentity(rawInput)
   const environment = detectCmuxEnvironment(env)
 
   await logger.log("debug", "environment detected", {
@@ -332,7 +333,14 @@ export async function processHook(
   })
 
   try {
-    const tree = summarize(event.cwd, attention, environment.surfaceID, dismissed)
+    const tree = summarize(
+      event.cwd,
+      attention,
+      environment.surfaceID,
+      dismissed,
+      identity.sessionId,
+      identity.transcriptPath,
+    )
     if (tree) {
       await new Promise<void>((resolve) => {
         execFile(

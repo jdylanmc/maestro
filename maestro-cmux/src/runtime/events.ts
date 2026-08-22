@@ -138,6 +138,37 @@ export function describeToolCall(
   return toolName
 }
 
+/**
+ * Session identity, as the runtime supplies it.
+ *
+ * EVERY hook payload carries `sessionId`, and `agentStop` additionally carries
+ * `transcriptPath`. Maestro previously discarded both and guessed the session
+ * from `cwd` plus newest mtime, which is wrong whenever a `workspace.yaml`
+ * records a cwd that is not the Session's actual cwd - measured live, one
+ * Session recorded `/Users/dylan/git/atlas`, a path that does not exist, while
+ * its hook reported the real repository path. The guess then bound a stale
+ * Session with zero subagents and published nothing.
+ *
+ * `agentStop.sessionId` is NOT the session-state directory name, so
+ * `transcriptPath` outranks it when present.
+ */
+export interface SessionIdentity {
+  sessionId: string | undefined
+  transcriptPath: string | undefined
+}
+
+export function parseSessionIdentity(rawInput: string): SessionIdentity {
+  try {
+    const o = JSON.parse(rawInput || "{}") as Record<string, unknown>
+    return {
+      sessionId: typeof o.sessionId === "string" ? o.sessionId : undefined,
+      transcriptPath: typeof o.transcriptPath === "string" ? o.transcriptPath : undefined,
+    }
+  } catch {
+    return { sessionId: undefined, transcriptPath: undefined }
+  }
+}
+
 export function parseHookInput(hookName: HookName, rawInput: string): CopilotHookEvent {
   const context = `${hookName} input`
 

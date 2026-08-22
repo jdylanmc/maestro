@@ -224,3 +224,46 @@ test("dismissing cannot hide running work", () => {
   const subs = new Map<string, Subagent>([["1", agent({ name: "busy", status: "run" })]])
   assert.match(encodeTree(subs, now, new Set(["busy"])), /busy/)
 })
+
+// --- session resolution (#33) ------------------------------------------------
+
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join as pjoin } from "node:path"
+import { parseSessionIdentity } from "../src/runtime/events.js"
+import { resolveSessionLog } from "../src/tree.js"
+
+test("every hook payload's sessionId and transcriptPath are parsed, not discarded", () => {
+  const withId = parseSessionIdentity(JSON.stringify({ cwd: "/x", sessionId: "abc" }))
+  assert.equal(withId.sessionId, "abc")
+
+  const stop = parseSessionIdentity(
+    JSON.stringify({ cwd: "/x", sessionId: "not-a-dir", transcriptPath: "/tmp/t.jsonl" }),
+  )
+  assert.equal(stop.transcriptPath, "/tmp/t.jsonl")
+
+  // Must never throw - this runs in the same runner as a tool hook.
+  assert.deepEqual(parseSessionIdentity("not json"), {
+    sessionId: undefined,
+    transcriptPath: undefined,
+  })
+})
+
+test("transcriptPath outranks sessionId, because agentStop's sessionId is not the directory", () => {
+  const root = mkdtempSync(pjoin(tmpdir(), "maestro-resolve-"))
+  const log = pjoin(root, "explicit.jsonl")
+  writeFileSync(log, "")
+  // agentStop carries a sessionId that is NOT the session-state directory name,
+  // so an implementation preferring it would resolve the wrong log.
+  assert.equal(resolveSessionLog("/nowhere", "df0af405-not-a-directory", log), log)
+})
+
+test("a bad sessionId cannot escape the session-state root", () => {
+  assert.equal(resolveSessionLog("/nowhere", "../../etc/passwd"), null)
+  assert.equal(resolveSessionLog("/nowhere", "has space"), null)
+})
+
+test("resolution falls back to the cwd heuristic only when given nothing exact", () => {
+  // No identity and no matching workspace.yaml anywhere: null, never a guess.
+  assert.equal(resolveSessionLog("/definitely/not/a/real/cwd/for/any/session"), null)
+})
