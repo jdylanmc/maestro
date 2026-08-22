@@ -227,9 +227,8 @@ test("dismissing cannot hide running work", () => {
 
 // --- session resolution (#33) ------------------------------------------------
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join as pjoin } from "node:path"
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
+import { basename, join as pjoin } from "node:path"
 import { parseSessionIdentity } from "../src/runtime/events.js"
 import { resolveSessionLog } from "../src/tree.js"
 
@@ -249,8 +248,9 @@ test("every hook payload's sessionId and transcriptPath are parsed, not discarde
   })
 })
 
-test("transcriptPath outranks sessionId, because agentStop's sessionId is not the directory", () => {
-  const root = mkdtempSync(pjoin(tmpdir(), "maestro-resolve-"))
+test("transcriptPath outranks sessionId, because agentStop's sessionId is not the directory", (t) => {
+  const root = mkdtempSync(pjoin(process.cwd(), ".maestro-resolve-"))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
   const log = pjoin(root, "explicit.jsonl")
   writeFileSync(log, "")
   // agentStop carries a sessionId that is NOT the session-state directory name,
@@ -263,7 +263,41 @@ test("a bad sessionId cannot escape the session-state root", () => {
   assert.equal(resolveSessionLog("/nowhere", "has space"), null)
 })
 
-test("resolution falls back to the cwd heuristic only when given nothing exact", () => {
-  // No identity and no matching workspace.yaml anywhere: null, never a guess.
-  assert.equal(resolveSessionLog("/definitely/not/a/real/cwd/for/any/session"), null)
+test("session identity prevents cross-contamination when cwd is shared", (t) => {
+  const root = mkdtempSync(pjoin(process.cwd(), ".maestro-resolve-"))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const cwd = "/shared/repository"
+  const firstDir = mkdtempSync(pjoin(root, "session-a-"))
+  const secondDir = mkdtempSync(pjoin(root, "session-b-"))
+  writeFileSync(pjoin(firstDir, "workspace.yaml"), `cwd: ${cwd}\n`)
+  writeFileSync(pjoin(secondDir, "workspace.yaml"), `cwd: ${cwd}\n`)
+  const firstLog = pjoin(firstDir, "events.jsonl")
+  const secondLog = pjoin(secondDir, "events.jsonl")
+  writeFileSync(firstLog, '{"session":"a"}\n')
+  writeFileSync(secondLog, '{"session":"b"}\n')
+  utimesSync(firstLog, new Date(1_000), new Date(1_000))
+  utimesSync(secondLog, new Date(2_000), new Date(2_000))
+  const explicitLog = pjoin(root, "explicit.jsonl")
+  const missingLog = pjoin(root, "missing.jsonl")
+  writeFileSync(explicitLog, "")
+
+  assert.equal(resolveSessionLog(cwd, basename(secondDir), explicitLog, root), explicitLog)
+  assert.equal(resolveSessionLog(cwd, basename(firstDir), missingLog, root), firstLog)
+  assert.equal(resolveSessionLog(cwd, basename(secondDir), undefined, root), secondLog)
+  assert.equal(resolveSessionLog(cwd, undefined, undefined, root), null)
+})
+
+test("resolution falls back to cwd only when it identifies one session", (t) => {
+  const root = mkdtempSync(pjoin(process.cwd(), ".maestro-resolve-"))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const cwd = "/one/session/repository"
+  const sessionDir = mkdtempSync(pjoin(root, "only-session-"))
+  writeFileSync(pjoin(sessionDir, "workspace.yaml"), `cwd: ${cwd}\n`)
+  writeFileSync(pjoin(sessionDir, "events.jsonl"), "")
+
+  assert.equal(
+    resolveSessionLog(cwd, undefined, undefined, root),
+    pjoin(sessionDir, "events.jsonl"),
+  )
+  assert.equal(resolveSessionLog(cwd, undefined, pjoin(root, "missing.jsonl"), root), null)
 })

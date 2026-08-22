@@ -121,39 +121,41 @@ export function detectAttention(logPath: string): Attention | undefined {
  * Order matters and is measured:
  *   1. `transcriptPath` - `agentStop` names the log file outright.
  *   2. `sessionId` - every other hook carries it, and it IS the directory name.
- *   3. `cwd` + newest mtime - the original guess, kept only as a last resort.
+ *   3. unique `cwd` match - accepted only when one session records that cwd.
  *
- * Step 3 alone silently bound the wrong Session in a live measurement, because
- * `workspace.yaml` can record a cwd the Session is not actually running in.
+ * The old cwd + newest-mtime guess silently bound the wrong Session in a live
+ * measurement. Ambiguous cwd fallback therefore fails closed.
  */
 export function resolveSessionLog(
   cwd: string,
   sessionId?: string,
   transcriptPath?: string,
+  sessionsRoot = SESSIONS,
 ): string | null {
   try {
     if (transcriptPath && statSync(transcriptPath).isFile()) return transcriptPath
   } catch {
-    /* fall through */
+    /* try the next exact identity */
   }
   if (sessionId && /^[A-Za-z0-9._-]+$/.test(sessionId)) {
-    const direct = join(SESSIONS, sessionId, "events.jsonl")
+    const direct = join(sessionsRoot, sessionId, "events.jsonl")
     try {
       if (statSync(direct).isFile()) return direct
     } catch {
-      /* fall through */
+      /* no exact match */
     }
   }
-  const dir = findSessionDir(cwd)
+  if (transcriptPath !== undefined || sessionId !== undefined) return null
+  const dir = findSessionDir(cwd, sessionsRoot)
   return dir ? join(dir, "events.jsonl") : null
 }
 
-/** Locate the session whose working directory is `cwd`, most recent first. */
-export function findSessionDir(cwd: string): string | null {
+/** Locate the unique session whose working directory is `cwd`. */
+export function findSessionDir(cwd: string, sessionsRoot = SESSIONS): string | null {
   try {
-    let best: { dir: string; mtime: number } | null = null
-    for (const entry of readdirSync(SESSIONS)) {
-      const dir = join(SESSIONS, entry)
+    let match: string | null = null
+    for (const entry of readdirSync(sessionsRoot)) {
+      const dir = join(sessionsRoot, entry)
       let yaml: string
       try {
         yaml = readFileSync(join(dir, "workspace.yaml"), "utf8")
@@ -162,15 +164,10 @@ export function findSessionDir(cwd: string): string | null {
       }
       const m = /^cwd:\s*(.+)$/m.exec(yaml)
       if (!m || (m[1] ?? "").trim() !== cwd) continue
-      let mtime = 0
-      try {
-        mtime = statSync(join(dir, "events.jsonl")).mtimeMs
-      } catch {
-        /* a session with no log yet is still a candidate */
-      }
-      if (!best || mtime > best.mtime) best = { dir, mtime }
+      if (match) return null
+      match = dir
     }
-    return best ? best.dir : null
+    return match
   } catch {
     return null
   }
