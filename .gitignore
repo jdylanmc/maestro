@@ -28,3 +28,12 @@ node_modules/
 
 # Disposable discovery prototypes; never committed
 .discovery-prototypes/
+
+# Skill Run Logs written by agent skills; machine-local diagnostics.
+.skill-log/
+
+# Session handoff documents; machine-local working state.
+/*--*.md
+
+# Node diagnostic and crash reports.
+report.*.json
