@@ -2,7 +2,7 @@
 schema-version: 1
 state-root: docs/discovery
 sessions: 1
-last-updated-cycle: maestro-graphical-agent-orchestrator/c-0029
+last-updated-cycle: maestro-graphical-agent-orchestrator/c-0030
 ---
 
 # Primary Discovery Map - Maestro
@@ -18,7 +18,7 @@ adds the live parent-child subagent tree where cmux has no native equivalent.
 
 | Session | Kind | Priority | Maturity | Active fog | Major blockers | Package |
 | --- | --- | --- | --- | --- | --- | --- |
-| maestro-graphical-agent-orchestrator | vertical | P0 | researched | The plugin and custom sidebar run end to end. Open fog is now bounded to complete event-log reads, exact Session identity, replacement of the transitional workspace-description wire format, reliable live lifecycle state, cmux hook-store duplication, restore correctness, and deliberate visual polish. | cmux's native hooks remained `idle` during active tool work; its restore action generated an invalid `-C` invocation; and its store accumulated many records for the same process/transcript. Maestro therefore still needs a fail-open hook fallback and cannot yet delegate all Session state or restore behavior to cmux. | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
+| maestro-graphical-agent-orchestrator | vertical | P0 | researched | The plugin, its custom sidebar, and its attention surface run end to end. Open fog is bounded to complete event-log reads, exact Session identity beyond the surface binding, replacement of the transitional workspace-description wire format, cmux hook-store duplication, restore correctness, and whether the plugin has a visible mark at all. | cmux's restore action generated an invalid `-C` invocation, and its hook store accumulates many records for the same process/transcript, so neither restore nor store identity can be inherited. Native lifecycle is **no longer a blocker**: c-0030 moved Maestro's own state onto the Copilot event log, from which Attention is derived rather than stored. The registered `notification` and `agentStop` hooks have not yet been observed firing end to end, because Copilot binds plugins at session start. | [discovery.md](./sessions/maestro-graphical-agent-orchestrator/discovery.md) |
 
 ## Typed Session Links
 
@@ -36,5 +36,10 @@ adds the live parent-child subagent tree where cmux has no native equivalent.
 - Maestro is observability-only: no worktree enforcement, durable orchestration
   intent, process sweeping, standalone application, or command surface.
 - An observer is always fail-open and never gains authority over a tool call.
+  `preToolUse` is **not registered**: its blast radius is every tool call in
+  every live Session, and c-0030 removed it once Attention became derivable from
+  the event log.
+- Retired prototypes live under `archive/` and are inert. `maestro-cmux/` is the
+  only live surface.
 - Credentials, personal data, employer configuration, machine-specific paths,
   and runtime state stay outside the repository.

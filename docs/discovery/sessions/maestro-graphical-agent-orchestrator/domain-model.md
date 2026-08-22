@@ -17,7 +17,12 @@ after Maestro narrowed from an orchestrator to an observability plugin.
   is the only domain concept naming something Maestro itself produces.
 - **Liveness** is the observed `Alive`, `Dead`, or `Ambiguous` process-evidence
   verdict for a Session.
-- **Attention** means a Session is observed to want its human.
+- **Attention** means a Session is observed to want its human. c-0030 settled
+  how it behaves: it is a **mirror of runtime state**, not a notification with a
+  lifetime. It persists for exactly as long as the Session is stopped and
+  resolves when work resumes. It is **derived** from the event log - a
+  `permission.requested` unmatched by a `permission.completed` - never stored as
+  a flag one hook sets and another clears.
 - The **Host Application** owns the Session process lifetime and the operating
   system identity attributed to its permission prompts. For the current route,
   cmux is the Host Application and Maestro runs inside it.
@@ -37,3 +42,13 @@ application. Existing checkpoints keep the historical wording.
   so one stored row cannot currently be treated as one Session.
 - cmux's documented lifecycle vocabulary is not yet reliable evidence for live
   work. c-0029 observed only `idle`, including during a ten-second tool call.
+  **c-0030 made this non-blocking:** Maestro derives its own state from the
+  Copilot event log, so the native lifecycle is no longer on the critical path.
+- A **failed subagent is not an observable domain state.** `subagent.failed` is
+  declared in the SDK typings but was never emitted across 60 measured sessions,
+  and `subagent.completed` carries no success flag. The tree distinguishes
+  running from completed only. Recorded here because two cycles treated the
+  declared vocabulary as a domain fact.
+- **Attention kind** - `permission`, `question`, `turn` - is an implementation
+  discrimination, not a new domain term. `Attention` already carries the broad
+  reading confirmed in c-0016; these are sub-cases of it.

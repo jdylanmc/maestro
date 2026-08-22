@@ -2114,3 +2114,214 @@ pre-install file. Copilot's own rewrite already restored `config.json` to
 semantically identical content, so rollback is now only
 `cmux hooks copilot uninstall` plus removing the `hooks` key from
 `settings.json` by hand if that command misses it.
+
+## c-0030 - A hook cannot report a blocked Session, and two unavailability claims were wrong
+
+Every measurement below was taken in the parent loop against live Sessions and
+the running cmux, not delegated and not read from documentation.
+
+### The structural finding: a hook-driven observer cannot report a blocked Session
+
+Ordering measured directly around a real permission request:
+
+```text
+2325  14:16:25.417  tool.execution_start     bash
+2326  14:16:25.421  hook.start               preToolUse
+2327  14:16:25.552  hook.end                 preToolUse
+2328  14:16:27.340  permission.requested     4c8e1776-...
+2329  14:16:27.371  permission.completed     4c8e1776-...
+```
+
+`preToolUse` fires **before the permission request exists**, and while the
+operator is being waited on **no hook fires at all**. The mechanism that would
+report "I am blocked" is idle exactly when the state is true. This generalises
+the #36 staleness defect from an accident into a structural property.
+
+The waits are real, not theoretical. Across 135 requests in one session:
+min 0.013 s, median 0.025 s, max **13432 s (3.7 hours)**, with 5 waits over 5 s.
+
+### Two hooks Maestro never registered
+
+| hookType | Count | Payload |
+| --- | --- | --- |
+| `notification` | 146 | `notificationType`, `title`, `message`, `sessionId`, `cwd`, `timestamp` |
+| `agentStop` | 51 | `stopReason`, `sessionId`, `transcriptPath`, `cwd`, `timestamp` |
+
+`notificationType` values: `permission_prompt` 135, `agent_idle` 7,
+`elicitation_dialog` 2, `shell_completed` 1, `shell_detached_completed` 1. Only
+the first two **block** the Session. `stopReason` was `end_turn` on all 51.
+
+`notification.message` for a permission prompt is the **full command text** -
+observed carrying a local tool invocation, redacted here - and must never be
+published. Only `title` is safe.
+
+This entry was itself caught by `scripts/check-public.sh` on the first commit
+attempt, because the illustrative value quoted verbatim was employer-specific.
+The hazard was documented and reproduced in the same sentence that warns about
+it, which is the strongest available argument for the rule.
+
+### Attention is attributable per subagent
+
+`permission.requested` carries **no** `agentId` - 0 of 129 - but carries
+`data.permissionRequest.toolCallId`, which joins to
+`tool.execution_start.data.toolCallId`, which carries a **top-level** `agentId`.
+The join resolved requests to named subagents (`sidebar-auditor`,
+`Initialize discovery chronicle`). c-0012 and c-0024 established the predicate at
+Session level only; it is per-subagent.
+
+A first attempt at this measurement produced a plausible table showing
+`129 SUBAGENT` - built entirely from guessed field names (`data.name`,
+`data.agentId`) that were all `None`. It was discarded and re-run against dumped
+payload shapes. **A confident aggregate over fields that do not exist looks
+exactly like a real result.**
+
+### `subagent.failed` does not exist
+
+c-0016 recorded, from SDK typings: *"Subagent vocabulary is richer than c-0010
+recorded: `subagent.started`, `subagent.completed`, **`subagent.failed`**,
+`subagent.selected`, `subagent.deselected`. A failed subagent is a distinct
+terminal state the tree must show."* c-0020 repeated it from the same source.
+
+Measured across the 60 most recent local sessions:
+
+| Event | Count |
+| --- | --- |
+| `subagent.started` | 133 |
+| `subagent.completed` | 132 |
+| `subagent.failed` | **0** |
+
+`subagent.completed` carries no success flag - only `toolCallId`, `agentName`,
+`agentDisplayName`, `model`, `totalToolCalls`, `totalTokens`, `durationMs`. A
+failed subagent is **indistinguishable from a successful one**, and the red
+`xmark` requirement had only ever rendered from hand-written fixtures.
+
+**The type is declared; the event is not emitted.** Both cycles read a
+declaration and recorded a behaviour. This is the same evidence class that
+produced the c-0006 spawn requirement falsified by c-0009, and the c-0014 seam
+decision taken on typings - the third instance, and the one that survived
+longest, nine cycles.
+
+### The attention hooks were never registered, so no badge has ever been real
+
+`hooks.json` is **generated** by `install.sh` from a hardcoded list, not shipped.
+Editing it by hand is discarded at the next install. The installed plugin carried
+only `errorOccurred, postToolUse, preToolUse, sessionEnd, sessionStart,
+userPromptSubmitted`. Every ASK badge observed during development came from a
+hand-injected description fixture. Corrected: `install.sh` is the single source
+of truth, its fail-open loop covers all eight hooks, and both new hooks are
+verified silent-and-zero across 12 payload shapes.
+
+### The sidebar's animation ceiling, measured
+
+`clock.epoch` returns **seconds** - `1787427474`, ten digits - and the sidebar
+re-renders about once a second, so anything hand-drawn from `clock` is capped at
+**1 fps**. There is no `withAnimation`, `.animation`, `.transition`, or
+`symbolEffect`, and no CSS.
+
+A throwaway probe sidebar established what renders: `ProgressView()`,
+`ProgressView(value:)`, `Gauge`, `Circle().trim().stroke()`, `.shadow`, `.blur`,
+`.opacity`, `.scaleEffect`. **`ProgressView()` resolves to a native
+`AXBusyIndicator`** - an AppKit `NSProgressIndicator` - which animates itself at
+native framerate, independent of the tick. It renders 32x32 raw and needs
+`.scaleEffect` plus an explicit `.frame`; `.controlSize(.small)` also works
+despite being absent from the documented modifier list. `.tint()` does **not**
+apply to it.
+
+**Hover is impossible, and it is documented upstream**, not merely unmeasured:
+the sidebar authoring guide states input is *"limited to forwarded clicks (no
+hover, focus, or keyboard)"*.
+
+### Surface ownership is publishable, not inferable
+
+`CMUX_SURFACE_ID` in the plugin's environment is byte-identical to the surface
+UUID cmux reports, and to the sidebar's `t.id`:
+
+```console
+$ cmux list-pane-surfaces --id-format uuids --workspace workspace:1
+* 06DF8701-7CFD-428E-99D2-85F43C0EEDD2  MAESTRO  [selected]
+$ echo $CMUX_SURFACE_ID
+06DF8701-7CFD-428E-99D2-85F43C0EEDD2
+```
+
+So Maestro **publishes** the owning surface rather than inferring it. The
+alternative considered and rejected was the `" - GitHub Copilot"` title suffix
+Copilot sets: every Copilot Session is `type: "terminal"` to cmux, because
+Copilot is launched as a shell command rather than via
+`new-surface --type agent-session`, so cmux genuinely has no type to expose.
+
+`workspace.action` exists as a generic RPC dispatcher accepting `set-description`,
+and `cmux workspace list --json` returns the stored description - together these
+let the sidebar mutate state on tap and let the plugin read back what the
+operator dismissed.
+
+### Context percentage: an unavailability claim that was wrong twice
+
+The first scan covered only `assistant.turn_end`, `assistant.message`, and
+`subagent.completed`, and concluded no context data exists. Scanning **every**
+event type found otherwise:
+
+| Event | Fields | Measured |
+| --- | --- | --- |
+| `session.compaction_start` | `currentTokens`, `conversationTokens`, `systemTokens`, `toolDefinitionsTokens` | `currentTokens = 644933` |
+| `session.compaction_complete` | **`tokenLimit`**, `preCompactionTokens`, `postCompactionTokens`, `tokensRemoved` | **`tokenLimit = 936000`** |
+| `session.start`, `session.model_change` | `contextTier` | `long_context` |
+
+Both fire only at compaction, and `assistant.turn_end` carries only `{turnId}`,
+so there is still no live numerator in the log.
+
+**But Copilot publishes the figure itself, and cmux can read it:**
+
+```console
+$ cmux read-screen --surface 06DF8701-...
+ Claude Opus 5 · Medium · 1M context (40%)
+```
+
+Measured across live Sessions in three workspaces: `1M context (21%)`,
+`1.1M context (14%)`, `1M context (40%)`. This is the runtime's own number, not
+an estimate. It also yields the Session's model and effort, closing the gap left
+by `assistant.turn_start.data.model` being null in all 260 measured turns.
+`read-screen` was measured available in c-0021 and never connected to this
+question.
+
+Limitations: it is screen-scraping; the tier string varies; it requires the
+status line in the **visible viewport** (one of three Sessions returned no match
+for that reason, so absence must be treated as unknown, never as zero); it costs
+one subprocess per Session per publish; and it works only from inside cmux.
+
+### Other runtime facts
+
+- `skill.invoked` exists with `name, path, content, allowedTools, source,
+  pluginName, pluginVersion, description, trigger, model`. There is **no
+  `skill.completed`**, so "currently running skill" is unknowable; only "last
+  invoked" is. `content` is the full skill markdown and must never be published.
+- `subagent.started.data.model` gives a per-subagent model
+  (`gpt-5.6-luna` x34, `gpt-5.5` x1).
+- A legacy `~/.copilot/hooks/maestro-herdr-fleet.json` from the retired herdr
+  prototype is still registered globally and still executes on session start,
+  session end, and every tool call. Disclosed, not removed - it is outside this
+  loop's write scope.
+
+### Repository scope change
+
+`proto-v1/`, `proto-v2.0/`, `harness/`, and `v2/` were moved to `archive/` in
+commit `59a785a`, with an `archive/README.md` marking them inert. Nothing in
+`maestro-cmux/` references them; only `README.md` and `AGENTS.md` did, and both
+were updated. This is the repository catching up with the c-0025 route
+retirement, and it is what makes n-0001 and n-0009 concretely dead rather than
+merely superseded.
+
+### Limitations of this cycle
+
+- The `notification` and `agentStop` hooks are **registered but have never been
+  observed firing into Maestro**. Copilot binds plugins at session start, so
+  every Session running during this cycle carried the old six-hook set. The
+  end-to-end ASK path is unproven and needs a newly started Session.
+- The derived-Attention design is decided, not implemented; the plugin still
+  stores the flag.
+- The per-subagent attention join is measured on completed requests only. No
+  unmatched request was observed live this cycle (129 requested, 129 completed).
+- Context-percentage scraping was measured on three Sessions on one machine, one
+  cmux version, one Copilot version.
+- The 60-session `subagent.failed` scan reads only the last 4 MB of each log, so
+  it bounds the observed frequency at zero rather than proving the event can
+  never be emitted.
