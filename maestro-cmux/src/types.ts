@@ -130,6 +130,16 @@ export interface RuntimeState {
     | undefined
   lastSessionEndReason: SessionEndReason | undefined
   attention: Attention | undefined
+  /**
+   * Names of finished subagents the operator dismissed from the sidebar.
+   *
+   * Dismissal happens in the SIDEBAR, which can only rewrite the workspace
+   * description - it has no state of its own. So the plugin reads the
+   * description back before publishing, and any finished agent it computed but
+   * that is no longer present was dismissed. Without this the next hook would
+   * resurrect every dismissed row within seconds.
+   */
+  dismissed: string[]
 }
 
 export interface SessionStartHookInput {

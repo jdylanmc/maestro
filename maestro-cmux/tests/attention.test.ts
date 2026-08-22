@@ -130,3 +130,97 @@ test("a label is truncated rather than allowed to consume the description", () =
   const row = encodeAttention({ kind: "question", label: "q".repeat(500), since: 1 })
   assert.ok(row.length <= 48, `row was ${row.length} chars`)
 })
+
+// --- ordering and retention -------------------------------------------------
+
+import { detectDismissed, encodeTree, RETAIN_MS, ROW_SEP, type Subagent } from "../src/tree.js"
+
+function agent(over: Partial<Subagent>): Subagent {
+  return {
+    name: "a",
+    kind: "",
+    status: "run",
+    parent: null,
+    tools: 0,
+    doneAt: undefined,
+    ...over,
+  }
+}
+
+test("running subagents sort above finished ones", () => {
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "done-first", status: "ok", doneAt: Date.now() })],
+    ["2", agent({ name: "still-running", status: "run" })],
+  ])
+  const rows = encodeTree(subs).split(ROW_SEP)
+  assert.match(rows[0] ?? "", /still-running/)
+  assert.match(rows[1] ?? "", /done-first/)
+})
+
+test("sorting never separates a child from its parent", () => {
+  // The flat-sort bug: a finished parent sorts down, and its running child
+  // would be left behind under an unrelated parent.
+  const subs = new Map<string, Subagent>([
+    ["p1", agent({ name: "parent-finished", status: "ok", doneAt: Date.now() })],
+    ["c1", agent({ name: "child-running", status: "run", parent: "p1" })],
+    ["p2", agent({ name: "parent-running", status: "run" })],
+  ])
+  const rows = encodeTree(subs).split(ROW_SEP)
+  const at = (n: string) => rows.findIndex((r) => r.includes(n))
+
+  // The child must immediately follow its own parent, wherever that lands.
+  assert.equal(at("child-running"), at("parent-finished") + 1)
+  // And it must be recorded as a child, not promoted to a root.
+  assert.equal((rows[at("child-running")] ?? "").split(" ")[0], "1")
+})
+
+test("a subagent finished longer ago than RETAIN_MS is retired", () => {
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "recent", status: "ok", doneAt: now - 60_000 })],
+    ["2", agent({ name: "ancient", status: "ok", doneAt: now - RETAIN_MS - 1 })],
+  ])
+  const encoded = encodeTree(subs, now)
+  assert.match(encoded, /recent/)
+  assert.doesNotMatch(encoded, /ancient/)
+})
+
+test("a running subagent is never retired, however old", () => {
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([["1", agent({ name: "long-runner", status: "run" })]])
+  assert.match(encodeTree(subs, now), /long-runner/)
+})
+
+// --- dismissal --------------------------------------------------------------
+
+test("a finished agent absent from the published description counts as dismissed", () => {
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "kept", status: "ok", doneAt: Date.now() })],
+    ["2", agent({ name: "clicked-away", status: "ok", doneAt: Date.now() })],
+  ])
+  const published = "@ o surface¦0 v kept"
+  assert.deepEqual(detectDismissed(subs, published), ["clicked-away"])
+})
+
+test("a RUNNING agent absent from the description is never treated as dismissed", () => {
+  // An absent running agent means a stale or truncated description, not intent.
+  const subs = new Map<string, Subagent>([["1", agent({ name: "still-going", status: "run" })]])
+  assert.deepEqual(detectDismissed(subs, "@ o surface"), [])
+})
+
+test("a dismissed agent stays hidden on the next publish", () => {
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "gone", status: "ok", doneAt: now })],
+    ["2", agent({ name: "stays", status: "ok", doneAt: now })],
+  ])
+  const encoded = encodeTree(subs, now, new Set(["gone"]))
+  assert.doesNotMatch(encoded, /gone/)
+  assert.match(encoded, /stays/)
+})
+
+test("dismissing cannot hide running work", () => {
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([["1", agent({ name: "busy", status: "run" })]])
+  assert.match(encodeTree(subs, now, new Set(["busy"])), /busy/)
+})

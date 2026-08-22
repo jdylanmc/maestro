@@ -1,11 +1,11 @@
 import { execFile } from "node:child_process"
-import { basename } from "node:path"
+import { basename, join } from "node:path"
 import { createCmuxClient } from "../cmux/client.js"
 import { detectCmuxEnvironment } from "../cmux/detect.js"
 import { loadConfig } from "../config.js"
 import { createLogger } from "../logger.js"
 import { summarizeText } from "../text.js"
-import { summarize } from "../tree.js"
+import { buildTree, detectDismissed, findSessionDir, summarize } from "../tree.js"
 import type {
   CmuxClient,
   HookLogger,
@@ -18,6 +18,28 @@ import { type CopilotHookEvent, parseHookInput } from "./events.js"
 import { createRuntimeState, reduceRuntimeState } from "./reducer.js"
 import { buildPresentationSnapshot } from "./renderer.js"
 import { cleanupStaleStateFiles, withRuntimeState } from "./state-store.js"
+
+/** The workspace description as cmux currently holds it, or undefined. */
+async function readPublishedDescription(
+  binary: string,
+  workspaceID: string | undefined,
+): Promise<string | undefined> {
+  if (!workspaceID) return undefined
+  return new Promise((resolve) => {
+    execFile(binary, ["workspace", "list", "--json"], { timeout: 4000 }, (err, stdout) => {
+      if (err) return resolve(undefined)
+      try {
+        const parsed = JSON.parse(stdout) as {
+          workspaces?: Array<{ id?: string; description?: string | null }>
+        }
+        const row = parsed.workspaces?.find((w) => w.id === workspaceID)
+        resolve(row?.description ?? undefined)
+      } catch {
+        resolve(undefined)
+      }
+    })
+  })
+}
 
 function isFileEditTool(toolName: string): boolean {
   return toolName === "edit" || toolName === "create"
@@ -282,8 +304,35 @@ export async function processHook(
   //
   // It runs last, after the pills and logs the rest of the plugin emits, and it
   // cannot fail the hook: a thrown error here would deny a tool call.
+  // Learn what the operator dismissed, then honour it.
+  //
+  // Dismissal happens in the sidebar, which can only rewrite the workspace
+  // description. So the published description is read back and compared with
+  // the computed tree: a FINISHED agent we computed but that is no longer
+  // published was dismissed by hand. That name is remembered in runtime state,
+  // because the very next publish would otherwise resurrect it.
+  const dismissed = new Set<string>()
   try {
-    const tree = summarize(event.cwd, attention, environment.surfaceID)
+    const dir = findSessionDir(event.cwd)
+    if (dir) {
+      const published = await readPublishedDescription(config.cmuxBin, environment.workspaceID)
+      if (published !== undefined) {
+        const subs = buildTree(join(dir, "events.jsonl"))
+        for (const name of detectDismissed(subs, published)) dismissed.add(name)
+      }
+    }
+  } catch {
+    /* dismissal is a convenience; never let it break a hook */
+  }
+
+  await withRuntimeState(event.cwd, environment.workspaceID, async (current) => {
+    if (!current) return current
+    for (const n of current.dismissed) dismissed.add(n)
+    return { ...current, dismissed: Array.from(dismissed) }
+  })
+
+  try {
+    const tree = summarize(event.cwd, attention, environment.surfaceID, dismissed)
     if (tree) {
       await new Promise<void>((resolve) => {
         execFile(

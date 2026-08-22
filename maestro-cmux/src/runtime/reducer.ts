@@ -26,6 +26,7 @@ export function createRuntimeState(
     lastError: undefined,
     lastSessionEndReason: undefined,
     attention: undefined,
+    dismissed: [],
   }
 }
 
@@ -114,6 +115,7 @@ export function reduceRuntimeState(
         lastError: undefined,
         lastSessionEndReason: undefined,
         attention: undefined,
+        dismissed: [],
       }
     }
 

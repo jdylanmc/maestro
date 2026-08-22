@@ -68,6 +68,20 @@ func ownerOf(_ d: String) -> String {
     return hits.count > 0 ? part(hits[0], 2) : ""
 }
 
+/** The description with one row removed, for click-to-dismiss.
+ *
+ *  There is no hover state to lean on: the upstream sidebar guide is explicit
+ *  that "input is limited to forwarded clicks (no hover, focus, or keyboard)".
+ *  So a finished agent cannot be crossed out on hover - it is simply tappable,
+ *  and tapping removes it.
+ *
+ *  `reduce` is used to rejoin because it is the same construct `nameOf` already
+ *  relies on; `joined(separator:)` is undocumented here and untested. */
+func without(_ d: String, _ row: String) -> String {
+    return rowsOf(d).filter { $0 != row }
+        .reduce("") { $0 == "" ? $1 : $0 + "¦" + $1 }
+}
+
 /** Subagents hang off their owning Copilot surface, so they indent one level
  *  deeper than the tab row they belong to. */
 func treeIndent(_ row: String) -> Int {
@@ -310,6 +324,13 @@ VStack(alignment: .leading, spacing: 0) {
                                             Spacer(minLength: 0)
                                         }
                                         .padding(4)
+                                        .help(part(row, 1) == "v" ? "Click to dismiss" : nameOf(row))
+                                        .onTapGesture {
+                                            cmux("workspace.action",
+                                                 workspace_id: w.id,
+                                                 action: "set-description",
+                                                 description: without(d, row))
+                                        }
                                     }
                                     if liveRows(d).count > 10 {
                                         HStack(spacing: 6) {

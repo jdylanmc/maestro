@@ -180,7 +180,14 @@ export function flatten(subs: Map<string, Subagent>): Array<[number, Subagent]> 
   const rows: Array<[number, Subagent]> = []
   const seen = new Set<string>()
   const walk = (parent: string | null, depth: number) => {
-    for (const id of kids.get(parent) ?? []) {
+    // Running siblings sort above finished ones. This MUST happen per sibling
+    // group rather than on the flattened rows: flattening emits a parent
+    // immediately followed by its children, so re-ordering the flat list would
+    // silently re-parent a child under whatever row sorted above it.
+    const group = [...(kids.get(parent) ?? [])].sort(
+      (a, b) => rank(subs.get(a)?.status ?? "ok") - rank(subs.get(b)?.status ?? "ok"),
+    )
+    for (const id of group) {
       if (seen.has(id)) continue
       seen.add(id)
       const s = subs.get(id)
@@ -274,18 +281,50 @@ export function encodeAttention(attention: Attention): string {
   return `${ATTENTION_MARK} ${ATTENTION_GLYPH[attention.kind]} ${label}`
 }
 
-export function encodeTree(subs: Map<string, Subagent>, now: number = Date.now()): string {
+/** Running sorts before finished. */
+function rank(status: SubagentStatus): number {
+  return status === "run" ? 0 : 1
+}
+
+export function encodeTree(
+  subs: Map<string, Subagent>,
+  now: number = Date.now(),
+  dismissed: ReadonlySet<string> = new Set(),
+): string {
   const clean = (v: string, n: number) =>
     v
       .replace(/[\n\r¦]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, n)
-  return flatten(subs)
-    .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < RETAIN_MS)
-    .slice(0, 60)
-    .map(([depth, s]) => `${Math.min(depth, 6)} ${GLYPH[s.status]} ${clean(s.name, 44)}`)
-    .join(ROW_SEP)
+  return (
+    flatten(subs)
+      .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < RETAIN_MS)
+      // A dismissed agent stays dismissed. Only FINISHED work can be dismissed -
+      // a running agent is never hidden, however emphatically it is clicked.
+      .filter(([, s]) => s.status !== "ok" || !dismissed.has(s.name))
+      .slice(0, 60)
+      .map(([depth, s]) => `${Math.min(depth, 6)} ${GLYPH[s.status]} ${clean(s.name, 44)}`)
+      .join(ROW_SEP)
+  )
+}
+
+/**
+ * Finished agents that were computed but are absent from `published`.
+ *
+ * The sidebar dismisses a row by rewriting the workspace description, because
+ * it has no state of its own. Reading the description back is therefore the
+ * only way to learn what the operator dismissed. Running agents are never
+ * treated as dismissed: an absent running agent means a stale or truncated
+ * description, not an intent to hide live work.
+ */
+export function detectDismissed(subs: Map<string, Subagent>, published: string): string[] {
+  const out: string[] = []
+  for (const s of subs.values()) {
+    if (s.status !== "ok") continue
+    if (!published.includes(s.name)) out.push(s.name)
+  }
+  return out
 }
 
 export interface TreeSummary {
@@ -308,6 +347,7 @@ export function summarize(
   cwd: string,
   attention?: Attention,
   surfaceID?: string,
+  dismissed: ReadonlySet<string> = new Set(),
 ): TreeSummary | null {
   try {
     const dir = findSessionDir(cwd)
@@ -322,7 +362,7 @@ export function summarize(
     const rows = [
       ...(surfaceID ? [encodeOwner(surfaceID)] : []),
       ...(attention ? [encodeAttention(attention)] : []),
-      ...(subs.size > 0 ? [encodeTree(subs)] : []),
+      ...(subs.size > 0 ? [encodeTree(subs, Date.now(), dismissed)] : []),
     ]
     return { total: subs.size, running, failed, attention, encoded: rows.join(ROW_SEP) }
   } catch {
