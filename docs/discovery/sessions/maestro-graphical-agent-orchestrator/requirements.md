@@ -1,391 +1,92 @@
-# Requirements - Maestro Graphical Agent Orchestrator
+# Requirements - Maestro Observability Plugin
 
-> **Terminology confirmed in c-0008.** The canonical glossary is the repository
-> root [`CONTEXT.md`](../../../../CONTEXT.md), published by `/domain-mapping`.
-> It is authoritative over any wording below. Two c-0007 definitions were
-> corrected there: a Fleet does **not** require a Worktree, and every subagent is
-> a Task while not every Task is a subagent.
->
-> **Terminology changed in c-0007.** The structural unit formerly called
-> `Session` is now a **Fleet**: one feature, one Worktree, one Copilot Session,
-> its subagent tree, and its durable state. `Session` now means only what the
-> Copilot runtime means by it. `Agent` and `Primary Agent` are no longer domain
-> entities; `Primary Agent` survives as an interface term only. Requirements
-> below that still read `Session` in a structural sense refer to a Fleet and are
-> reconciled progressively, with each reconciled item marked.
+The orchestration and multi-route requirements published before c-0025 are
+historical. Their full wording remains in immutable cycle checkpoints. This file
+is the current specification after the user settled Maestro's scope as an
+observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
 
 ## Confirmed requirements
 
-- The MVP contract is implementation-independent and shared across prototype routes. [Issue #18](https://github.com/jdylanmc/maestro/issues/18)
-- The product is visualization-first: named Sessions, one workspace and Primary Agent per Session, recursively nested Squadron visibility, structured activity, attention, outcomes, and targeted cancellation where supported. [Issue #12](https://github.com/jdylanmc/maestro/issues/12), [Issue #6](https://github.com/jdylanmc/maestro/issues/6)
-- macOS is the supported platform for current prototypes. [AGENTS.md](../../../AGENTS.md)
-- The first proving MVP is one complete real flow on one platform; cross-platform prototypes share the same functionality specification, while implementation tasks vary by platform. [c-0001](./cycles/c-0001.md)
-- ~~The first acceptance slice includes Session creation or resume, real Primary Agent chat, one structured delegated Squad Mate, Workspace and file context, targeted cancellation where supported, restart, and accurate reconciliation.~~ **Superseded in c-0011** by the scripted Acceptance Slice below. The c-0001 wording predates the Fleet vocabulary, names a `Squad Mate`, and is a list of capabilities rather than an executable flow, so it could never say whether a route had finished. [c-0001](./cycles/c-0001.md), [c-0011](./cycles/c-0011.md)
-
-### Acceptance slice and route sequencing
-
-**Confirmed in c-0011.**
-
-- ~~**All four routes are driven to a complete MVP.** v1.1 WezTerm, v2 Electron, v3 Tauri/Rust, and v4 native macOS Swift are each held to the whole [Issue #18](https://github.com/jdylanmc/maestro/issues/18) contract. They are explicitly **not** reduced to bounded feasibility probes; the loop recommended reduction and the user rejected it.~~ **Superseded in c-0018, struck through in c-0020.** The user split the decision by route rather than accepting or rejecting it wholesale: **v2 Electron and v1.1 WezTerm are committed to a complete MVP**, while **v3 Tauri/Rust and v4 native macOS Swift are reduced to bounded feasibility probes** under a `delegated-to-loop` disposition - each still producing an executive report, which c-0011 requires of every route including a rejected one. This bullet contradicted its own section for two cycles and was carried as a known defect; it is corrected here rather than silently rewritten, because the c-0011 decision was real and the record of its reversal is the point. [c-0011](./cycles/c-0011.md), [c-0018](./cycles/c-0018.md)
-- **Routes execute strictly one at a time**, in **evidence order rather than version order**: v2 Electron, then v1.1 WezTerm, then v3 Tauri/Rust, then v4 native macOS Swift. Electron leads because it is the only route carrying measured evidence ([c-0009](./cycles/c-0009.md)); starting elsewhere would strand it and reopen process ownership on an unproven route.
-- **One Acceptance Slice, identical across every route**, so the comparison is like-for-like. A route is complete when this flow runs end to end:
-  1. Create two named Fleets; each gets its own Worktree and branch, enforced.
-  2. Each Fleet presents its primary agent window, bound 1:1.
-  3. Prompt Fleet A; it delegates at least one subagent; the subagent tree renders live with correct parentage.
-  4. Select Fleet B; every panel re-scopes to it.
-  5. Fleet A hits a permission request; Attention surfaces on that Fleet, and on no other. *(c-0013 broadened this to "a state that requires the human" because ACP cannot surface a permission; **c-0014 withdrew that broadening** when the SDK proved it can. The wording the user confirmed is restored, so the delegation drift is paid back rather than compounded.)*
-  6. Quit through the pre-close summary; both Fleets auto-Park; **zero surviving processes**. Relaunch; both Fleets return with identity, history, Worktree, and recomputed Liveness; Fleet A's Session resumes by name.
-- Every step of the slice restates an already-confirmed requirement. The slice adds no scope; it makes the existing contract executable.
-- **Route scope was split by route in c-0018.** n-0003 (v2 Electron) and n-0004 (v1.1 WezTerm) are **committed to complete MVPs**, unconditionally. n-0005 (v3 Tauri/Rust) and n-0006 (v4 native macOS Swift) are **reduced to bounded feasibility probes**, each answering one decisive question and each still producing an executive report. The user committed the two routes carrying evidence and delegated the two carrying none: *"You can build Electron and WezTerm variants now and delegate the Swift and Rust variants if you recommend."* This partially reinstates the reduction the loop recommended in c-0011 and was overruled on; what changed is that each probe's question is now derived from per-route research rather than from a general cost argument. [c-0011](./cycles/c-0011.md), [c-0018](./cycles/c-0018.md)
-- **The two committed routes still run strictly one at a time, Electron first.** The c-0011 sequencing requirement survives the c-0018 commitment. Reason: the Acceptance Harness is shared and unbuilt, so building it against two routes concurrently lets it be shaped by whichever route is easier to instrument - the exact bias the State Oracle exists to prevent - and any harness defect would surface in both executive reports at once with no clean control. Decided by the loop under `delegated-to-loop`. [c-0018](./cycles/c-0018.md)
-- **Playwright cannot drive a Tauri application on macOS, and `tauri-driver` does not support macOS.** This corrects the c-0015 claim that "Tauri reaches Playwright through WebDriver". `WKWebView` exposes no Chrome DevTools Protocol, and Tauri's own documentation states that driving `tauri-driver` directly supports "only Windows and Linux ... as macOS has no WKWebView driver tool available". The working path is **WebdriverIO with `@wdio/tauri-service`**, which embeds a W3C WebDriver server *inside the application binary* - so a Tauri route must modify the product under test to make it testable, which no other route must do. CrabNebula's macOS driver is commercial. Appium's `mac2` driver reaches the accessibility layer but not the webview DOM. [c-0018](./cycles/c-0018.md)
-- **A native macOS Swift route has the strongest verification story of the four.** `XCUITest` is Apple's first-class framework and `XCUIApplication` drives an already-packaged `.app` by bundle identifier or file URL, with no test target compiled into the product. Costs specific to macOS rather than iOS: the runner needs Accessibility permission, an active graphical session (not pure headless), and there is no per-run sandbox reset, so state must be cleaned in teardown. [c-0018](./cycles/c-0018.md)
-- **Copilot SDK language-binding availability differs per route, and is a second rubric axis.** GitHub publishes official bindings for TypeScript, Python, Go, **Rust**, Java, and .NET, and **none for Swift**. Consequences: a Tauri/Rust route can consume the seam natively with no Node sidecar, and a Swift route must spawn a sidecar or hand-roll JSON-RPC against no published specification. Neither had been counted before c-0018. [c-0018](./cycles/c-0018.md)
-- **Each route produces an executive report** of that stack's pros and cons as a first-class deliverable, not a by-product.
-- **The executive report has a fixed five-section shape, and every rubric claim is a harness measurement rather than an assessment.** Settled in c-0019, answering the comparability question open since c-0011. The sections, in order: a lead **Recap** - what this route was and where it got to, for a reader returning without context; then the four rubric sections - (1) acceptance-slice result per step with the evidence that proved it, or `rejected` with the reason the stack could not build the application; (2) automation reach, with the manual residue **named**; (3) SDK language-binding path - native, sidecar, or hand-rolled - and what it cost; (4) process-ownership measurements, survivor count on graceful quit and after force-quit. A fifth free-text "stack character" section is explicitly **excluded from the rubric**, so impressions have somewhere to go that cannot contaminate the comparison. Fixing the sections is what lets n-0007 **consume** the four reports rather than re-derive the comparison from prose, which c-0011 required; requiring measurements over assessments is the direct lesson of c-0016, where a confident causal claim was simply wrong. [c-0011](./cycles/c-0011.md), [c-0018](./cycles/c-0018.md), [c-0019](./cycles/c-0019.md)
-- **The report's second job is re-orientation, and the user named it.** *"I may come back to a session and not remember what is going on and want a quick 'what were we doing and where are we at'."* This is why the Recap section leads rather than trails: a rubric is read by someone comparing, a Recap by someone returning. [c-0019](./cycles/c-0019.md)
-- **A stack that cannot build the app is rejected.** Rejection is a legitimate terminal verdict for a route, not a loop failure: the route still produces its report, is marked rejected, and the sequence advances.
-- **The comparative technology evaluation is a deliverable in its own right**, consuming the four executive reports rather than re-deriving the comparison. A rejected stack is an input to it - the reason it could not build the app is itself a finding.
-- **The Acceptance Slice is verified by an Acceptance Harness with two layers.** Settled in c-0015, refining the c-0012 decision.
-  - **State Oracle** - route-agnostic, asserting slice steps 1 through 6 from `git worktree list` and `git branch`, `ps` against recorded process-group identifiers, `~/.copilot/session-state/<id>/events.jsonl`, and the SDK's `listSessions()`, `resumeSession()`, and `permissions.pendingRequests()`. It requires **no cooperation from the route under test**, so no stack is advantaged by being easy to instrument, and no route can assert its own success. It is buildable **before any route exists**.
-  - **Presentation Check** - what only appears on screen: the primary agent window, the live subagent tree, panel re-scoping on selection, and where Attention surfaces. Automated as far as each stack allows, beginning with Playwright against Electron.
-  - **Pass or fail never depends on automation reach.** A route verified only by the operator still passes if it behaves correctly; what changes is what its executive report says. The report must state the manual residue explicitly. [c-0015](./cycles/c-0015.md), [c-0012](./cycles/c-0012.md)
-- **Verification is machine-first, because there are no human testers.** The only human available is the operator. A manual verification step is a **stopgap of last resort**, never a plan, and every one that survives into a route's verification is a cost recorded against that route rather than a neutral choice. *User: "i can't afford human testers, so we will test with machines as much as we can."* [c-0015](./cycles/c-0015.md)
-- **The MVP is proven on one stack before verification breadth is built out.** Harness work is sized to be sufficient for the Electron route, not complete for all four. *User: "but first - we have to prove an MVP on a stack."* [c-0015](./cycles/c-0015.md)
-- **User-interface automation capability is a fixed criterion of the comparative evaluation**, named by the user before any route shipped, because automated regression checks are the work that follows the MVP. Each route's automation reach on the Presentation Check **is** the evidence for it - measured, not assessed on paper. Recorded honestly: the criterion is **not neutral** between routes. A component-driven web stack reaches Storybook and Playwright directly, Swift uses XCUITest, and a terminal surface exposes very little to any of them, so naming this criterion predicts part of the ranking. That is a legitimate product decision. **One clause was falsified in c-0018:** "Tauri reaches Playwright through WebDriver" is wrong on macOS - see the corrected entry below. [c-0015](./cycles/c-0015.md), [c-0018](./cycles/c-0018.md)
-- **The acceptance slice runs against an unsigned, fuse-enabled `.app`.** Signing and notarization are **excluded from the slice** and deferred, with the trigger being the first distribution of Maestro to anyone but the author. The user is the only user of the MVP, and signing exists for distribution rather than for running one's own local build. c-0012 already measured the property that matters - LaunchServices reparenting to `launchd` while still reaching zero survivors - on a packaged unsigned `.app`. This keeps **one binary under test**, so no slice step is verified against a binary the user does not actually run. [c-0016](./cycles/c-0016.md)
-- **Acceptance-slice step 4 is machine-verifiable, measured.** It was the only step with no external ground truth, so it decided whether the Presentation Check was viable at all. Playwright drove a packaged Electron `.app` and asserted one selection re-scoping four sibling panels with `Promise.all` over auto-retrying `expect(locator)` calls - 3/3 passing unpackaged and 3/3 packaged. [c-0016](./cycles/c-0016.md)
-- **Every Presentation Check assertion must be paired with a negative control.** An auto-retrying assertion can pass because the application is correct or because it is trivially fast, and those are indistinguishable without one. The c-0016 probe staggered its panel updates from 40 ms to 500 ms and asserted that an immediate non-retrying read still saw **stale** state; that control is what makes the positive result evidence rather than decoration. A harness that only ever asserts success cannot detect that it has stopped testing anything. [c-0016](./cycles/c-0016.md)
-- **The Acceptance Harness runs a paired-falsification suite against itself, first, on every run.** Every assertion in both layers - State Oracle and Presentation Check - ships with a fixture it must **fail** on. The negative suite executes before the route suite, and if any negative case *passes*, the harness declares **itself** broken and refuses to report on the route at all. Granularity is **per assertion, not per slice step**: a step can pass with four assertions of which three are vacuous, and the c-0016 failure was at assertion granularity. This generalises the single negative control c-0016 measured rather than introducing a new mechanism, and it is the Acceptance Harness's own verification seam - the answer to "what verifies the verifier", which is circular unless stated. Settled by the loop under `delegated-to-loop` after the user declined it as a non-product decision. [c-0017](./cycles/c-0017.md)
-- **Storybook is excluded from the Acceptance Harness.** It renders one component in isolation with mocked props, so it structurally cannot express "one selection re-scopes four sibling panels". It stays available as a per-panel visual-regression complement after the MVP, and is not part of the slice. [c-0016](./cycles/c-0016.md)
-- The Electron route must preserve a main-process authority boundary, a preload-mediated renderer API, durable Session state, structured delegated-Agent state, restart reconciliation, and targeted cancellation. [c-0003](./cycles/c-0003.md)
-
-### Lifecycle and process ownership
-
-- Exactly one Primary Agent per Session, a strict 1:1 binding. [c-0005](./cycles/c-0005.md)
-- The 1:1 binding is enforced by a lock rather than by convention: a second primary for the same Session is refused, and a lock-refused Session degrades to read-only. Modelled on the firstmate primary-harness home lock. [firstmate-arch.md](../../../../v2/docs/reference/firstmate-arch.md), [c-0005](./cycles/c-0005.md)
-- ~~**No Agent process may outlive the application.** Closing Maestro terminates every Agent and Sub-agent it started, leaving no orphan, no daemon, and no background helper.~~ **Narrowed in c-0021 by product decision.** The confirmed bar is now: **closing Maestro makes a best-effort attempt to stop every Agent and Sub-agent it started, and a sweep at next launch reaps whatever survived.** The absolute prohibition is retired as a P0 gate. *User: "what I don't want to happen is I close the UX and everything stays running. So long as cmux does a best attempt at shutting stuff down, that's OK. We don't have to force kill processes and stuff, that's unnecessary."* The c-0006 forensics are **not** withdrawn - **observed violated in c-0006**: a detached `herdr server` daemon kept two Copilot Sessions and five Model Context Protocol servers alive for two days after the graphical host exited. What changed is the disposition: the residual risk is now **accepted** rather than engineered out. **Recorded consequence, measured:** c-0012 showed a live Copilot Session leaves roughly five processes running when only `SIGTERM` is sent, so best-effort teardown alone is expected to leave strays, and **sweep-on-launch becomes the sole guarantee** rather than a backstop. This is the second reversal of a c-0006 requirement - c-0009 falsified its spawn model by measurement, c-0021 narrows its teardown guarantee by decision. [c-0005](./cycles/c-0005.md), [c-0006](./cycles/c-0006.md), [c-0012](./cycles/c-0012.md), [c-0021](./cycles/c-0021.md)
-- **Closing Maestro auto-Parks every Fleet** - state persisted, processes terminated, uncommitted work preserved - behind a pre-close summary naming any Fleet with in-flight work or uncommitted changes, acknowledged to proceed. Silent termination would make every Fleet `Interrupted` on next launch, rendering the confirmed Parked/Interrupted distinction decorative. Blocking the close was rejected because `Ambiguous` is a real liveness verdict and could trap the user in the application. [c-0008](./cycles/c-0008.md)
-- Persistence is of durable state, never of live processes. Data survives; processes do not. [c-0005](./cycles/c-0005.md)
-- **Ownership extends to the whole descendant tree, not to direct children.** The observed orphans were grandchildren - Model Context Protocol servers under Copilot Sessions under a daemon. Teardown operates on the process group, and correctness is judged by the tree, not by the processes Maestro spawned directly. [c-0006](./cycles/c-0006.md)
-- **Termination is verified and escalated, never fired and forgotten.** `SIGTERM` was observed to be ignored by wrapper processes that exited only after their children died. Teardown sends the signal, re-reads the process table, escalates to `SIGKILL` on timeout, and reports any survivor rather than assuming success. [c-0006](./cycles/c-0006.md)
-- **Reap on launch.** `SIGKILL`, a crash, and macOS Force Quit all bypass in-process cleanup, so graceful teardown cannot be the only defense. Maestro durably records the process-group identifiers it owns and reaps any survivor from a previous run at the next launch, before starting new work. [c-0006](./cycles/c-0006.md)
-- ~~**No third-party dependency may supply the process lifetime.**~~ **Rewritten in c-0021, not demoted.** The c-0006 wording - "Maestro owns its processes' lifetime directly, or it does not use the dependency" - is **made false** by the c-0021 decision to host Maestro inside cmux, because cmux owns the pseudo-terminal and therefore the agent processes' lifetime. Rewriting it rather than deleting it preserves what the requirement was actually protecting against. The confirmed rule is now: **a dependency may supply the process lifetime only when its lifetime is visible to and endable by the operator.** `herdr` violated this because it was a detached background daemon with no user-visible surface, which is why its detachment silently became the product's observable behavior; cmux is a foreground application the operator can see, focus, and quit, and its agents are children of visible panes. That difference - not ownership - is the property that matters. **Retained obligation:** Maestro still records the process groups it knows about and sweeps them at launch, because a visible host does not make a crashed host's leftovers visible. [c-0006](./cycles/c-0006.md), [c-0021](./cycles/c-0021.md)
-- **Each Fleet is spawned detached, in its own process group.** ~~c-0006 required non-detached spawning;~~ **falsified by measurement in c-0009.** A non-detached child is not a process-group leader, so it shares the supervisor's group and cannot be signalled as a group at all - `process.kill(-pid)` returns `ESRCH` and every descendant survives even a graceful quit. Detachment is what makes complete teardown of a nested tree, and targeted per-Fleet cancellation, possible. [c-0009](./cycles/c-0009.md)
-- **Detachment is safe only when paired with durable ownership and a reaper.** Maestro records each Fleet's process-group identifier durably, terminates the group on quit with verification and escalation, and reaps any recorded group left over at next launch. Measured: with the reaper, zero survivors; without it, six. [c-0009](./cycles/c-0009.md)
-- **The application is accountable for every permission prompt its descendants raise.** macOS binds the responsible process at launch and descendants inherit it for their own lifetime, independent of whether the responsible process still exists, so prompts from binaries Maestro never authored are presented to the user under Maestro's name with no way to identify the real requester. Leaving a descendant alive is therefore a trust defect, not only a resource leak. [c-0006](./cycles/c-0006.md)
-- **Bundle identity must be distinct.** Shipping under a bundle identifier attached to a cloned third-party binary makes permission grants, and their attribution, indistinguishable from that upstream application. [c-0006](./cycles/c-0006.md)
-- **Packaging preserves the supervision property.** Measured in c-0012 against a packaged, unsigned macOS `.app` launched through LaunchServices: nine Fleet processes in three detached process groups reached **zero survivors** on graceful quit, **nine survivors** on a Force-Quit simulation with no reaper, and **zero** after reap-on-launch. The three packaged scenarios reproduce c-0009's development-run results exactly, so the supervision design is not an artifact of running under a shell. [c-0012](./cycles/c-0012.md)
-- **Reparenting to `launchd` is not the defect; unowned reparenting is.** The packaged application's own parent process identifier is 1 - the identical shape that made v1.0's detached `herdr server` dangerous in c-0006 - and it is harmless, because the application is its own process-group leader, each Fleet receives a distinct group, and `process.kill(-pgid)` addresses it exactly as in a development run. This sharpens the c-0006 requirement rather than adding one: what must never happen is a reparented process **no supervisor records or reaps**. [c-0012](./cycles/c-0012.md)
-- **Escalation is load-bearing, not a safety net.** Measured against a real Copilot Session holding eight processes in one group - `copilot`, two `npm exec` wrappers, Model Context Protocol servers including the same `OsgWikiMcp` binary from c-0006 - graceful `SIGTERM` **failed**: survivors fell 8 -> 6 -> 5 and then stalled for three seconds. `SIGKILL` escalation reached zero, total teardown 4.35 s. c-0009's synthetic `sh`/`sleep` trees reached zero on `SIGTERM` alone, so the synthetic result **overstated** how well graceful teardown works. A route that sends `SIGTERM` and reports success will leave a live Session's Model Context Protocol servers running. [c-0012](./cycles/c-0012.md)
-- **`copilot` self-assigns its own process group.** Spawned without any detach flag it still appears with `pgid == pid`, distinct from its parent's group, and its Model Context Protocol servers inherit that group. A supervisor therefore gets a clean per-Session group boundary for free - but must still record it durably, because a group it does not record is a group it cannot reap. [c-0012](./cycles/c-0012.md)
-- **Electron's own state directory is redirectable.** `app.setPath('userData', ...)` called before `whenReady` moves every Electron-authored write to a chosen location, so packaging does not force durable state into `~/Library/Application Support`. This is the mechanism that satisfies the confirmed requirement that Maestro state live outside any single worktree. [c-0012](./cycles/c-0012.md)
-- `Parked` and `Interrupted` are opposites and must be distinguishable in the store: parked is a deliberate user-initiated stop, interrupted is an unintended one. [Issue #9](https://github.com/jdylanmc/maestro/issues/9), [c-0005](./cycles/c-0005.md)
-- Parking must not discard uncommitted work; park is not teardown. [firstmate-arch.md](../../../../v2/docs/reference/firstmate-arch.md), [c-0005](./cycles/c-0005.md)
-- **Fleet lifecycle is carried on two independent axes, not one state set.** Durable Fleet state expresses user intent and survives quit: `Active`, `Parked`, `Interrupted`, `Failed`. Runtime Liveness is observed from process evidence at each launch and is never persisted as truth: `Alive`, `Dead`, `Ambiguous`. A flat set cannot express "Active but orphaned", which c-0006 observed and which is the defect that must be detected and reaped. [c-0007](./cycles/c-0007.md)
-- Liveness must be classified from process evidence, not assumed, and must admit an explicit `ambiguous` verdict alongside alive and dead. [firstmate-arch.md](../../../../v2/docs/reference/firstmate-arch.md), [c-0005](./cycles/c-0005.md)
-- Session state is projected deterministically from evidence with a fixed precedence, with no heuristic or model-inferred state. [firstmate-arch.md](../../../../v2/docs/reference/firstmate-arch.md), [c-0005](./cycles/c-0005.md)
-
-### Capacity
-
-- No more than 8 concurrent Sessions. [c-0005](./cycles/c-0005.md)
-- Available processor and memory are surfaced inside the Sessions panel, beside the Sessions competing for them. [c-0005](./cycles/c-0005.md)
-- Admission control is active, not advisory: the application refuses or warns against starting a Session the host cannot carry. The effective ceiling is the lower of 8 and host capacity. [c-0005](./cycles/c-0005.md)
-
-### Interface
-
-- Three columns: a left column with a collapsible Sessions/Worktrees panel above a collapsible Sub-agent tree panel; a collapsible directory-structure column; and an expandable main context window. [c-0005 wireframe](./cycles/c-0005.md)
-- Selecting a Session re-scopes every other panel together - the Sub-agent tree, the directory structure, and the main context window. Selection is a single global control, not per-panel navigation. [c-0005](./cycles/c-0005.md)
-- The main context window is Session-scoped chat by default; selecting a Sub-agent shows its log and details; selecting a file shows the file. [c-0005 wireframe](./cycles/c-0005.md)
-- The directory structure supports open and close folder and shows git information inline. [c-0005 wireframe](./cycles/c-0005.md)
-- Tabs across the top with vertical and horizontal splits, following Visual Studio Code conventions. [c-0005 wireframe](./cycles/c-0005.md)
-- Delegation is shown as a live tree of names, states, and current activity, with full output read on demand by drilling into one node. Concurrent scrollback for every subagent is explicitly rejected. [c-0005](./cycles/c-0005.md)
-- **Selecting a Fleet always presents that Fleet's primary agent window, bound 1:1 to it.** The binding is structural - one Fleet, one Copilot Session, one primary agent window - so the window is never absent, never shared between Fleets, and never ambiguous about which Fleet it belongs to. This specifies the main context window's default content, where c-0005 specified only its scoping. [c-0007](./cycles/c-0007.md)
-- **`Primary Agent` is the interface term for that window.** The word `Session` need not appear in the interface at all, which keeps the Copilot naming collision out of the user's view entirely. [c-0007](./cycles/c-0007.md)
-
-- **File panes are read-only viewers with an "open in Visual Studio Code" action.** No in-app editor is built for the MVP. This closes the contradiction between Issue #12's deferral and the c-0005 wireframe, which specified a basic editor. [c-0008](./cycles/c-0008.md)
-
-- **The visual theme is Nord.** Confirmed by the user in c-0021 as a **P0**. Recorded as a product requirement rather than a preference because it constrains the host: a route must be able to present the whole surface - terminal, panels, sidebar, and chrome - in one coherent theme. **Measured the same cycle: cmux ships Nord built in**, in six variants (`Nord`, `Nord Light`, `Nord Wave`, `Nordfox`, and two further matches), inherited from Ghostty's theme set and settable with `cmux themes set Nord`. This P0 therefore costs nothing on the chosen route, which is why it was accepted without a cost question. [c-0021](./cycles/c-0021.md)
-
-### Fleet Recap
-
-- **Maestro presents a `Recap` for a Fleet: a short account of what that Fleet was doing and where it got to, for a human returning without context.** Derived from the Fleet's own durable state and history rather than reported by its processes. Confirmed as domain vocabulary in [`CONTEXT.md`](../../../../CONTEXT.md) under a new `Account` group. [c-0019](./cycles/c-0019.md)
-- **A Recap is not a condition, and changes none of them.** `Attention`, `Parked`, `Interrupted`, and `Liveness` can all be correctly populated while the human still cannot act, because none of them says what the work *was*. That gap is what the concept names, and it is why it sits in its own glossary group rather than under `Condition`. [c-0019](./cycles/c-0019.md)
-- **It is a strong P1, deliberately outside MVP scope and outside the rubric.** *User: "It's not a p0 but a very desired p1."* Folding it into the acceptance slice would have re-opened the only two promotion-ready leaves to buy nothing comparative, because a capability every stack can implement cannot separate four stacks - the same reasoning the user applied to desktop notifications in c-0016. [c-0016](./cycles/c-0016.md), [c-0019](./cycles/c-0019.md)
-- **The term was renamed on evidence, and the rename is the point.** The user proposed `Orientation`; `/domain-mapping` rejected it because it was already **triple-booked** in this repository - the `## Scope and Orientation` heading in eight files under `v2/docs/reference/`, the executive report's lead section, and this capability - which is precisely the collision that retired `Workspace` in c-0007. A second objection was structural: every other term in `CONTEXT.md` names the thing or the **Fleet's** condition, whereas `Orientation` named the *human's* mental state. `Orientation` is retained as a discouraged alias. [c-0019](./cycles/c-0019.md)
-
-### Adoption
-
-- **Input-model continuity.** The user is keyboard-first with settled muscle memory and a real cost to learning new hotkeys. A route requiring a new keymap pays an adoption penalty against the daily-driver bar. The present-day baseline workflow is Visual Studio Code with its integrated terminal. [c-0005](./cycles/c-0005.md)
-- The structural vocabulary uses plain literal nouns, with "Maestro" retained only as the product name and interface chrome. Decided by the user in c-0005; **not yet confirmed**, because no domain contract exists to cite. [c-0005](./cycles/c-0005.md)
-
-### Isolation and concurrency
-
-- **Fleets are isolated by default.** Concurrent Fleets work different features in the same large monorepo, so they must not share a working checkout by default. [c-0007](./cycles/c-0007.md)
-- ~~**Worktree-per-Fleet is the strong default**, not enforced as a hard rule; a Fleet may be pointed at an existing checkout.~~ **Superseded in c-0010.** **Worktree-per-Fleet is a hard rule.** Every Fleet has exactly one worktree of its own and Fleets never share a checkout. The user: "fleets are isolated to worktrees." [c-0010](./cycles/c-0010.md)
-- **Worktree-per-Fleet implies branch-per-Fleet.** Two worktrees cannot check out the same branch; this is a verified hard git constraint, not a policy choice. Fleet creation therefore implies branch creation or selection. [c-0007](./cycles/c-0007.md)
-- ~~**A Fleet must know it is not alone.**~~ **Reversed in c-0010.** **Fleets are fully isolated and unaware of each other.** No cross-Fleet awareness or messaging is built for the MVP; the human is the only integration point. This overturns the c-0007 requirement rather than refining it: research established that the runtime provides no peer channel to inherit, so awareness would have had to be invented, and the user declined. [c-0010](./cycles/c-0010.md)
-- **Isolation holds on both axes at once.** A Fleet shares neither a working checkout nor a message channel with any other Fleet. A consequence is that no cross-Fleet conflict resolution is needed, because two Fleets cannot touch the same working files. [c-0010](./cycles/c-0010.md)
-- Isolation is not total: the git stash and the object store are shared across worktrees. Any feature that uses the stash is a cross-Fleet interaction and must be treated as such. [c-0007](./cycles/c-0007.md)
-- The target repository is a large monorepo, so per-worktree duplication of build artifacts and editor indexes is a real cost that bears on the ceiling of concurrent Fleets. [c-0007](./cycles/c-0007.md)
-- **Git is not the constraint; duplicated working state is.** Measured: a worktree of a clean checkout costs ~2.6 MiB and ~50 ms to create, with the object store shared and unchanged. What scales badly is per-worktree untracked and build state - `node_modules`, build output, caches. File descriptors are not a risk at this scale. Because worktrees are now mandatory rather than optional, this is the load-bearing limit on concurrent Fleets. [c-0010](./cycles/c-0010.md)
-- **Maestro must not duplicate build state per Fleet where it can avoid it.** Sparse checkout is settable per worktree and is the strongest available mitigation for a monorepo. [c-0010](./cycles/c-0010.md)
-
-### Route class, platform idiom, and the five-route comparison
-
-**All three confirmed in c-0022.**
-
-- **The route register is the single source of the route count.** Routes are listed here and nowhere else; no other document states a number. This is recorded as a fix to a defect that recurred three cycles running - c-0011 wrote "four routes" as a literal into several places, c-0022 corrected it to five, and c-0023 superseded that to six within one cycle. A count written as a literal in four documents is wrong the moment a route is added, and it was.
-
-  | Route | Node | Class | Status |
-  | --- | --- | --- | --- |
-  | cmux | n-0011 | terminal-hosted | **leads**; prototyped c-0021 |
-  | v2 Electron | n-0003 | application | built and promoted ([#29](https://github.com/jdylanmc/maestro/issues/29)) |
-  | v1.1 WezTerm | n-0004 | terminal-hosted | committed, unstarted |
-  | v3 Tauri/Rust | n-0005 | application | bounded probe |
-  | v4 native macOS Swift | n-0006 | application | bounded probe |
-  | Zellij | n-0012 | multiplexer-in-host-terminal | candidate, unsequenced beyond "after cmux" |
-
-  Every route on the register produces one executive report in the fixed five-section shape, and the comparative evaluation (n-0007) consumes **one report per register row**. [c-0011](./cycles/c-0011.md), [c-0022](./cycles/c-0022.md), [c-0023](./cycles/c-0023.md)
-
-- **There is a third route class, found in c-0023.** The c-0022 distinction had two values - terminal-hosted and application - and does not cover **a multiplexer running inside the operator's own terminal**, which is what Zellij is. It owns no window, has no renderer or accessibility tree of its own, and layers a keymap inside a terminal that already has one. Its seam is the Copilot CLI, like the other terminal-hosted routes, but its presentation and automation surfaces are its own command-line interface and its WebAssembly plugin API. This is carried in the pending `/domain-mapping` packet for `route class` rather than settled here. [c-0022](./cycles/c-0022.md), [c-0023](./cycles/c-0023.md)
-
-- **There are five routes, and cmux leads.** *User: "cmux joins the comparison but push it to the front of the lead."* n-0011 (cmux) does **not** supersede n-0004 (WezTerm), n-0005 (Tauri), or n-0006 (Swift); it joins them and takes the lead position. n-0003 (v2 Electron) is already built and promoted, so the live sequence is **cmux, then WezTerm, then Tauri, then Swift**, with Electron's report already in hand. ~~Every count of "four routes" or "four executive reports" recorded from c-0011 onward is superseded by **five**.~~ **Superseded within one cycle by c-0023**, which added Zellij as a sixth. The count is now held only by the route register above. This extends c-0011's evidence-order rule rather than breaking it: Electron led because it alone carried measured evidence, and cmux now carries measured evidence too - from [c-0021](./cycles/c-0021.md), and against the current P0 set rather than the superseded one. [c-0011](./cycles/c-0011.md), [c-0022](./cycles/c-0022.md), [c-0023](./cycles/c-0023.md)
-
-- **The integration seam is a property of the route class, not of the product.** *User: "Deprioritize the copilot seam for cmux directly since it can use the cli and it's a terminal itself -- reserve copilot sdk for the apps where we need to create our own chat interface."*
-  - **Terminal-hosted routes** (n-0011 cmux, n-0004 WezTerm) drive a Fleet through the **Copilot CLI**. The terminal *is* the chat interface, so no programmatic send is needed, and the subagent tree, Attention, and Liveness are read from `events.jsonl`.
-  - **Application routes** (n-0003 Electron, n-0005 Tauri, n-0006 Swift) use the **Copilot SDK**, because they must build a chat interface and therefore need programmatic send, resume, and permission surfaces.
-  This **narrows c-0014 rather than falsifying it**, and preserves the SDK work of c-0014, c-0016, and c-0020 instead of stranding it. The seam had been recorded as a property of the product when it is a property of the route class. Consequence: **`N0.17` (pin the SDK version) binds only where the SDK is used.** A terminal-hosted route pins the **event-log format** instead - the more stable of the two, since the SDK permission surface changed shape across three observed versions while the log join has held across four cycles and more than 36,000 events. [c-0014](./cycles/c-0014.md), [c-0022](./cycles/c-0022.md)
-
-- **A route implements the contract in its host's idiom.** *User: "we basically want to 'lean in' on each platform and embrace it's strengths."* A route does not reproduce a design authored for a different host. Worked consequences for n-0011: Attention is **cmux's global Feed**, chronological across all Fleets, rather than a Fleet-scoped panel - a unified triage inbox is a legitimate expression of Attention at 8 Fleets, and c-0022's own analysis had wrongly scored it as a partial miss before this principle was confirmed; the layout is **cmux's** sidebar / pane-grid / right-sidebar rather than the c-0005 three-column wireframe; and subagents may be rendered as **panes** as well as a tree, since cmux already does this for Claude Teams.
-
-- **The idiom principle is bounded, and the bound is load-bearing.** The **Acceptance Slice stays identical across every route**, and the executive report keeps its fixed five-section shape. Idiomatic *implementation* is permitted; idiomatic *behaviour* is not, and neither is an idiomatic rubric. Without this bound the principle silently becomes "each route is judged by its own standard", which would void the five-route comparison confirmed in the same cycle. The rubric question becomes "what does our design become on this stack" rather than "can this stack implement our design" - a sharpening rather than a loosening. [c-0011](./cycles/c-0011.md), [c-0019](./cycles/c-0019.md), [c-0022](./cycles/c-0022.md)
-
-- **Permission accountability inverts under hosting rather than disappearing.** `N0.11` (distinct bundle identity) and `N0.12` (accountability for descendants' prompts) were written because macOS binds the responsible process at launch. On a terminal-hosted route, prompts raised by a Fleet's descendants are attributed to **the host application** - cmux - not to Maestro. This is *better* than the `herdr` case by the same test that rewrote `N0.5`: the host is a visible foreground application the operator can identify and quit. But "Maestro is accountable" is false on a hosted route, and `N0.11` is retired there rather than merely deferred. [c-0006](./cycles/c-0006.md), [c-0021](./cycles/c-0021.md), [c-0022](./cycles/c-0022.md)
-
-- **Attention was observed firing on a hosted route, and the accepted unknown from c-0014 is discharged.** Measured in c-0024 on cmux against a live Copilot Session inside a Fleet's own worktree: an unapproved `rm` raised `permission.requested` (`requestId d5092cfc`, `2026-08-21T22:13:03.447Z`) with **zero** matching `permission.completed`, and the helper reported `1 requested / 0 completed / 1 pending` with Attention raised on that Fleet **and on no other** - the second Fleet reported no session in the same instant. On approval the same `requestId` completed with `kind: approved` and Attention **cleared**. The predicate confirmed in [`CONTEXT.md`](../../../../CONTEXT.md) therefore holds as a true set difference in both directions, not merely as a latch. This retires the c-0014 risk that acceptance-slice step 5 rested on declarations shipped with the binary rather than on observed behaviour. [c-0014](./cycles/c-0014.md), [c-0024](./cycles/c-0024.md)
-
-- **A permission request carries enough detail to present, not merely to detect.** `data.permissionRequest` holds `kind`, `fullCommandText`, `intention`, `commands`, `commandSegments`, `possiblePaths`, `possibleUrls`, `hasWriteFileRedirection`, and `canOfferSessionApproval`. Maestro can therefore show *what* a Fleet is blocked on rather than only *that* it is blocked. Not previously recorded in this session's state. [c-0024](./cycles/c-0024.md)
-
-- **A step-5 assertion is invalid against a working directory covered by a standing approval.** Measured: the first c-0024 attempt produced **0 permission events** because `~/.copilot/permissions-config.json` holds an approve-for-location rule on `/Users/dylan/git` granting `write: *`, `mcp: *`, and a command list, and the Fleet worktree sits beneath it - so the command was pre-approved and correctly never requested. This is the **third distinct reason** step 5 has failed to fire across the project, after ACP surfacing no permission events (c-0013) and the SDK hook not changing behaviour (c-0020), and the first that is the system working as designed. **Consequence for the Acceptance Harness:** step 5 must be exercised by a command outside the approved set, or in a location no standing rule covers, and the harness must assert that precondition. Otherwise it measures the operator's local trust configuration rather than the route, and returns a confident false negative on any machine with a broad approval rule. [c-0013](./cycles/c-0013.md), [c-0020](./cycles/c-0020.md), [c-0024](./cycles/c-0024.md)
-
-- **A cmux pane gives a Fleet a clean per-Fleet process group for free.** Measured: a live Fleet occupied **one process group of 8 processes** - an `agency` wrapper, `copilot`, three Model Context Protocol servers, and two `node` children - every one resolving by `lsof` to the Fleet's own worktree, and distinct from the observing session's group. This reproduces c-0012's Electron shape exactly and confirms the boundary is real rather than an artifact of shared grouping. **Graceful teardown reached 0 survivors of 8**, MCP servers included. [c-0012](./cycles/c-0012.md), [c-0024](./cycles/c-0024.md)
-
-### Composition, and the rule an observer must obey
-
-**Confirmed in c-0024.**
-
-- **Maestro is composed of three surfaces, and only two are host-shaped.** (1) A **Copilot CLI plugin** wired to the runtime's documented hooks - `sessionStart`, `sessionEnd`, `userPromptSubmitted`, `preToolUse`, `postToolUse`, `errorOccurred` - reporting status, progress, and notifications. (2) A **pane-hosted helper**, a long-running process inside a Host Application pane that reads the session event log, reconstructs the subagent tree, and drives the presentation surface. (3) The **Fleet core** - enforced worktree-per-Fleet, durable `Parked`/`Interrupted` intent, and sweep-on-launch - which is ordinary software over git, a state file, and the process table, and depends on **no** Host Application at all. *User: "So - Maestro becomes a form of a cmux plugin, running ontop of cmux? I'm not opposed."* The answer recorded here is narrower than the question: Maestro **presents** as a plugin and is **not built** as one, which is what keeps the route register meaningful rather than collapsing the product onto one host. [c-0024](./cycles/c-0024.md)
-
-- **The presentation surface is reached through a backend interface, built now rather than retrofitted.** The helper renders through one seam - present this Fleet, present this tree - rather than distributing host-specific calls through its logic. Delegated research is explicit that the command structures differ between hosts and that *"retrofitting it is painful"*. This is the concrete cost of keeping n-0012 (Zellij) and n-0004 (WezTerm) alive, and it is paid once, early. [c-0024](./cycles/c-0024.md)
-
-- **An observer must never be able to veto the thing it observes.** Measured, and it cost a live session. Copilot CLI treats a **non-zero exit from a `preToolUse` hook as a denial**. The upstream `copilot-cmux` plugin exited 1 on any internal error, including a payload shape it did not recognise - and against Copilot CLI 1.0.81-5 it does not recognise the current `preToolUse` payload. Every tool call in an unrelated live session was refused, `bash`, `glob`, `view`, and a bare `pwd` included, leaving that session unable to read its own disk. Nothing was wrong with the operator's permissions: a decoration plugin had become a veto. **Maestro's hooks therefore always exit zero, report failures on a diagnostic channel, and never influence whether a tool may run.** Enforced in `maestro-cmux/tests/fail-open.test.ts` against nine malformed payload shapes across every hook, with a negative control that fails if the runner never executed. [c-0024](./cycles/c-0024.md)
-
-- **A green test suite is not evidence of compatibility.** Upstream's 68 tests passed before and after the failure, because they only ever exercised the payload shape upstream assumed. This is the **third** occurrence of the same class in this project, after the c-0016 fuse claim and the c-0021 negative control that passed while testing nothing. The standing rule is that a check must be shown to fail on the case it exists to catch. [c-0016](./cycles/c-0016.md), [c-0021](./cycles/c-0021.md), [c-0024](./cycles/c-0024.md)
-
-- **The subagent tree is unclaimed territory, and licensing constrains reuse.** Two independent surveys of the 190+ project ecosystem found **no tool that renders a genuine parent-child agent hierarchy** - every one shows a flat board, a lane group, or a widget - and **no tool that enforces one worktree per workspace**, or that distinguishes a deliberate stop from a crash. Reuse constraint: `cmux-agent-mcp` is **PolyForm Strict**, which prohibits commercial use, while `cmuxlayer` is **Apache 2.0** and safe as a reference. [c-0024](./cycles/c-0024.md)
-
-### Runtime integration
-
-- **Maestro names the runtime's Session rather than maintaining a private name.** The Copilot CLI accepts `-n, --name`, supports `/rename`, and resolves `--resume` by name. This supersedes the recorded decision on [Issue #5](https://github.com/jdylanmc/maestro/issues/5) that Maestro owns naming. A consequence is that a Maestro-created Fleet stays addressable from the command line without Maestro. [c-0007](./cycles/c-0007.md)
-- Maestro's vocabulary aligns with the runtime's where they overlap: `subagent` rather than `Sub-agent`, and `Task` for a tree node's underlying runtime handle. [c-0007](./cycles/c-0007.md)
-- **Maestro reads only generic runtime evidence.** It does not special-case any orchestration skill, and does not read the `ship-with-squadron` run ledger. Skill-specific state such as deadlines, merge gates, ticket states, and the `AT_RISK` classification is therefore unavailable to the interface. [c-0007](./cycles/c-0007.md)
-- Durable Maestro state belongs outside any single worktree, so that it is shared across the worktrees of one repository rather than trapped in one. [c-0007](./cycles/c-0007.md)
-- **The subagent tree is reconstructed by joining `subagent.started.data.toolCallId` to the `agentId` on the spawning agent's own `tool.*` event.** A root-spawned subagent's tool event carries a null `agentId`. [c-0010](./cycles/c-0010.md)
-- **`parentId` must never be used to build the tree.** It is a linear event-chain pointer, not a parent-agent link: in a measured 41,928-event session it held 41,927 distinct values, every one resolving to an event id and none to an `agentId`. Consecutive parallel *siblings* therefore appear as parent and child, and building on it yields a plausible but wholly fictional tree. [c-0010](./cycles/c-0010.md)
-- **`agentId` is a reliable identity for attribution.** In the same session the 132 ids appearing on `subagent.started` were exactly the 132 appearing on other events, so every event is attributable to the agent that produced it. [c-0010](./cycles/c-0010.md)
-- **The tree renders arbitrary depth, but must be optimised for breadth.** Measured real depth in the largest local session was 2, not the 16 a `parentId` reading suggests: 51 subagents root-spawned, 72 at depth 1, 9 at depth 2 - and 72 of 132 spawned by a single agent. Nesting is genuine but shallow; fan-out dominates. **The depth figure is corrected in c-0021: nesting reaches at least 3.** A scan of all local sessions found seven with genuine nesting and one at depth 3 (`b7d9967c`, six subagents, 100% resolved). The requirement is unchanged - arbitrary depth, optimised for breadth - but the specific "maximum observed depth is 2" figure recorded by both c-0010 and c-0020 does not hold, and any renderer or assertion calibrated to it is calibrated wrong. [c-0010](./cycles/c-0010.md), [c-0021](./cycles/c-0021.md)
-- **Attention is an unmatched `permission.requested`**, plus `session.error` and `abort` as terminal states. This replaces `AT_RISK`, which is not computable from generic events. [c-0010](./cycles/c-0010.md)
-- **Attention pairs by `data.requestId`.** Both `permission.requested` and `permission.completed` carry `data.requestId`; the request additionally carries `data.permissionRequest.toolCallId`. The predicate is the set difference of requested and completed request identifiers. **Observed firing for the first time in c-0012**: request `dd7f6347` raised at 23:46:59.608Z on a genuinely blocked Session and still unmatched across two samples 25 s apart, and separately a full fire-and-clear cycle - requested 23:45:08.603Z, completed 23:45:09.728Z with `{"kind": "approved"}`. [c-0012](./cycles/c-0012.md)
-- **`permission.completed.data.result.kind` discriminates the outcome**, so Maestro can distinguish a human approval from a policy denial rather than only detecting presence. Observed values: `approved`, `denied-no-approval-rule-and-could-not-request-from-user`. [c-0012](./cycles/c-0012.md)
-- **Events are read from `events.jsonl`, never from `session.db`.** The per-session SQLite database holds only `inbox_entries`, `todos`, and `todo_deps`. The event stream that the subagent tree, Attention, and Liveness are all reconstructed from is the newline-delimited JSON log at `~/.copilot/session-state/<session-id>/events.jsonl`. [c-0012](./cycles/c-0012.md)
-- **The subagent tree is delivered as typed SDK events, not only as a log to parse.** `subagent.started`, `subagent.completed`, `subagent.failed`, `subagent.selected`, and `subagent.deselected` are typed session events with `type` discriminators, and `generated/rpc.d.ts` documents an `EventsAgentScope` filter whose `'primary'` value returns "main-agent events plus events whose type starts with `subagent.`". A route or the State Oracle may subscribe rather than tail `events.jsonl`. [c-0020](./cycles/c-0020.md)
-- **The c-0010 tree construction and the `parentId` exclusion are corroborated by the vendor's own typings.** `SubagentStartedData.toolCallId` is documented as "Tool call ID of the parent tool invocation that spawned this sub-agent", and `parentId` as "ID of the chronologically preceding event in the session, forming a linked chain". Revalidated on 36,517 previously unmeasured events across two sessions: **85 subagents, 100% resolved, zero unresolved**, max depth 2, fan-out dominating - independently reproducing c-0010. [c-0010](./cycles/c-0010.md), [c-0020](./cycles/c-0020.md)
-- **The subagent tree updates live.** Helper agents appear in the tree the moment they start, rather than filling in the next time the operator looks at that Fleet. Confirmed by the user in c-0020 on the grounds of immediacy. **Maestro subscribes while a Fleet is `Alive` and reconstructs from durable state when it is `Parked` or `Dead`**, and the Acceptance Harness asserts both paths. [c-0020](./cycles/c-0020.md)
-- **`ephemeral` events are a documented but currently unobserved risk.** `subagent.started` and its siblings carry `ephemeral?: boolean` - "when true, the event is transient and not persisted to the session event log on disk" - so a tree rebuilt purely from `events.jsonl` could in principle be incomplete. Measured: **0 ephemeral events in 36,517**, with all 85 `subagent.started` durably persisted. Recorded as a bounded unknown rather than as a live risk; *trigger:* the first ephemeral event ever observed. [c-0020](./cycles/c-0020.md)
-- **A client may choose the session id.** `SessionConfig.sessionId` is documented "Optional custom session ID. If not provided, the server generates one." There is still **no rename API** and no name field on `SessionConfig`, though `session.title_changed` exists as a typed event carrying "The new display title for the session". This strengthens rather than reopens the c-0013 decision to bind by `sessionId` with a Maestro-owned display name: Maestro can now mint the identifier it binds to. [c-0020](./cycles/c-0020.md)
-- **SDK version bound, measured.** `permissions.pendingRequests()`, the typed `subagent.*` events, caller-supplied `SessionConfig.sessionId`, and `session.title_changed` are present and identically shaped across **1.0.80 through 1.0.81-5**. This is the evidence for the version pin the seam decision requires, and it discharges the bound that [`docs/adr/0002`](../../../../docs/adr/0002-consume-the-runtime-permission-model.md) has lacked since c-0016 - the ADR edit itself remains `/domain-mapping`'s to make. [c-0020](./cycles/c-0020.md)
-- **The integration seam is the Copilot SDK.** Settled in c-0014, reversing c-0013. The SDK ships **inside the platform package** at `node_modules/@github/copilot-<platform>/copilot-sdk/` with full typings: `CopilotClient` over stdio, TCP, or in-process FFI; `createSession(config)`, `sendAndWait`, `resumeSession(sessionId, config)`, `listSessions()`. [c-0014](./cycles/c-0014.md)
-- **Permissions are first-class on the SDK, in both a push and a pull form.** `SessionConfig.onPermissionRequest` delivers an answerable callback returning a decision from a rich union - approve-once, approve-for-session, approve-for-location, approve-permanently, reject, user-not-available, and four distinct denial causes. Omit the handler and requests are surfaced as events and left pending for `permissions.pendingRequests()`, whose generated documentation defines its return as "the set of `permission.requested` events that have not yet been followed by a matching `permission.completed` event" - **the c-0010 Attention predicate, in the runtime's own words**. `permissions.handlePendingPermissionRequest({requestId, result})` answers one; `permissions.setApproveAll(...)` expresses a broad-permission posture as a toggle. Per-tool `skipPermission` and `permissionDecision: "allow" | "deny" | "ask"` provide policy without mediation. **Maestro therefore builds no permission layer of its own: it consumes the runtime's, and Attention becomes a query rather than a reconstruction.** [c-0014](./cycles/c-0014.md)
-- **Accepted unknown: the SDK permission callback has never been observed firing.** The c-0014 probe reached a live `createSession` and was stopped by an exhausted monthly quota before any model turn. *Risk:* this seam decision, and acceptance-slice step 5 with it, rests on declarations shipped with the binary and on Orbit's independent implementation, not on observed behaviour - the same evidence class that produced the c-0006 spawn requirement that c-0009 later falsified. *Trigger:* the next quota reset, or any earlier chance to run one model turn. [c-0014](./cycles/c-0014.md)
-- ~~**The integration seam is `copilot --acp`.**~~ **Superseded in c-0014.** ACP remains a working fallback and its measurements stand; the inference that it was the best seam does not. Recorded as measured in c-0013: A route drives a Fleet through JSON-RPC on stdio: `initialize`, `session/new`, `session/prompt`, `session/list`, `session/load`, consuming `session/update` notifications - `agent_message_chunk` for streaming text, `tool_call` and `tool_call_update` carrying `title`, `kind`, `status`, `rawInput`, and `rawOutput` for per-subagent Activity. `session/load` resumes a session **with its history**, verified by asking a resumed session to recall its earlier instruction. `session/list` returns `sessionId`, `cwd`, `title`, and `updatedAt` for every local session, which is a ready-made Fleet reconciliation surface. [c-0013](./cycles/c-0013.md)
-- **ACP surfaces no permission requests, so Attention is mode-dependent.** Measured: no `session/request_permission` arrives, and `events.jsonl` for an ACP session records **zero** permission events - `tool.execution_start` goes straight to `tool.execution_complete`. Confirmed with and without declared client capabilities, against a control pseudo-terminal session in the same environment and working directory that did prompt. Attention is therefore `session.error` and `abort` always, plus an unmatched `permission.requested` wherever the mode surfaces one. **Maestro does not build a permission-mediation layer for the MVP**: the primary user runs with broad permissions, so mediating a gate that workflow rarely reaches would be inventing work, and it would contradict the confirmed generic-evidence stance. Recorded as an upstream capability dependency with a re-test trigger on every Copilot CLI upgrade. [c-0013](./cycles/c-0013.md)
-- **ACP does not name sessions, so a Fleet is bound by `sessionId`.** `session/new` accepts a `name` parameter without honouring it - `workspace.yaml` shows `user_named:` empty. This **narrows** the c-0007 requirement that Maestro names the runtime's Session: Maestro binds the durable `sessionId` returned by `session/new`, owns the display name itself, and sets the runtime name only in a mode that supports it. The goal that requirement served - a Fleet stays identifiable outside Maestro - survives through `session/list` titles and `workspace.yaml`, which records `cwd`, `git_root`, `branch`, and `client_name`. [c-0013](./cycles/c-0013.md)
-- ~~**A Fleet must run an interactive Session, not a non-interactive one.**~~ **Narrowed in c-0013.** The measured constraint is that a Fleet must not run in **non-interactive `-p` mode**, which auto-denies. ACP is the third mode and is the one adopted. Measured: without `--allow-all-tools`, a `-p` invocation completes every permission request **immediately** as `denied-no-approval-rule-and-could-not-request-from-user`, so nothing is ever unmatched and Attention can never fire. Acceptance-slice step 5 is unreachable through non-interactive invocation, which makes the integration mode a **requirement-level constraint** rather than an implementation detail. `copilot --acp`, the Agent Client Protocol server the binary already exposes, is the candidate seam; driving the terminal user interface through a pseudo-terminal is the fallback and proved fragile. [c-0012](./cycles/c-0012.md)
-- **A route pins its SDK version, and the pinned version goes in its executive report.** The permission surface has changed shape three times across observed versions: `copilot-sdk@0.3.0` and the copy bundled in `@github/copilot@1.0.40` make `onPermissionRequest` **required** and expose **no** `pendingRequests()`; `1.0.9-preview.2` made the handler optional and added the query; `1.0.11-preview.2` re-worded the query's contract. Version ordering was verified before concluding anything, so **c-0014 is confirmed, not falsified** - the pull model was added, not removed. But an unpinned SDK means an unstable Attention implementation. [c-0016](./cycles/c-0016.md)
-- **Attention is a reconstruction that Maestro does not have to implement.** The current `pendingRequests()` documentation reads "**Reconstructs** the set of pending tool permission requests **from the session's event history**." c-0014's claim that "Attention becomes a query rather than a reconstruction" is narrowed: it *is* a reconstruction, performed by the runtime. The defensible requirement is that Maestro consumes it rather than building it. [c-0016](./cycles/c-0016.md)
-- **The confirmed Attention trigger set maps onto four SDK surfaces**, verified against `1.0.11-preview.2`: an unmatched `permission.requested` (blocked); `session.error` and `hooks.onErrorOccurred` (errored); `session.idle` with `aborted: true` (aborted); and `session.idle` with `aborted` falsy, or `hooks.onSessionEnd` (finished and unacknowledged). The definition confirmed in `CONTEXT.md` is fully served by the seam. [c-0016](./cycles/c-0016.md)
-- **A failed subagent is a distinct terminal state.** The event vocabulary is richer than c-0010 recorded: `subagent.started`, `subagent.completed`, **`subagent.failed`**, `subagent.selected`, `subagent.deselected`. The subagent tree must distinguish failure from completion. [c-0016](./cycles/c-0016.md)
-- **Flipping Electron fuses without re-signing produces a binary macOS kills on sight** - `SIGKILL (Code Signature Invalid)`, `CODESIGNING / Invalid Page`. `@electron/fuses` rewrites the Mach-O after electron-builder signs it. Any route that manipulates fuses must re-sign afterwards, and this interacts directly with the decision to ship the MVP unsigned. [c-0016](./cycles/c-0016.md)
-- **`assistant.turn_end` must not be read as Attention.** It means the assistant yielded control, not that a human is required. [c-0010](./cycles/c-0010.md)
-- **`inbox_entries` is an intra-Fleet path, not an inter-Fleet one.** Across all 674 local session databases it holds 27 rows, every sender a `background-agent` or `sidekick-agent` reporting to its owning session - never a peer session. It is the subagent reporting channel and offers nothing for cross-Fleet messaging. [c-0010](./cycles/c-0010.md)
-- **`unread` must not be read as "the human has seen this."** All 27 observed rows carry `unread = 1`; the flag is never cleared in persisted state. [c-0010](./cycles/c-0010.md)
-
-## Scope, settled in c-0025
-
-**Maestro is an observability plugin. It makes agent work visible inside a
-terminal the operator already uses.**
-
-Asked what Maestro's scope is, the user chose this reading over the alternative
-that the product was still an orchestrator being built in stages. The decision
-retires most of what the sections below specify, and those sections are kept -
-struck through where superseded - because each was confirmed on evidence and the
-record of a reversal is worth more than a tidy document.
-
-**In scope.** Read the Copilot session's own event log and render the subagent
-tree, live, with status. Surface what the runtime already reports: activity,
-progress, and `Attention`.
-
-**Out of scope, as of this cycle.** Enforcing worktree isolation. Durable
-`Parked` versus `Interrupted` intent. Sweeping leftover processes. A command
-surface of any size. Being an application: the routes to Electron, Tauri, Swift,
-WezTerm, and Zellij are retired along with the comparative evaluation that would
-have chosen between them.
-
-**Why this is a destination rather than a retreat.** The session's Destination
-was to find the smallest empirical sequence that could prove or falsify the MVP
-contract. It did both: the contract was larger than the problem, and the host
-supplies nearly all of it. Of the eighteen P0 requirements confirmed in c-0021,
-cmux already provides eleven, two became configuration in c-0024, and the tree
-is the only one the ecosystem does not have - measured across 190+ projects, none
-of which renders a genuine parent-child agent hierarchy.
-
-**What is left to build is one thing.** The subagent tree, read from
-`events.jsonl` by the join confirmed in c-0010 and revalidated in c-0020 and
-c-0024, published into the Host Application. Everything else is configuration.
-
-**The domain has not been updated to match.** `Fleet` is defined in
-[`CONTEXT.md`](../../../../CONTEXT.md) as "one feature, one Worktree, one Copilot
-Session, its subagent tree, and its durable state", and two of those five
-properties are now unenforced. That is material vocabulary change, it belongs to
-`/domain-mapping`, and it is staged rather than applied here.
-
-## Priority index
-
-**Established in c-0021.** Until this cycle, priority existed only on discovery
-*nodes*; no requirement carried one, so every reading of "the P0 set" was
-re-derived from prose and could differ between cycles. The user re-ranked the
-whole index directly. Identifiers are stable and are the reference used by the
-Acceptance Slice, the harness, and every executive report.
-
-### P0 - confirmed by the user in c-0021
-
-| Id | Requirement |
-| --- | --- |
-| F0.1 | Named Fleets, each with its own Worktree and branch, **enforced** |
-| F0.4 | Real primary-agent chat against a live Copilot Session |
-| F0.5 | Live subagent tree with correct parentage |
-| F0.7 | The tree distinguishes `failed` from `completed` |
-| F0.9 | Selecting a Fleet re-scopes every panel together |
-| F0.12 | Pre-close summary naming Fleets with in-flight or uncommitted work |
-| F0.13 | Quit auto-Parks every Fleet |
-| F0.14 | Relaunch restores identity, history, Worktree, and recomputed Liveness |
-| F0.18 | **Sweep on launch** - reap recorded process groups from a previous run |
-| F0.20 | Directory tree with inline git information |
-| F0.22 | Read-only file viewers plus "open in Visual Studio Code" |
-| F0.24 | Processor and memory surfaced inside the Fleets panel |
-| F0.27 | **The visual theme is Nord** |
-| F1.3 | Tabs with vertical and horizontal splits |
-| F1.4 | Collapsible panels |
-| N0.1 | Best-effort teardown on quit (narrowed - see Lifecycle) |
-| N0.6 | Persistence is of durable state, never of live processes |
-| N0.14 | macOS is the supported platform |
-
-### P0-implied - mechanisms, not independent scope
-
-These are **not** a backlog. Each is the only known way a retained P0 is true, so
-none can be scheduled or dropped on its own. They were demoted in the user's
-re-rank and are reclassified here rather than left in P1, because listing a
-mechanism beside the requirement it implements invites deferring the mechanism
-and keeping the promise.
-
-| Id | Mechanism | Implements |
-| --- | --- | --- |
-| F0.2 | Branch-per-Fleet (a hard git constraint, not a policy) | F0.1 |
-| F0.3 | The primary agent window itself, bound 1:1 | F0.4 |
-| F0.6 | `parentId` must never build the tree | F0.5 |
-| F0.8 | Subscribe while `Alive`, reconstruct when `Parked`/`Dead` | F0.5 |
-| F0.11 | Attention is consumed from the runtime, not rebuilt | F0.10 |
-| F0.15 | `Parked` vs `Interrupted` - durable intent | F0.13, F0.14 |
-| F0.16 | The two lifecycle axes: durable intent x observed Liveness | F0.13, F0.14 |
-| F0.17 | Liveness classified from process evidence | F0.14 |
-| N0.2 | Ownership covers the descendant tree, not direct children | N0.1 |
-| N0.4 | Each Fleet in its own process group, recorded durably | N0.1, F0.18 |
-| N0.16 | Events read from `events.jsonl`, never `session.db` | F0.5 |
-
-### P1
-
-**Functional:** F0.10 Attention; F0.19 three-column layout; F0.21 main-window
-content rules; F0.23 admission control; F0.25 runtime-addressable session naming;
-F0.26 targeted cancellation; F1.1 **Fleet Recap**; F1.2 desktop notification on
-Attention; F1.5 per-route executive report; F1.6 comparative technology
-evaluation. *(F0.15 and F0.16 were moved to `P0-implied` in c-0022: auto-Park at
-P0 without a durable Parked/Interrupted distinction makes Park decorative on
-relaunch, which is the exact outcome c-0008 rejected silent termination to
-avoid.)*
-
-**Non-functional:** N0.3 verify-and-escalate teardown (**explicitly dropped to P1
-by the user**, not merely deprioritized); N0.7 durable state outside any
-worktree; N0.8 Park preserves uncommitted work; N0.9 the 1:1 lock; N0.12
-accountability for descendants' permission prompts; N0.13 the 8-Fleet ceiling;
-N0.15 generic runtime evidence only; N0.17 the SDK version pin; N1.1
-input-model continuity; N1.3 bounded per-worktree build state; N1.4 routes one at
-a time.
-
-### Retired - not demoted
-
-These were artifacts of the v2 Electron route and stop being requirements at all
-if Maestro is hosted rather than built: **N0.18** main-process authority
-boundary, **N0.19** the unsigned fuse-enabled build, **N0.11** distinct bundle
-identity. Recorded as retired-with-a-trigger: each returns if Maestro ever ships
-as its own application bundle.
-
-### Not product priorities
-
-**N0.20 through N0.27** - machine-first verification, the State Oracle, the
-Presentation Check, negative controls, the paired-falsification suite,
-measurement over assessment, and the user-interface automation criterion - are
-**verification method**, not product scope. They were carried in the same list as
-product requirements, which was a classification error made when the index was
-first derived. They are binding on how the loop judges a route and are not
-ranked against product capability.
-
-### Standing caveat
-
-Two P0 entries are **uncalibrated**: F0.24's meter and the retired-to-P1 F0.23
-admission control were both specified against an 8-Fleet ceiling that has never
-been measured against a repository large enough to bind it.
+### Product scope
+
+- Maestro makes work delegated by a Copilot **Session** visible inside cmux, the
+  Host Application the operator already uses.
+- Maestro observes; it does not enforce worktree isolation, own process
+  lifetime, persist `Parked` or `Interrupted` intent, sweep processes, provide a
+  command surface, or ship as a standalone application.
+- macOS is the supported platform.
+- cmux-native behavior is preferred. Maestro extends only where cmux cannot
+  bridge the required gap. The subagent tree remains Maestro's unique addition.
+
+### Runtime evidence
+
+- Read events from the Session's `events.jsonl`, never `session.db`.
+- Reconstruct parentage by joining
+  `subagent.started.data.toolCallId` to the spawning agent's `tool.*` event
+  `agentId`. Never use event `parentId`, which is chronological.
+- Use `agentId` as subagent identity.
+- Render arbitrary depth while optimizing for breadth.
+- Update the tree live while the Session runs and reconstruct it from durable
+  events when revisited.
+- Distinguish running, completed, and failed subagents.
+- Do not publish secrets, prompts, tool arguments, transcript content, or
+  machine-specific paths.
+
+### cmux presentation
+
+- Render the hierarchy cmux exposes: workspace -> terminal -> Session ->
+  subagent tree.
+- Selection controls expansion; completed subagents collapse behind a count.
+- A running row uses an animated spinner. A failed row uses a red `xmark`.
+- Follow cmux's custom-sidebar subset. Unsupported SwiftUI syntax fails
+  silently, so visual verification is required; `cmux sidebar validate` is not
+  sufficient.
+- Use semantic colors and SF Symbols. The project raster icon is unavailable in
+  custom sidebars.
+- Status and progress use their proven per-tab visual channels. Log is retained
+  and queryable but is not assumed to render on the workspace card.
+
+### Hook safety
+
+- Every Maestro hook is fail-open and exits zero on malformed or unexpected
+  input. An observer must never veto the tool call it observes.
+- Do not register `preToolUse` unless a future measured requirement cannot be
+  met through a safer event. `userPromptSubmitted` is the preferred start signal
+  for live work.
+- Honor `CMUX_COPILOT_HOOKS_DISABLED=1` as a complete Maestro hook kill switch.
+- Keep coding-agent integration optional and local configuration outside the
+  repository.
+
+## Current constraints and exclusions
+
+- The c-0026 single-line `¦` workspace-description format is transitional and
+  must be removed only when the replacement preserves every required visible
+  tree field.
+- Custom-sidebar rendering has no `@State`, `VSplitView`, `GeometryReader`,
+  `TextField`, or reliable zero-width hiding. Do not retry measured
+  non-rendering constructs.
+- Workspace rename input, a custom raster mark, and an expandable completed-task
+  disclosure are unavailable in the sidebar language and are not requirements.
+- cmux restore and hook-session storage are upstream capabilities. Maestro may
+  consume them only to the extent their measured behavior is correct.
 
 ## Unresolved requirements
 
-- ~~The minimum end-to-end acceptance slice that every prototype must prove.~~ **Resolved in c-0011:** the six-step scripted Acceptance Slice above, identical across all four routes, plus a per-stack executive report.
-- Which deferred capabilities are truly outside the MVP once a working shell exists. Narrowed in c-0011: anything not exercised by the six-step Acceptance Slice is outside the MVP by construction, so this reduces to whether the slice itself is right.
-- The required fidelity of restart reconciliation for active or interrupted work.
-- The acceptable provider-specific degradation when runtime controls are experimental.
-- ~~Whether the Electron route's real BrowserWindow and packaging seams hold once the external Electron dependency is available.~~ **Resolved in c-0012.** The `BrowserWindow` seam was exercised in c-0009; the packaging seam was measured in c-0012 and preserves supervision. What replaces it is narrower and recorded below: the signed and notarized build is still untested.
-- ~~**Workspace versus Worktree.**~~ **Resolved in c-0007.** A Fleet prefers its own Worktree, not as a hard rule. `Workspace` is retired as a structural term because Copilot and Visual Studio Code both own it.
-- ~~**How a Fleet is made aware of its siblings.**~~ **Resolved in c-0010:** it is not. Fleets are fully isolated; the human is the only integration point.
-- ~~**What Maestro uses for Attention now that the ledger is excluded.**~~ **Resolved in c-0010:** an unmatched `permission.requested`, plus `session.error` and `abort`. Unproven in the blocking case, because no unresolved request was found in local evidence.
-- ~~**Whether the tree renders arbitrary depth or a bounded depth.**~~ **Resolved in c-0010:** arbitrary depth, optimised for breadth. Measured real depth was 2, with fan-out dominating.
-- ~~**Whether `inbox_entries` inter-session messaging is in scope.**~~ **Resolved in c-0010:** out of scope, and misread. It is the subagent-to-owning-session channel, not a peer channel.
-- **Whether the 8-Fleet ceiling survives worktree-per-Fleet in a large monorepo.** Narrowed in c-0010 to duplicated untracked and build state; git cost is negligible and file descriptors are not a risk. **Accepted as a known unknown in c-0011** because no target monorepo exists to measure against. *Risk:* admission control and the resource meter are being specified against a ceiling never measured against a repository large enough to bind it, so a wrong calibration would surface only under load on a user's real repository. *Trigger to revisit:* the first time a real Fleet count exceeds 3 on a repository with heavy dependency or build state, or the moment sparse checkout is adopted, since c-0010 identified it as the strongest mitigation.
-- ~~**In-app editing is contradicted.**~~ **Resolved in c-0008:** read-only viewers plus an "open in Visual Studio Code" action. No editor is built.
-- Whether the Sessions ceiling of 8 and the host-capacity guardrail need distinct user-facing treatment when the guardrail binds first.
-- **Whether `herdr` remains in the architecture at all.** Its detached-daemon lifetime directly contradicts the process-ownership requirement. Either Maestro replaces it with directly owned child processes, or it must prove `herdr` can be run in a non-detaching mode it fully controls. [c-0006](./cycles/c-0006.md)
-- ~~**What happens to long-running Agent work when the user closes the application.**~~ **Resolved in c-0008:** auto-Park behind an acknowledged pre-close summary.
-- **The WezTerm automation ceiling has never been measured, only researched.** The ~40-50% figure, the assertable `wezterm cli` surface, and the absence of a macOS accessibility tree all come from c-0016 delegated research, which is untrusted-evidence class by this loop's own rules - and they feed a **fixed rubric criterion** for a route now committed to a complete MVP. c-0018 obtained standing permission to measure it directly: *"I do not use WezTerm actively on this computer so you may experiment with it's capabilities and read the documentation as necessary."* Upgrading this from research to measurement is available under a prototype gate and is the cheapest remaining improvement to the rubric's evidence base. [c-0016](./cycles/c-0016.md), [c-0018](./cycles/c-0018.md)
-- **What the comparative evaluation's rubric holds beyond user-interface automation, and how the criteria weigh.** Narrowed in c-0015: the early-versus-late question is partly answered, because the user fixed one criterion before any route shipped. Still open is whether a route that cannot be meaningfully automated is merely scored down or effectively disqualified, which matters most for the v1.1 WezTerm route. Owned by n-0007. [c-0015](./cycles/c-0015.md)
-- **Post-MVP direction on record:** automated user-interface regression checks are the next work after the MVP, so a stack is being chosen partly for what it costs *after* the MVP rather than only for whether it can reach one. Storybook and Playwright are named as reference points, not as decisions. [c-0015](./cycles/c-0015.md)
-- ~~**Whether the Attention predicate fires against a genuine block.**~~ **Resolved in c-0012.** It fires, it clears, and it pairs by `data.requestId`. Observed on a deliberately blocked live Session.
-- ~~**Which integration mode a Fleet uses to drive its Session.**~~ **Resolved in c-0014: the Copilot SDK**, reversing c-0013's choice of ACP. Permissions, resume, and session listing are all first-class there.
-- **Whether the SDK permission callback fires in practice.** The accepted unknown above. Until it is observed, the strongest available claim is that the runtime declares the behaviour and a separate application implements against it.
-- **Whether the SDK exposes a session rename.** No name field was found in `SessionConfig`; `clientName` is not a session name. If one exists over RPC, the c-0007 runtime-naming requirement can be restored in full rather than narrowed. **Cost corrected in c-0018:** this is *not* a free read. The typings existed only inside c-0014's prototype isolation path, which was cleaned up, and no copy remains - `~/.copilot-cli/*/` ships the binary alone. Answering it needs an `npm install` inside a fresh isolation path, under a prototype gate. [c-0014](./cycles/c-0014.md), [c-0018](./cycles/c-0018.md)
-- **Whether `subagent.started` reaches an SDK client as a typed event**, or only through `events.jsonl`. **Restated in c-0018:** this was still phrased against ACP, the seam c-0014 superseded, and existed in three places at once - here in its ACP form, on n-0002 in its ACP form, and on n-0008 in its SDK form. It is now held solely by n-0008. No subagent was spawned during the c-0013 or c-0014 probes, so the subagent tree's live path is confirmed only for the shared event log. It bears directly on acceptance-slice step 3. [c-0013](./cycles/c-0013.md), [c-0014](./cycles/c-0014.md), [c-0018](./cycles/c-0018.md)
-- **What the Acceptance Harness's stack-agnostic interface is.** Owned by n-0009 and blocking all four routes. **Narrowed in c-0016:** step 4's re-scoping is no longer the open part - it is measured working on Electron through Playwright, needing only stable `data-testid` hooks from the route. What remains is the WezTerm end, where roughly **40-50%** of on-screen verification is automatable through `wezterm cli list`, `get-text`, and `list-clients`, and the rest is unreachable: WezTerm exposes **no macOS accessibility tree at all** (issue #913), which closes XCTest, Appium, and AppleScript together and leaves only screenshot plus optical character recognition. [c-0012](./cycles/c-0012.md), [c-0016](./cycles/c-0016.md)
-- ~~**How the Acceptance Harness proves it is not vacuously passing.**~~ **Resolved in c-0017:** the paired-falsification suite recorded above, at per-assertion granularity, run before the route suite, with a passing negative case failing the harness rather than the route. [c-0016](./cycles/c-0016.md), [c-0017](./cycles/c-0017.md)
-- **Which processes survive `SIGTERM` on a live Session, and why.** c-0012 captured the survivor count (five) but not their identity. The c-0006 pattern - wrapper processes exiting only once their children die - is the likely explanation and is untested. It bears on whether a longer grace period would avoid `SIGKILL` or merely delay it. [c-0012](./cycles/c-0012.md)
-- ~~**Whether a signed, notarized, hardened-runtime build spawns and reaps like the unsigned build.**~~ **Resolved in c-0016 by scoping it out.** The MVP ships unsigned, so the question no longer gates the slice. It returns the moment Maestro is distributed to anyone but the author, and the c-0012 caveat still applies then: the hardened runtime restricts what a process may do, so it is not a formality. [c-0012](./cycles/c-0012.md), [c-0016](./cycles/c-0016.md)
-- **Whether disabling `enableNodeCliInspectArguments` actually blocks Playwright. Accepted unknown as of c-0017, not a blocker.** It does not gate the MVP: the MVP ships **fuse-enabled** (c-0016) and Playwright is measured 3/3 against exactly that build, so the question only becomes live for a configuration the MVP has deferred. Documentary only, and **explicitly not established by the c-0016 probe**, which tried to test it and accidentally tested code signing instead: the fuse-disabled builds were killed by macOS for an invalid signature before Playwright's attach was ever exercised. A valid test must re-sign after flipping fuses. *Risk:* if the claim is false, the MVP could ship with production fuse settings and still be testable, and this cycle's build decision is more conservative than it needs to be. *Trigger:* the first Electron route build that configures fuses at all. [c-0016](./cycles/c-0016.md)
-- **The constraint on shipping has moved above the route nodes.** As of c-0017 both n-0003 (v2 Electron MVP) and n-0009 (Acceptance Harness) pass the full leaf gate at fog `cleared` and maturity `promotion-ready`, and neither can be published, because the promotion gate also requires the **branch** node to be at those values and both branches - n-0000 and n-0001 - sit below them. Two things must land before any MVP work item exists: n-0001 needs its executive-report comparability question answered, and n-0000 needs re-maturing plus reconciliation of Issue #1, whose "Isolation" section has contradicted confirmed c-0010 state for seven cycles and is the tracker parent the work would hang beneath. [c-0017](./cycles/c-0017.md)
-- **What evidence each route's executive report must carry to make four reports genuinely comparable.** Owned by n-0001, unasked for six cycles, and now on the critical path because n-0001 is n-0009's branch. This is a product decision - it defines the artifact the comparative evaluation consumes - and it is the next question the loop should spend budget on. [c-0011](./cycles/c-0011.md), [c-0017](./cycles/c-0017.md)
-- **Desktop push notifications are a strong P1, and deliberately not a rubric criterion.** The primary agent of a Fleet should be able to raise an operating-system notification when its Fleet enters Attention. The user placed it outside P0 and stated that every candidate stack is expected to handle it, so it earns **no weight** in the comparative evaluation and must not be used to separate routes. *User: "I expect all stacks to be able to handle this so not really indexing too hard on it."* [c-0016](./cycles/c-0016.md)
+- Replace tail truncation with incremental event-log reads so logs larger than
+  8 MiB do not silently omit subagents.
+- Resolve the correct Session without choosing the newest log for a shared
+  working directory.
+- Replace the transitional workspace description with proven per-tab channels
+  or another representation that preserves parentage, state, and activity.
+- Determine how the Session task list is presented when `log` is retained but
+  not workspace-card content.
+- Decide the deliberate SF Symbol for Maestro's mark.
+- Establish a reliable live Session state. c-0029 observed cmux's
+  `runtimeStatus` and `agentLifecycle` as `idle` throughout a ten-second active
+  tool call.
+- Explain or canonicalize cmux hook-store duplication before using it for
+  identity. c-0029 observed 31 records while one process/transcript accumulated
+  many identities.
+- Re-measure session restore after the generated `-C` argument defect is fixed.
+- Verify uninstall after Copilot migrated cmux hooks from `config.json` to
+  `settings.json`.

@@ -2000,19 +2000,112 @@ Each command is guarded by `[ -n "$CMUX_SURFACE_ID" ]` and by
 **exit 0 and `{}`**. `CMUX_COPILOT_HOOKS_DISABLED=1` is a documented kill switch
 Maestro should mirror.
 
-### What is still unmeasured
+### The migrated hooks fire inside cmux
 
-`~/.cmuxterm/` still holds only `events.jsonl`; no
-`copilot-hook-sessions.json` exists yet, because every session run here was
-outside cmux. The lifecycle values, the session store, and whether
-`set-status` / `log` / `set-progress` actually **render** all require a Copilot
-session started inside a cmux terminal. A Copilot session outside cmux cannot
-drive the CLI at all:
+A Copilot session started inside cmux created
+`~/.cmuxterm/copilot-hook-sessions.json`. Its record contains the expected
+session id, workspace id, surface id, cwd, pid, process start time, launch
+command, and timestamps. The measured lifecycle was `idle`, represented
+consistently in both `agentLifecycle` and `runtimeStatus`; the last notification
+also reported `idle` with the body "Copilot session completed". The other
+documented lifecycle values have not yet been observed.
+
+The store contained duplicate session records for one Copilot process. One used
+the active Copilot session id; two used different ids while pointing at the same
+process and transcript. That duplication needs explanation before Maestro treats
+the file as a one-row-per-session source of truth.
+
+### Status and progress render; log is stored but not shown on the workspace card
+
+All three commands returned `OK` from inside cmux. `cmux list-status`,
+`cmux list-log`, and `cmux sidebar-state` immediately exposed the published
+values. Direct inspection of the cmux workspace card confirmed:
+
+- `set-status` rendered the blue `hello` status.
+- `set-progress 0.5 --label=half` rendered the `half` progress row.
+- `log` appended `[info] hello` to the per-tab log and was returned by
+  `list-log`, but no log row appeared on the workspace card.
+
+The temporary status and progress were then removed with `clear-status` and
+`clear-progress`. The result narrows the sidebar redesign: status and progress
+are proven visual channels, while log is a retained/queryable channel rather
+than workspace-card content.
+
+A Copilot session outside cmux still cannot drive the CLI at all:
 
 ```
 $ cmux list-status
 Error: ERROR: Access denied - only processes started inside cmux can connect
 ```
+
+### The spinner fix renders correctly
+
+After `cmux sidebar reload maestro`, `cmux sidebar open maestro` opened the
+custom sidebar as a real Bonsplit pane. The accessibility tree exposed the
+splitter, workspace and terminal hierarchy, and both test rows.
+
+A controlled description fixture rendered `running-probe` with the animated
+braille spinner and `failed-probe` with the red SF Symbol `xmark`. This directly
+confirms the c-0026 fix: branching between the spinner and failure image works,
+and a running row no longer draws the red `x` that `.frame(width: 0)` failed to
+hide.
+
+The pane itself is resizable through cmux's persisted split system. That proves
+the c-0026 candidate mechanism, but does not reverse the user's earlier decision
+to keep the task panel bounded inside the sidebar rather than make every task
+list a separate pane.
+
+### Native lifecycle stayed idle during active work
+
+The hook store grew as this cycle ran. A corrected 30-second watcher sampled
+`sessions` 519 times at about 58 ms intervals while one tool call remained open
+for ten seconds:
+
+| Measurement | Result |
+| --- | --- |
+| Store records | 31 throughout the sample |
+| `runtimeStatus` | `idle` in all 16,089 record observations |
+| `agentLifecycle` | `idle` in all 16,089 record observations |
+| Non-idle transitions | 0 |
+
+This is a negative result with an active control: the tool call was deliberately
+held open. cmux's native Copilot hooks did not expose `running` during that work,
+so Maestro cannot delegate its live-working signal to the native lifecycle on
+this version. The result does not establish that `needsInput` or `unknown`
+cannot occur; neither was exercised.
+
+The duplication also worsened from the three records first observed. Earlier in
+the cycle the file held 23 records across three process identities, including
+13 records sharing one active process and transcript. It later reached 31.
+One-row-per-Session is disproven, and the file is not a safe identity source
+until cmux defines or canonicalizes these duplicates.
+
+### Native restore generated an invalid Copilot command
+
+After restarting cmux, its workspace card offered a Copilot restore action. The
+action launched:
+
+```console
+cmux restore copilot <checkpoint-id>
+```
+
+cmux accepted that invocation, but the generated Copilot command failed:
+
+```text
+error: option '-C <directory>' argument missing
+```
+
+This is not missing operator input. `cmux restore --help` documents only
+`<kind> <checkpoint-id>` as required. Public cmux source builds restore from a
+captured launch command and removes saved working-directory options only when
+the option's following value equals the recorded directory. The failure
+therefore lies in captured or reconstructed argument shape; the exact malformed
+token was not isolated in this cycle.
+
+The practical consequence is narrower than "restore is unavailable": the
+session store and restore affordance exist, but Copilot restore is not working
+for the measured record and must not be treated as inherited durable behavior
+until re-measured.
 
 ### Rollback
 
