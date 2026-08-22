@@ -25,15 +25,17 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
   `subagent.started.data.toolCallId` to the spawning agent's `tool.*` event
   `agentId`. Never use event `parentId`, which is chronological.
 - Use `agentId` as subagent identity.
-- Render arbitrary depth while optimizing for breadth.
+- Render a bounded tree projection: publish at most 60 rows, clamp displayed
+  depth to 6, and show at most 10 rows for the owning surface. This favors
+  breadth and keeps the sidebar bounded; it does not preserve arbitrary depth.
 - Update the tree live while the Session runs and reconstruct it from durable
   events when revisited.
-- Distinguish running from completed subagents. **There is no failed state.**
-  `subagent.failed` is declared in the SDK typings but is never emitted:
-  measured across 60 recent sessions, 133 `subagent.started`, 132
-  `subagent.completed`, **zero** failures, and `subagent.completed` carries no
-  success flag. A failure indicator can therefore only ever be rendered from a
-  hand-written fixture, and must not be built (c-0030).
+- Distinguish running from completed subagents. Live events expose no failed
+  state: across 60 measured sessions, 133 `subagent.started` and 132
+  `subagent.completed` events carried no failure signal. The implementation
+  nevertheless retains a fixture-only `fail` status, `x` wire glyph, and red
+  `xmark` rendering. **Unimplemented requirement:** remove that unreachable
+  failure representation, as decided in c-0030.
 - Retain a finished subagent briefly rather than deleting it on completion, and
   sort running work above finished work within each sibling group.
 - Derive **Attention from the event log**, never from a stored flag: a
@@ -42,8 +44,16 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
 - Read the Session's context percentage, model, and effort from the runtime's
   own status line via `cmux read-screen`. Never synthesise a percentage from
   hardcoded context-window sizes.
-- Do not publish secrets, prompts, tool arguments, transcript content, or
-  machine-specific paths.
+- **Unimplemented privacy requirement:** do not publish secrets, prompts, tool
+  arguments, transcript content, or machine-specific paths. The current runtime
+  violates this boundary: it derives a tool summary from the argument
+  `description`, or from the basename of the argument `path`, and publishes that
+  summary in cmux status/progress and logs, all enabled by default. It also
+  publishes a summarized prompt in thinking progress and logs by default, and
+  may append summarized tool-result text to a log entry. A direct `path`
+  argument is reduced to its basename, but arbitrary `description` and result
+  text receive no path or secret scrubbing. Full command text and transcript
+  content are not published by these paths.
 
 ### cmux presentation
 
@@ -58,9 +68,13 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
 - Subagents render nested under the Copilot surface that produced them, matched
   by the `CMUX_SURFACE_ID` the plugin publishes against the sidebar's `t.id`.
   Never infer the owning surface from a title suffix.
-- Attention renders as a yellow badge that persists for exactly as long as the
-  Session is stopped, and returns to the running indicator when work resumes. It
-  is a mirror of runtime state, not a notification with a lifetime.
+- **Unimplemented attention requirement:** the yellow badge should mirror the
+  blocking runtime state and persist until that state clears. Today a derived
+  permission remains open until its matching `permission.completed`, while the
+  reducer clears stored attention on `user.prompt` or `tool.post`; the sidebar
+  also lets a click remove the published attention row. There is no generic
+  "work resumed" transition, and a later hook may republish an outstanding
+  derived permission.
 - Follow cmux's custom-sidebar subset. Unsupported SwiftUI syntax fails
   silently, so visual verification is required; `cmux sidebar validate` is not
   sufficient.
@@ -101,8 +115,8 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
   must be removed only when the replacement preserves every required visible
   tree field.
 - Custom-sidebar rendering has no `@State`, `VSplitView`, `GeometryReader`,
-  `TextField`, or reliable zero-width hiding. Do not retry measured
-  non-rendering constructs.
+  `TextField`, or reliable zero-width hiding. `HSplitView` is available. Do not
+  retry measured non-rendering constructs.
 - Workspace rename input, a custom raster mark, and an expandable completed-task
   disclosure are unavailable in the sidebar language and are not requirements.
 - cmux restore and hook-session storage are upstream capabilities. Maestro may
@@ -110,17 +124,16 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
 
 ## Unresolved requirements
 
-- Replace tail truncation with incremental event-log reads so logs larger than
-  8 MiB do not silently omit subagents.
 - Resolve the correct Session without choosing the newest log for a shared
   working directory.
 - Replace the transitional workspace description with proven per-tab channels
   or another representation that preserves parentage, state, and activity.
 - Determine how the Session task list is presented when `log` is retained but
   not workspace-card content.
-- Decide whether Maestro has a visible mark at all. c-0030 removed the sidebar
-  title row, so the `point.3.connected.trianglepath.dotted` header symbol is
-  gone and no mark is currently rendered.
+- Decide whether Maestro needs a dedicated visible mark. c-0030 removed the
+  separate sidebar title row and its `point.3.connected.trianglepath.dotted`
+  symbol, but every workspace row still renders the generic `folder.fill`
+  symbol beside its workspace title.
 - Decide what a still-blocked badge should do for a Session that **dies while
   blocked**. It never resumes, so nothing clears it. Accepted unknown; manual
   dismissal is the current exit.

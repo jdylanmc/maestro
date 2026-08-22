@@ -1899,7 +1899,7 @@ report what it dropped. Consequences, all confirmed by measurement:
   construct at a time. Reason about the published data separately, from the
   stored description, never from what the pane shows.
 
-### The four constructs measured to fail silently
+### The five constructs measured to fail silently
 
 | # | Construct | Observed | Use instead |
 | --- | --- | --- | --- |
@@ -1907,6 +1907,7 @@ report what it dropped. Consequences, all confirmed by measurement:
 | 2 | Arithmetic as a bare modifier **argument**, e.g. `.padding(.leading, depth * 9)` | Nothing renders. Arithmetic inside a function body or a `"\(...)"` interpolation is fine. | A ternary, or precompute in a `func` |
 | 3 | `split(separator: "\n")` | Returns the whole string as **one** element - the `\n` escape is not interpreted. `whereSeparator: { $0.isNewline }` renders nothing at all. **A 23-line tree became one truncated row while cmux stored all 432 bytes intact.** | A single-line wire format split on a literal delimiter |
 | 4 | `.frame(width: 0)` to hide a view | **Does not hide.** Six running subagents drew a red `xmark` that was supposed to be zero-width. | `if/else` branching between the two views |
+| 5 | A nested function call used as an argument, e.g. `cued(anyRunning(d), clock.epoch, 0)` | Only part of the icon rendered; the rest was silently dropped. | Keep arguments flat: bindings and literals only. Precompute inside the called `func` when needed. |
 
 Rule 3 is the expensive one: it is indistinguishable from a publishing bug. The
 only way it was caught was reading the stored description out of
@@ -1927,14 +1928,28 @@ Neither had been read in the 27 hours the plugin existed. Reading them settled
 three of five open capability questions outright and explained every silent
 failure above. The check costs one `curl`.
 
+### Measured available surface
+
+The interpreter is richer than the first probe established. The following
+render: `Rectangle`, `RoundedRectangle`, `Capsule`, `Circle`, `Ellipse`, `.fill`,
+`.stroke("#hex", lineWidth:)`, `.trim(from:to:)` for arcs, `ZStack`, `.offset`,
+`.rotationEffect`, `.mask`, `.overlay`, `ScrollView`, and `HSplitView`.
+`HSplitView` provides a resizable divider whose position persists.
+
+The workspace binding also exposes `w.progress` (an object with `value` and
+`label`), `w.latestMessage`, `w.latestPrompt`, and `w.latestAt`. However,
+`w.latestAt` was empty on every measured Copilot surface and must not be used as
+a Copilot activity signal. Nil-coalescing (`??`) is outside the documented
+supported subset and should be avoided.
+
 ### Documented as unsupported - do not attempt
 
 `@State` and every two-way control (`TextField`, `Toggle`, `Slider`, `Picker`);
 `switch`; custom `struct`/`View`; gradients; navigation (`sheet`, `popover`,
 `NavigationStack`); `.keyboardShortcut`; `AsyncImage`/`.resizable`. There is
 **no `VSplitView`** and **no `GeometryReader`**, and `.frame` exposes `width`,
-`height`, and `maxWidth` but no `maxHeight` - so no view can know or claim a
-proportion of the sidebar's height. Bound lists by row count instead.
+`height`, and `maxWidth` but no `maxHeight`. Use `HSplitView` when a horizontal,
+user-resizable split is appropriate; otherwise bound lists by row count.
 
 ## c-0029 prototype - cmux's Copilot hooks install, but only after Copilot moves them
 
@@ -2215,8 +2230,11 @@ verified silent-and-zero across 12 payload shapes.
 
 `clock.epoch` returns **seconds** - `1787427474`, ten digits - and the sidebar
 re-renders about once a second, so anything hand-drawn from `clock` is capped at
-**1 fps**. There is no `withAnimation`, `.animation`, `.transition`, or
-`symbolEffect`, and no CSS.
+**1 fps**. `clock.second` wraps at 60 and visibly jerks once a minute; use the
+monotonic `clock.epoch`. Refresh drift makes one-tick-per-phase sequences
+stutter, so hold every phase for at least two ticks. Sequenced animation is
+fragile; symmetric animation is robust. There is no `withAnimation`,
+`.animation`, `.transition`, or `symbolEffect`, and no CSS.
 
 A throwaway probe sidebar established what renders: `ProgressView()`,
 `ProgressView(value:)`, `Gauge`, `Circle().trim().stroke()`, `.shadow`, `.blur`,
