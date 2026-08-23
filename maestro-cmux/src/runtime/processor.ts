@@ -5,7 +5,16 @@ import { detectCmuxEnvironment } from "../cmux/detect.js"
 import { loadConfig } from "../config.js"
 import { createLogger } from "../logger.js"
 import { summarizeText } from "../text.js"
-import { buildTree, detectDismissed, findSessionDir, summarize, type TreeSummary } from "../tree.js"
+import {
+  buildTree,
+  detectDismissed,
+  findSessionDir,
+  mergeOwnedRows,
+  ownedRows,
+  pruneOwnedBlocks,
+  summarize,
+  type TreeSummary,
+} from "../tree.js"
 import type {
   CmuxClient,
   HookLogger,
@@ -41,6 +50,29 @@ async function readPublishedDescription(
   })
 }
 
+/** Surface ids currently living in a workspace, or undefined if unavailable. */
+async function readWorkspaceSurfaces(
+  binary: string,
+  workspaceID: string | undefined,
+): Promise<string[] | undefined> {
+  if (!workspaceID) return undefined
+  return new Promise((resolve) => {
+    execFile(
+      binary,
+      ["list-pane-surfaces", "--id-format", "uuids", "--workspace", workspaceID],
+      { timeout: 4000 },
+      (err, stdout) => {
+        if (err) return resolve(undefined)
+        const ids = stdout
+          .split("\n")
+          .map((line) => line.replace(/^[*\s]+/, "").split(/\s+/)[0] ?? "")
+          .filter((id) => /^[0-9A-Fa-f-]{36}$/.test(id))
+        resolve(ids.length > 0 ? ids : undefined)
+      },
+    )
+  })
+}
+
 function isFileEditTool(toolName: string): boolean {
   return toolName === "edit" || toolName === "create"
 }
@@ -56,7 +88,6 @@ export function treeDescriptionForEvent(
   if (eventType === "session.end") return ""
   return tree?.encoded
 }
-
 async function renderState(
   cmux: CmuxClient,
   config: PluginConfig,
@@ -331,14 +362,19 @@ export async function processHook(
   // published was dismissed by hand. That name is remembered in runtime state,
   // because the very next publish would otherwise resurrect it.
   const dismissed = new Set<string>()
+  let published: string | undefined
   try {
+    published = await readPublishedDescription(config.cmuxBin, environment.workspaceID)
     const dir = findSessionDir(event.cwd)
-    if (dir) {
-      const published = await readPublishedDescription(config.cmuxBin, environment.workspaceID)
-      if (published !== undefined) {
-        const subs = buildTree(join(dir, "events.jsonl"))
-        for (const name of detectDismissed(subs, published)) dismissed.add(name)
-      }
+    if (dir && published !== undefined) {
+      const subs = buildTree(join(dir, "events.jsonl"))
+      // Compare against THIS Session's block only. A co-resident Session's rows
+      // are not evidence about what this operator dismissed here, and a shared
+      // subagent name across two blocks would otherwise mask a real dismissal.
+      const mineNow = environment.surfaceID
+        ? ownedRows(published, environment.surfaceID)
+        : published
+      for (const name of detectDismissed(subs, mineNow)) dismissed.add(name)
     }
   } catch {
     /* dismissal is a convenience; never let it break a hook */
@@ -351,6 +387,16 @@ export async function processHook(
   })
 
   try {
+    // A killed Session never runs its end hook, so its block would linger with
+    // no live Session to clear it. Session start is the natural cleanup point:
+    // it is once per Session rather than once per tool call, and it is exactly
+    // when a workspace is being picked back up after a crash.
+    const prunedBase = async (): Promise<string> => {
+      const base = published ?? ""
+      if (event.type !== "session.start" || !base) return base
+      const live = await readWorkspaceSurfaces(config.cmuxBin, environment.workspaceID)
+      return live ? pruneOwnedBlocks(base, live) : base
+    }
     const tree =
       event.type === "session.end"
         ? null
@@ -362,14 +408,26 @@ export async function processHook(
             identity.sessionId,
             identity.transcriptPath,
           )
-    const description = treeDescriptionForEvent(event.type, tree)
+    const mine = treeDescriptionForEvent(event.type, tree)
     // An EMPTY tree is published, not swallowed. `summarize` returns null only
     // when it could not compute at all; a session whose subagents have all
     // finished and aged out summarises to an empty row set, and publishing that
     // is what clears a stale tree. Skipping the publish is what froze completed
-    // subagents on screen as permanently running (#36). A Session end clears
-    // the entire description, including the owner row, so the surface resumes
-    // rendering as an ordinary terminal.
+    // subagents on screen as permanently running (#36).
+    //
+    // The field is shared, so this Session replaces only its OWN block and
+    // leaves co-resident Sessions alone (issue #49). A Session end therefore
+    // removes its block rather than clearing the field, which used to take
+    // every other Session in the workspace down with it.
+    //
+    // Without a surface id there is no block to own, so the whole field is
+    // written exactly as before.
+    const description =
+      mine === undefined
+        ? undefined
+        : environment.surfaceID
+          ? mergeOwnedRows(await prunedBase(), environment.surfaceID, mine)
+          : mine
     if (description !== undefined) {
       await new Promise<void>((resolve) => {
         execFile(

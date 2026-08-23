@@ -488,6 +488,97 @@ export const OWNER_MARK = "@"
 export function encodeOwner(surfaceID: string): string {
   return `${OWNER_MARK} o ${surfaceID.replace(/[\n\r¦ ]/g, "")}`
 }
+
+/**
+ * The description, split into one block per publishing Session.
+ *
+ * The workspace description is a single field, but a workspace can hold more
+ * than one Copilot Session. Until now each Session rewrote the WHOLE field, so
+ * whichever published last won: the other Session's owner row vanished and its
+ * tab fell back to rendering as a plain terminal, taking its subagent tree with
+ * it (issue #49).
+ *
+ * No new wire format is needed to fix that, because the owner row already
+ * identifies a Session. It is simply promoted to a DELIMITER: an `@ o <surface>`
+ * row opens a block, and every row after it belongs to that Session until the
+ * next owner row. A single-Session workspace encodes byte-identically to before.
+ *
+ * Rows appearing BEFORE any owner row are dropped rather than preserved. They
+ * cannot be attributed to a Session, so nothing could ever clear them - and this
+ * field is Maestro's own, so the only way to produce them is an older build that
+ * published without an owner. Dropping them lets one publish clean up after an
+ * upgrade; keeping them would strand stale rows on screen forever.
+ */
+export interface OwnedBlock {
+  owner: string
+  rows: string[]
+}
+
+export function splitOwnedBlocks(published: string): OwnedBlock[] {
+  const blocks: OwnedBlock[] = []
+  for (const row of published.split(ROW_SEP)) {
+    if (!row) continue
+    if (row.startsWith(`${OWNER_MARK} o `)) {
+      blocks.push({ owner: row.slice(4).trim(), rows: [row] })
+    } else {
+      const current = blocks[blocks.length - 1]
+      if (current) current.rows.push(row)
+    }
+  }
+  return blocks
+}
+
+/** The rows one Session published, as a description fragment of its own. */
+export function ownedRows(published: string, surfaceID: string): string {
+  const block = splitOwnedBlocks(published).find((b) => b.owner === surfaceID)
+  return block ? block.rows.join(ROW_SEP) : ""
+}
+
+/**
+ * Drop blocks whose surface no longer exists in the workspace.
+ *
+ * Per-block merging fixes clobbering but introduces a new way to go stale: a
+ * Session that is KILLED never runs its end hook, so its block is never removed
+ * and no live Session will touch it. The old whole-field overwrite cleaned that
+ * up as a side effect of destroying everything.
+ *
+ * Pruning is therefore explicit, and deliberately conservative - an EMPTY or
+ * unavailable surface list prunes nothing, because "I could not enumerate the
+ * surfaces" must never be read as "no surfaces exist" and wipe live trees.
+ */
+export function pruneOwnedBlocks(published: string, liveSurfaceIDs: readonly string[]): string {
+  if (liveSurfaceIDs.length === 0) return published
+  const live = new Set(liveSurfaceIDs)
+  return splitOwnedBlocks(published)
+    .filter((b) => live.has(b.owner))
+    .flatMap((b) => b.rows)
+    .join(ROW_SEP)
+}
+
+/**
+ * Replace one Session's block, leaving every other Session's block untouched.
+ *
+ * `mine` is that Session's freshly computed rows, owner row included. An EMPTY
+ * `mine` removes the block - which is what a Session end must do now, because
+ * clearing the whole field would take every co-resident Session down with it.
+ *
+ * Block order is preserved so tabs do not reshuffle: an existing block is
+ * updated in place, and a new one is appended.
+ */
+export function mergeOwnedRows(published: string, surfaceID: string, mine: string): string {
+  const blocks = splitOwnedBlocks(published)
+  const rows = mine.split(ROW_SEP).filter((row) => row.length > 0)
+  const index = blocks.findIndex((b) => b.owner === surfaceID)
+
+  if (index >= 0) {
+    if (rows.length > 0) blocks[index] = { owner: surfaceID, rows }
+    else blocks.splice(index, 1)
+  } else if (rows.length > 0) {
+    blocks.push({ owner: surfaceID, rows })
+  }
+
+  return blocks.flatMap((b) => b.rows).join(ROW_SEP)
+}
 const ATTENTION_GLYPH: Record<AttentionKind, string> = {
   permission: "p",
   question: "q",

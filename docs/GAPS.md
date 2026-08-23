@@ -172,6 +172,22 @@ Measured, each after costing real debugging time:
 **Shipped:** `detectAttention` retires outstanding permissions and elicitations at `session.shutdown`, applied in log order so a `session.resume` correctly reopens later ones. One live Session in the same scan carried **3** shutdowns, so a whole-file "has shutdown" test would have muted a real blocking prompt.
 **Closes with:** a supervised plugin process that can observe Session death and publish on its behalf, rather than a hook that only runs while the Session is alive.
 
+### G-24 - A blocked Session cannot raise its own badge
+
+**Wanted:** the ASK badge to appear whenever a Session is waiting on the operator.
+**Blocked by:** publishing is hook-driven, and while a Session sits blocked NO hook fires. Measured ordering is `tool.execution_start` -> `preToolUse` -> `permission.requested`, so even a tool-start hook runs before the request exists. The only hook that can catch a live block is `notification`, and it does not fire for every prompt variant.
+**Evidence:** a Session blocked on an "Allow directory access" prompt showed no badge; its workspace description held the owner row and nothing else, so no attention row was ever written. Its log had an outstanding `permission.requested` at that moment, so `detectAttention` would have returned it - nothing called it. That log recorded 347 permission requests and zero `notification` events.
+**Shipped:** nothing. This is the opposite failure to G-11: that badge wrongly STAYED ON, this one never turns on, and better derivation cannot fix it because derivation is never invoked.
+**Closes with:** a watcher that recomputes attention on a timer rather than on a hook - the same supervised process as G-23.
+
+### G-25 - The interpreter cannot scope rows to one publisher
+
+**Wanted:** each Copilot Session's subagent rows rendered under its own tab.
+**Blocked by:** extracting one publisher's contiguous rows needs an index span, and every construct tried to build it renders NOTHING - silently. `Array(0..<rows.count).filter { ... }.map { rows[$0] }` fails, and so does `var out: [String] = []` with `out.append(rows[j])` in a `for` loop. Single-expression filters over the whole description work, which is why the unscoped version renders.
+**Evidence:** verified against the live accessibility tree, and confirmed by reverting - the old unscoped code renders rows, the scoped code renders none, on the same description. `cmux sidebar validate` reported OK throughout.
+**Shipped:** the publish side is block-aware (see mergeOwnedRows), and `isOwner` correctly marks EVERY Session's tab - proven live with a second owner block. Only row scoping is missing, so co-resident Sessions currently pool their rows under the first tab instead of losing them.
+**Closes with:** a compiled sidebar reading a real payload, or per-surface channels. See issue #49.
+
 ---
 
 ## Host gaps
