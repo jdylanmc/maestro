@@ -351,6 +351,11 @@ export async function processHook(
       identity.sessionId,
       identity.transcriptPath,
     )
+    // An EMPTY tree is published, not swallowed. `summarize` returns null only
+    // when it could not compute at all; a session whose subagents have all
+    // finished and aged out summarises to an empty row set, and publishing that
+    // is what clears a stale tree. Skipping the publish is what froze completed
+    // subagents on screen as permanently running (#36).
     if (tree) {
       await new Promise<void>((resolve) => {
         execFile(
