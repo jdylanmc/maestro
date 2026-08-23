@@ -22,11 +22,7 @@ import { detectAttention } from "../src/tree.js"
 
 const ASK = "ask_user"
 
-function event(
-  type: string,
-  data: Record<string, unknown>,
-  timestamp: string,
-): string {
+function event(type: string, data: Record<string, unknown>, timestamp: string): string {
   return `${JSON.stringify({ type, agentId: null, data, timestamp })}\n`
 }
 
@@ -58,10 +54,24 @@ test("an answered elicitation raises nothing", (t: TestContext) => {
 test("only the unanswered elicitation counts among many answered ones", (t: TestContext) => {
   const lines: string[] = []
   for (let i = 0; i < 50; i++) {
-    lines.push(event("tool.execution_start", { toolCallId: `c${i}`, toolName: ASK }, "2026-08-20T11:42:36.443Z"))
-    lines.push(event("tool.execution_complete", { toolCallId: `c${i}` }, "2026-08-20T11:43:00.000Z"))
+    lines.push(
+      event(
+        "tool.execution_start",
+        { toolCallId: `c${i}`, toolName: ASK },
+        "2026-08-20T11:42:36.443Z",
+      ),
+    )
+    lines.push(
+      event("tool.execution_complete", { toolCallId: `c${i}` }, "2026-08-20T11:43:00.000Z"),
+    )
   }
-  lines.push(event("tool.execution_start", { toolCallId: "live", toolName: ASK }, "2026-08-23T00:13:51.709Z"))
+  lines.push(
+    event(
+      "tool.execution_start",
+      { toolCallId: "live", toolName: ASK },
+      "2026-08-23T00:13:51.709Z",
+    ),
+  )
   const attention = detectAttention(log(t, lines))
   assert.equal(attention?.kind, "question")
   assert.equal(
@@ -81,7 +91,11 @@ test("the oldest unanswered elicitation is the one reported", (t: TestContext) =
 
 test("an ordinary open tool call is not an elicitation", (t: TestContext) => {
   const path = log(t, [
-    event("tool.execution_start", { toolCallId: "c1", toolName: "bash" }, "2026-08-23T00:13:51.709Z"),
+    event(
+      "tool.execution_start",
+      { toolCallId: "c1", toolName: "bash" },
+      "2026-08-23T00:13:51.709Z",
+    ),
   ])
   assert.equal(detectAttention(path), undefined, "a long-running bash is not a blocked Session")
 })
@@ -89,7 +103,11 @@ test("an ordinary open tool call is not an elicitation", (t: TestContext) => {
 test("an outstanding permission outranks an outstanding question", (t: TestContext) => {
   const path = log(t, [
     event("tool.execution_start", { toolCallId: "c1", toolName: ASK }, "2026-08-23T00:10:00.000Z"),
-    event("tool.execution_start", { toolCallId: "c2", toolName: "bash" }, "2026-08-23T00:12:00.000Z"),
+    event(
+      "tool.execution_start",
+      { toolCallId: "c2", toolName: "bash" },
+      "2026-08-23T00:12:00.000Z",
+    ),
     event(
       "permission.requested",
       { requestId: "r1", permissionRequest: { toolCallId: "c2" } },

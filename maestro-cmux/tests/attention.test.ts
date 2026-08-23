@@ -227,7 +227,7 @@ test("dismissing cannot hide running work", () => {
 
 // --- session resolution (#33) ------------------------------------------------
 
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { basename, join as pjoin } from "node:path"
 import { parseSessionIdentity } from "../src/runtime/events.js"
 import { resolveSessionLog } from "../src/tree.js"
