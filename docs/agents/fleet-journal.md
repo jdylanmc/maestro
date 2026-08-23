@@ -181,3 +181,68 @@ the operator's session. Push and merge authority stays with the maestro.
 
 **Cost.** Two tickets, roughly 16 minutes of wall clock for the pair, one
 restart for the `/tmp` refusal, and one review round trip on #32.
+
+## Wave 2: four tickets in parallel (2026-08-22)
+
+Baseline `c87f1e0`, 132 tests. Four workers, isolated worktrees outside `/tmp`,
+model diversity: Opus 5 on #31 and #36, GPT-5.6 Sol on #33 and #50. All four
+landed. Tests 132 -> 147. Lint unchanged at 1 pre-existing warning.
+
+| Ticket | Model | Outcome |
+| --- | --- | --- |
+| #50 requirements/evidence drift | Sol | merged `aaaa196` |
+| #33 session resolution | Sol | merged `dd2116c` |
+| #36 stale publish | Opus 5 | merged `38f9c70` |
+| #31 spawn signal | Opus 5 | merged `8d56ab0` |
+
+### Parallel merge safety held, but only because regions were checked first
+
+Three of the four branches touched `tree.ts`. All merged clean because the
+regions were verified against the code before dispatch, not inferred from the
+ticket bodies: #33 in `resolveSessionLog`, #36 in `summarize`, #31 in the event
+ingestion loop. #36 deliberately confined itself to a comment in
+`processor.ts` to stay out of a neighbour's diff, which is the behaviour to
+reinforce. Merge order was newest-base-last, and `#33`'s changes were
+explicitly re-checked after each subsequent merge rather than assumed.
+
+### Every ticket body was wrong in some way
+
+This is now the pattern, not the exception. Four for four:
+
+- **#33** was marked "already fixed, just add a regression test". Half true.
+  Session-ID resolution had been fixed; the `cwd` + newest-mtime last resort was
+  still live and still bound the wrong session on real data.
+- **#36** attributed the freeze to `RETAIN_MS` ageing subagents out. That is one
+  trigger. The swallow fired for any nothing-to-show state, including sessions
+  that never delegated.
+- **#31** cited a 3.170s-110.887s spawn gap. Measured 130.8s-185.1s.
+- **#50** listed six contradicted claims; two turned out to be genuine
+  unimplemented requirements rather than stale prose, and were labelled in place
+  instead of deleted.
+
+**Rule: instruct workers to verify the ticket body against code and report
+contradictions.** All four did, and each contradiction was worth more than the
+nominal fix.
+
+### The negative control keeps paying for itself
+
+Mandatory negative controls caught a defect nobody had filed: #36's aged-out
+tree published a trailing `¦` separator, visible only because the control run
+diffed encoded output. Demand the exact failure text, not a claim of failure.
+
+### Measured: `tool.execution_complete` inversion is structural in background mode
+
+Previously recorded as 5 of 35 delegations inverting. For background
+delegations it is **4 of 4**: the tool call completes in under a second because
+background mode returns an agent id immediately, while `subagent.started`
+arrives up to 184.4s later. `tool.execution_complete` is not merely an
+unreliable finish signal, it is systematically wrong for background work.
+
+### Live reproduction beats fixtures
+
+#31 was diagnosed by parsing the parent session's own log while the fleet was
+invisible on screen, and the fix was verified by replaying that log truncated to
+the moment of failure. Both workers who were handed live measurements
+(`#31`, `#33`) replayed them independently rather than taking them on trust,
+and both returned sharper numbers than they were given. Hand workers evidence,
+and tell them to falsify it.
