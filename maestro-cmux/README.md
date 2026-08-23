@@ -97,10 +97,27 @@ preserves its history.
 
 ## Configuration
 
-Environment variables, unchanged from upstream:
+The installer creates `~/.config/maestro/config.json` with a small set of
+presentation preferences:
+
+```json
+{
+  "progressEnabled": true,
+  "keepDoneStatus": true,
+  "notifyOnSessionEnd": true,
+  "notifyOnErrors": true
+}
+```
+
+Each hook invocation reloads this file, so changes apply to the next event
+without reinstalling the plugin. The gear in the Maestro sidebar's compact top
+toolbar opens cmux's native Custom Sidebars settings pane.
+
+Environment variables override the file-backed values:
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `MAESTRO_CONFIG_PATH` | `~/.config/maestro/config.json` | Override the Maestro settings file path. |
 | `COPILOT_CMUX_BIN` | `cmux` | Override the `cmux` executable path. |
 | `COPILOT_CMUX_STATUS_KEY` | `copilot` | Sidebar status key namespace. |
 | `COPILOT_CMUX_TRANSPORT` | `auto` | `auto`, `socket`, or `cli`. |
@@ -135,6 +152,12 @@ that renders the hierarchy: workspace, then surface, then subagent tree.
 cmux sidebar select maestro   # activate it as the left sidebar
 cmux sidebar open maestro     # or open it as a resizable pane
 ```
+
+`install.sh` installs the sidebar at
+`~/.config/cmux/sidebars/maestro.swift`. Its top settings gear uses cmux's
+documented `settings.open` action rather than attempting an in-sidebar modal:
+the interpreted sidebar runtime does not yet support `@State`, input controls,
+`.sheet`, or `.popover`.
 
 Surfaces are one line by default and expand on focus to show directory and
 branch. Selection is marked by an accent stripe. Expansion needs no `@State`,

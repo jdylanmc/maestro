@@ -5,7 +5,7 @@ import { detectCmuxEnvironment } from "../cmux/detect.js"
 import { loadConfig } from "../config.js"
 import { createLogger } from "../logger.js"
 import { summarizeText } from "../text.js"
-import { buildTree, detectDismissed, findSessionDir, summarize } from "../tree.js"
+import { buildTree, detectDismissed, findSessionDir, summarize, type TreeSummary } from "../tree.js"
 import type {
   CmuxClient,
   HookLogger,
@@ -47,6 +47,14 @@ function isFileEditTool(toolName: string): boolean {
 
 function projectLabelForCwd(cwd: string): string {
   return basename(cwd) || cwd
+}
+
+export function treeDescriptionForEvent(
+  eventType: CopilotHookEvent["type"],
+  tree: TreeSummary | null,
+): string | undefined {
+  if (eventType === "session.end") return ""
+  return tree?.encoded
 }
 
 async function renderState(
@@ -343,20 +351,26 @@ export async function processHook(
   })
 
   try {
-    const tree = summarize(
-      event.cwd,
-      attention,
-      environment.surfaceID,
-      dismissed,
-      identity.sessionId,
-      identity.transcriptPath,
-    )
+    const tree =
+      event.type === "session.end"
+        ? null
+        : summarize(
+            event.cwd,
+            attention,
+            environment.surfaceID,
+            dismissed,
+            identity.sessionId,
+            identity.transcriptPath,
+          )
+    const description = treeDescriptionForEvent(event.type, tree)
     // An EMPTY tree is published, not swallowed. `summarize` returns null only
     // when it could not compute at all; a session whose subagents have all
     // finished and aged out summarises to an empty row set, and publishing that
     // is what clears a stale tree. Skipping the publish is what froze completed
-    // subagents on screen as permanently running (#36).
-    if (tree) {
+    // subagents on screen as permanently running (#36). A Session end clears
+    // the entire description, including the owner row, so the surface resumes
+    // rendering as an ordinary terminal.
+    if (description !== undefined) {
       await new Promise<void>((resolve) => {
         execFile(
           config.cmuxBin,
@@ -365,7 +379,7 @@ export async function processHook(
             "--action",
             "set-description",
             "--description",
-            tree.encoded,
+            description,
             "--workspace",
             environment.workspaceID ?? "",
           ],
@@ -374,10 +388,10 @@ export async function processHook(
         )
       })
       await logger.log("debug", "tree published", {
-        total: tree.total,
-        running: tree.running,
-        failed: tree.failed,
-        attention: tree.attention?.kind,
+        total: tree?.total ?? 0,
+        running: tree?.running ?? 0,
+        failed: tree?.failed ?? 0,
+        attention: tree?.attention?.kind,
       })
     }
   } catch (error) {

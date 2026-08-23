@@ -184,15 +184,30 @@ func baseName(_ p: String) -> String {
 
 VStack(alignment: .leading, spacing: 0) {
 
-    // No title row. The pane's own tab already reads "maestro", so a header
-    // here spent ~40pt of vertical space restating it.
+    HStack {
+        Text("Maestro")
+            .font(.system(size: 18)).bold()
+            .foregroundColor(.secondary)
+        Spacer()
+        Image(systemName: "gearshape")
+            .font(.system(size: 12))
+            .foregroundColor(.secondary)
+            .accessibilityLabel("Settings")
+            .help("Settings")
+            .onTapGesture {
+                cmux("settings.open", target: "customSidebars")
+            }
+    }
+    .padding(.horizontal, 4)
 
-    ScrollView {
-        VStack(alignment: .leading, spacing: 2) {
-            Reorderable(workspaces, move: "workspace.reorder") { w in
-                VStack(alignment: .leading, spacing: 3) {
+    Divider()
+        .offset(y: -6)
 
-                    HStack(spacing: 5) {
+    VStack(alignment: .leading, spacing: 2) {
+        Reorderable(workspaces, move: "workspace.reorder") { w in
+            VStack(alignment: .leading, spacing: 3) {
+
+                HStack(spacing: 5) {
                         Image(systemName: "folder.fill")
                             .imageScale(.small)
                             .foregroundColor(w.selected ? .accentColor : .secondary)
@@ -291,12 +306,13 @@ VStack(alignment: .leading, spacing: 0) {
                                         .scaleEffect(0.45)
                                         .frame(width: 14, height: 14)
                                         .tint(.green)
-                                    Text("\(countOf(d, ">"))")
+                                    Text("\(countOf(d, ">")) active")
                                         .font(.system(size: 12)).bold().monospacedDigit()
                                 }
                                 .foregroundColor(.green)
                                 .shadow(color: "#30D158", radius: 4, x: 0, y: 0)
                                 .fixedSize()
+                                .help("Running subagents")
                             }
                             // No failed count. `subagent.failed` DOES NOT EXIST:
                             // measured across 60 recent sessions, 133
@@ -577,10 +593,11 @@ VStack(alignment: .leading, spacing: 0) {
                                     }
                                 }
                             }
-                    }
                 }
-                .padding(2)
             }
+            .padding(2)
         }
     }
+    .padding(.bottom, 40)
+    .offset(y: -16)
 }

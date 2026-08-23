@@ -1,0 +1,6 @@
+{
+  "progressEnabled": true,
+  "keepDoneStatus": true,
+  "notifyOnSessionEnd": true,
+  "notifyOnErrors": true
+}

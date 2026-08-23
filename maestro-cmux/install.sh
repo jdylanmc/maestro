@@ -32,12 +32,27 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 RUNNER="$ROOT/dist/hook-runner.js"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+MAESTRO_CONFIG_DIR="$CONFIG_HOME/maestro"
+MAESTRO_CONFIG="$MAESTRO_CONFIG_DIR/config.json"
+CMUX_SIDEBAR_DIR="$CONFIG_HOME/cmux/sidebars"
 
 echo "building..."
 npm install --silent
 npm run build
 
 [ -f "$RUNNER" ] || { echo "build produced no $RUNNER" >&2; exit 1; }
+
+echo "installing Maestro settings and sidebar..."
+mkdir -p "$MAESTRO_CONFIG_DIR" "$CMUX_SIDEBAR_DIR"
+if [ ! -e "$MAESTRO_CONFIG" ]; then
+  install -m 0644 "$ROOT/config.example.json" "$MAESTRO_CONFIG"
+  echo "  created $MAESTRO_CONFIG"
+else
+  echo "  preserved $MAESTRO_CONFIG"
+fi
+install -m 0644 "$ROOT/sidebars/maestro.swift" "$CMUX_SIDEBAR_DIR/maestro.swift"
+echo "  installed $CMUX_SIDEBAR_DIR/maestro.swift"
 
 echo "generating hooks.json with an absolute runner path..."
 python3 - "$RUNNER" <<'PY'
