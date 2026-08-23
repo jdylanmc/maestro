@@ -208,10 +208,47 @@ function* readLines(path: string): Generator<string> {
 }
 
 /**
+ * Tool calls that spawn a subagent.
+ *
+ * Measured across every session log on disk: 2,202 of 2,289 `subagent.started`
+ * events resolve to an earlier `tool.execution_start`, and that tool is ONLY
+ * ever `task` (1,926) or `execution_subagent` (276). The unmatched remainder
+ * are spawns whose tool event is not in the same file.
+ */
+const SPAWN_TOOLS = new Set(["task", "execution_subagent"])
+
+/** Key prefix for a delegation that has started but has no subagent yet. Never
+ *  an `agentId`, so it can never collide with a real subagent. */
+const PENDING = "pending:"
+
+/**
  * Build the tree.
  *
  * A subagent's parent is the `agentId` on the tool event whose `toolCallId`
  * spawned it; a null owner means the primary agent spawned it.
+ *
+ * A delegation is rendered from `tool.execution_start`, not from
+ * `subagent.started`. Both events carry the same `toolCallId`, and the tool
+ * event is always the earlier of the two - measured gap 3.170s to 110.887s
+ * across 35 delegations in one session, and over ten minutes in a batched
+ * case. That gap is a blind window: the operator has delegated work and the
+ * tree shows nothing. So each unclaimed spawn contributes a PLACEHOLDER row,
+ * and a spawn whose `subagent.started` has arrived contributes nothing extra -
+ * the real subagent replaces it rather than doubling it. The claim is resolved
+ * after the whole file is read, so it does not matter which event was written
+ * first.
+ *
+ * `tool.execution_complete` is deliberately NOT a finish signal, and not a
+ * placeholder-retirement signal either: in 5 of those 35 cases it fired BEFORE
+ * `subagent.started`. For a BACKGROUND delegation that ordering is structural,
+ * not incidental - the tool call returns at once while the subagent runs on.
+ * Measured live: four background workers completed their tool call 0.7s-0.9s
+ * after starting it and did not emit `subagent.started` for another 130.8s to
+ * 185.1s. Replaying that log truncated to the moment the operator looked, the
+ * previous reducer produced an empty tree and the four running workers were
+ * invisible; this one renders all four. A spawn that truly never produces a
+ * subagent therefore lingers, which measurement says is rare - 8 of 2,240
+ * spawn tool calls in the entire history on disk, 0.36%.
  *
  * `parentId` is never used. It is a pointer to the chronologically preceding
  * event, not a parent-agent link: in a measured 41,928-event session it held
@@ -222,6 +259,8 @@ function* readLines(path: string): Generator<string> {
 export function buildTree(logPath: string): Map<string, Subagent> {
   const subs = new Map<string, Subagent>()
   const owner = new Map<string, string | null>()
+  const spawns = new Map<string, { name: string; kind: string }>()
+  const claimed = new Set<string>()
   try {
     for (const line of readLines(logPath)) {
       if (!line) continue
@@ -239,7 +278,19 @@ export function buildTree(logPath: string): Map<string, Subagent> {
       if (e.type === "tool.execution_start") {
         const tc = d.toolCallId as string | undefined
         if (tc && !owner.has(tc)) owner.set(tc, e.agentId ?? null)
+        if (tc && SPAWN_TOOLS.has((d.toolName as string) ?? "") && !spawns.has(tc)) {
+          // The parent names its own delegation. `task` carries `name` plus
+          // `agent_type`; `execution_subagent` carries only `description`.
+          const args = (d.arguments ?? {}) as Record<string, unknown>
+          const kind = (args.agent_type as string) || (d.toolName as string) || ""
+          spawns.set(tc, {
+            name: (args.name as string) || (args.description as string) || kind || "subagent",
+            kind,
+          })
+        }
       } else if (e.type === "subagent.started") {
+        const tc = d.toolCallId as string | undefined
+        if (tc) claimed.add(tc)
         const aid = e.agentId
         if (!aid) continue
         subs.set(aid, {
@@ -274,6 +325,19 @@ export function buildTree(logPath: string): Map<string, Subagent> {
   for (const s of subs.values()) {
     const tc = (s as unknown as { tc?: string }).tc
     s.parent = tc && owner.has(tc) ? (owner.get(tc) ?? null) : null
+  }
+  // Unclaimed spawns only. A claimed one is already in `subs` as the real
+  // subagent, so emitting it here too is exactly the double-count to avoid.
+  for (const [tc, spawn] of spawns) {
+    if (claimed.has(tc)) continue
+    subs.set(PENDING + tc, {
+      name: spawn.name,
+      kind: spawn.kind,
+      status: "run",
+      parent: owner.get(tc) ?? null,
+      tools: 0,
+      doneAt: undefined,
+    })
   }
   return subs
 }
