@@ -98,13 +98,18 @@ func anyRunning(_ d: String) -> Bool {
     return rowsOf(d).filter { part($0, 1) == ">" }.count > 0
 }
 
-/** Eyes open on even seconds while working; always shut when idle.
- *  Idle is deliberately motionless - stillness is the signal. */
-func eyesOpen(_ d: String, _ e: Int) -> Bool {
-    if working(d) {
-        return e % 2 == 0
-    }
-    return false
+/** Eyes open and glowing while working; shut when idle.
+ *
+ *  Previously the eyes blinked on even seconds. A blink recomputed once per
+ *  tick reads as a stutter rather than life, because `clock.epoch` is SECONDS
+ *  and the sidebar re-evaluates about once a second - the same ~1 fps ceiling
+ *  that rules out every other hand-drawn animation here. A steady green glow
+ *  carries the same "this one is awake" signal with no motion budget at all,
+ *  and matches the running-subagent dot so one colour means one thing.
+ *
+ *  Idle stays deliberately motionless AND unlit - stillness is the signal. */
+func eyesOpen(_ d: String) -> Bool {
+    return working(d)
 }
 
 /** The Session itself is working, which is NOT the same as having a running
@@ -144,11 +149,74 @@ func cued(_ d: String, _ e: Int, _ i: Int) -> Bool {
     return false
 }
 
-/** Subagents hang off their owning Copilot surface, so they indent one level
- *  deeper than the tab row they belong to. */
+/** Depth is encoded as a string token; map it to an Int without relying on
+ *  optional parsing in view code. Rows are capped at depth 6 upstream. */
+func depthOf(_ row: String) -> Int {
+    let d = part(row, 0)
+    return d == "0" ? 0 : d == "1" ? 1 : d == "2" ? 2 : d == "3" ? 3 : d == "4" ? 4 : d == "5" ? 5 : 6
+}
+
+/** Whether another row at the same depth appears before this branch closes.
+ *  The tree wire format is flat, but rows are depth-first. Looking ahead until
+ *  a shallower row appears tells us whether to draw a tee/continuing vertical
+ *  or the final elbow/blank ancestor space. */
+func hasSiblingAfter(_ rows: [String], _ i: Int, _ depth: Int) -> Bool {
+    if i + 1 >= rows.count {
+        return false
+    }
+    for j in (i + 1)..<rows.count {
+        let d = depthOf(rows[j])
+        if d < depth {
+            return false
+        }
+        if d == depth {
+            return true
+        }
+    }
+    return false
+}
+
+func treeBlankSlot() -> some View {
+    return Spacer().frame(width: 13, height: 16)
+}
+
+func treeContinueSlot() -> some View {
+    return ZStack {
+        Rectangle().fill(.secondary).frame(width: 1, height: 16).offset(x: -4).opacity(0.45)
+    }
+    .frame(width: 13, height: 16)
+}
+
+func treeBranchSlot(_ hasNext: Bool) -> some View {
+    return ZStack {
+        if hasNext {
+            Rectangle().fill(.secondary).frame(width: 1, height: 16).offset(x: -4).opacity(0.45)
+        } else {
+            Rectangle().fill(.secondary).frame(width: 1, height: 8).offset(x: -4, y: -4).opacity(0.45)
+        }
+        Rectangle().fill(.secondary).frame(width: 8, height: 1).offset(x: 0).opacity(0.45)
+    }
+    .frame(width: 13, height: 16)
+}
+
+func runningDot() -> some View {
+    return ZStack {
+        Circle().fill(.green).frame(width: 6, height: 6)
+            .shadow(color: "#30D158", radius: 4, x: 0, y: 0)
+    }
+    .frame(width: 12, height: 12)
+}
+
+func stoppedDot() -> some View {
+    return Circle().fill(.secondary).frame(width: 5, height: 5).opacity(0.45)
+        .frame(width: 12, height: 12)
+}
+
+/** Subagents hang off their owning Copilot surface, so overflow rows keep a
+ *  fixed gutter aligned with the explicit connector tree. */
 func treeIndent(_ row: String) -> Int {
     let d = part(row, 0)
-    return d == "0" ? 44 : d == "1" ? 61 : d == "2" ? 79 : d == "3" ? 97 : 114
+    return d == "0" ? 44 : d == "1" ? 61 : d == "2" ? 79 : d == "3" ? 97 : d == "4" ? 114 : d == "5" ? 132 : 149
 }
 
 /** The attention kind a workspace is publishing: "p" permission, "q" question,
@@ -186,7 +254,7 @@ VStack(alignment: .leading, spacing: 0) {
 
     HStack {
         Text("Maestro")
-            .font(.system(size: 18)).bold()
+            .font(.system(size: 18, design: .monospaced)).bold()
             .foregroundColor(.secondary)
         Spacer()
         Image(systemName: "gearshape")
@@ -208,9 +276,25 @@ VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
 
                 HStack(spacing: 5) {
-                        Image(systemName: "folder.fill")
-                            .imageScale(.small)
-                            .foregroundColor(w.selected ? .accentColor : .secondary)
+                        if let d = w.description {
+                            if anyRunning(d) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 3).fill(w.selected ? .accentColor : .green)
+                                        .frame(width: 13, height: 10).opacity(0.22)
+                                    Circle().fill(.green).frame(width: 6, height: 6)
+                                        .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
+                                }
+                                .frame(width: 16, height: 16)
+                            } else {
+                                Image(systemName: "rectangle.stack.fill")
+                                    .imageScale(.small)
+                                    .foregroundColor(w.selected ? .accentColor : .secondary)
+                            }
+                        } else {
+                            Image(systemName: "rectangle.stack.fill")
+                                .imageScale(.small)
+                                .foregroundColor(w.selected ? .accentColor : .secondary)
+                        }
                         Text(w.title)
                             .font(.body).bold()
                             .lineLimit(1).truncationMode(.tail).layoutPriority(1)
@@ -351,6 +435,13 @@ VStack(alignment: .leading, spacing: 0) {
                     }
 
                     ForEach(w.tabs.prefix(8)) { t in
+                        // A Session and the subagents it spawned are ONE selectable
+                        // unit. They were previously siblings, so the selection
+                        // background and accent stripe stopped at the tab row and
+                        // the subagent rows below it read as unrelated, unselected
+                        // work. Wrapping them makes the visual grouping match the
+                        // actual ownership: these agents belong to THIS Session.
+                        VStack(alignment: .leading, spacing: 2) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Spacer().frame(width: 12)
@@ -395,12 +486,14 @@ VStack(alignment: .leading, spacing: 0) {
                                                 Rectangle().fill(.primary).frame(width: 2, height: 4).offset(x: -3, y: -9)
                                                 RoundedRectangle(cornerRadius: 5).fill(.primary).frame(width: 17, height: 14).offset(x: -3)
                                                 RoundedRectangle(cornerRadius: 3).fill(.black).frame(width: 11, height: 7).offset(x: -3)
-                                                if eyesOpen(d, clock.epoch) {
-                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: -6)
-                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: 0)
+                                                if eyesOpen(d) {
+                                                    Capsule().fill(.green).frame(width: 2, height: 4).offset(x: -6)
+                                                        .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
+                                                    Capsule().fill(.green).frame(width: 2, height: 4).offset(x: 0)
+                                                        .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
                                                 } else {
-                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: -6)
-                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: 0)
+                                                    Capsule().fill(.secondary).frame(width: 2, height: 1).offset(x: -6)
+                                                    Capsule().fill(.secondary).frame(width: 2, height: 1).offset(x: 0)
                                                 }
                                             }.frame(width: 30, height: 28)
                                         } else {
@@ -411,12 +504,14 @@ VStack(alignment: .leading, spacing: 0) {
                                                 Rectangle().fill(.primary).frame(width: 2, height: 4).offset(y: -7)
                                                 RoundedRectangle(cornerRadius: 5).fill(.primary).frame(width: 17, height: 14)
                                                 RoundedRectangle(cornerRadius: 3).fill(.black).frame(width: 11, height: 8)
-                                                if eyesOpen(d, clock.epoch) {
-                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: -3)
-                                                    Capsule().fill(.white).frame(width: 2, height: 4).offset(x: 3)
+                                                if eyesOpen(d) {
+                                                    Capsule().fill(.green).frame(width: 2, height: 4).offset(x: -3)
+                                                        .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
+                                                    Capsule().fill(.green).frame(width: 2, height: 4).offset(x: 3)
+                                                        .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
                                                 } else {
-                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: -3)
-                                                    Capsule().fill(.white).frame(width: 2, height: 1).offset(x: 3)
+                                                    Capsule().fill(.secondary).frame(width: 2, height: 1).offset(x: -3)
+                                                    Capsule().fill(.secondary).frame(width: 2, height: 1).offset(x: 3)
                                                 }
                                             }.frame(width: 24, height: 24)
                                         }
@@ -502,16 +597,6 @@ VStack(alignment: .leading, spacing: 0) {
                             }
                         }
                         .padding(4)
-                        .background {
-                            if t.focused && w.selected {
-                                Rectangle().fill(.secondary).opacity(0.07)
-                            }
-                        }
-                        .overlay(alignment: .leading) {
-                            if t.focused && w.selected {
-                                Rectangle().fill(.accentColor).frame(width: 2)
-                            }
-                        }
                         .onTapGesture {
                             cmux("workspace.select", workspace_id: w.id)
                             cmux("surface.focus", surface_id: t.id)
@@ -532,15 +617,46 @@ VStack(alignment: .leading, spacing: 0) {
                                     // sidebar lying about state it does not own.
                                     // Live rows take the same tap as their tab:
                                     // focus the surface that is doing the work.
-                                    ForEach(liveRows(d).prefix(10)) { row in
-                                        if part(row, 1) == "v" {
+                                    let rows = liveRows(d)
+                                    let visibleRows = Array(rows.prefix(10).enumerated())
+                                    ForEach(visibleRows, id: \.offset) { i, row in
+                                        let depth = depthOf(row)
+                                        let keep0 = hasSiblingAfter(rows, i, 0)
+                                        let keep1 = hasSiblingAfter(rows, i, 1)
+                                        let keep2 = hasSiblingAfter(rows, i, 2)
+                                        let keep3 = hasSiblingAfter(rows, i, 3)
+                                        let keep4 = hasSiblingAfter(rows, i, 4)
+                                        let keep5 = hasSiblingAfter(rows, i, 5)
+                                        let rowKeepsGoing = hasSiblingAfter(rows, i, depth)
+                                        let status = part(row, 1)
+                                        let title = nameOf(row)
+                                        if status == "v" {
                                             HStack(spacing: 6) {
-                                                Spacer().frame(width: treeIndent(row))
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 10))
-                                                    .foregroundColor(.secondary)
-                                                    .frame(width: 12)
-                                                Text(nameOf(row))
+                                                Spacer().frame(width: 30)
+                                                HStack(spacing: 0) {
+                                                    if depth > 0 {
+                                                        if keep0 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 1 {
+                                                        if keep1 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 2 {
+                                                        if keep2 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 3 {
+                                                        if keep3 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 4 {
+                                                        if keep4 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 5 {
+                                                        if keep5 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    treeBranchSlot(rowKeepsGoing)
+                                                }
+                                                .fixedSize()
+                                                stoppedDot()
+                                                Text(title)
                                                     .font(.system(size: 12))
                                                     .foregroundColor(.secondary)
                                                     .lineLimit(1).truncationMode(.tail)
@@ -556,36 +672,60 @@ VStack(alignment: .leading, spacing: 0) {
                                             }
                                         } else {
                                             HStack(spacing: 6) {
-                                                Spacer().frame(width: treeIndent(row))
-                                                if part(row, 1) == ">" {
-                                                    ProgressView()
-                                                        .scaleEffect(0.42)
-                                                        .frame(width: 12, height: 12)
-                                                        .tint(.green)
+                                                Spacer().frame(width: 30)
+                                                HStack(spacing: 0) {
+                                                    if depth > 0 {
+                                                        if keep0 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 1 {
+                                                        if keep1 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 2 {
+                                                        if keep2 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 3 {
+                                                        if keep3 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 4 {
+                                                        if keep4 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 5 {
+                                                        if keep5 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    treeBranchSlot(rowKeepsGoing)
+                                                }
+                                                .fixedSize()
+                                                if status == ">" {
+                                                    runningDot()
                                                 } else {
                                                     Image(systemName: "xmark")
                                                         .font(.system(size: 10))
                                                         .foregroundColor(.red)
                                                         .frame(width: 12)
                                                 }
-                                                Text(nameOf(row))
+                                                Text(title)
                                                     .font(.system(size: 12))
                                                     .foregroundColor(.primary)
                                                     .lineLimit(1).truncationMode(.tail)
                                                 Spacer(minLength: 0)
                                             }
                                             .padding(4)
-                                            .help(nameOf(row))
+                                            .help(title)
                                             .onTapGesture {
                                                 cmux("workspace.select", workspace_id: w.id)
                                                 cmux("surface.focus", surface_id: t.id)
                                             }
                                         }
                                     }
-                                    if liveRows(d).count > 10 {
+                                    if rows.count > 10 {
                                         HStack(spacing: 6) {
-                                            Spacer().frame(width: 44)
-                                            Text("+ \(liveRows(d).count - 10) more")
+                                            Spacer().frame(width: 30)
+                                            HStack(spacing: 0) {
+                                                treeContinueSlot()
+                                                treeBranchSlot(false)
+                                            }
+                                            .fixedSize()
+                                            Text("+ \(rows.count - 10) more")
                                                 .font(.caption2).foregroundColor(.secondary)
                                             Spacer(minLength: 0)
                                         }
@@ -593,6 +733,17 @@ VStack(alignment: .leading, spacing: 0) {
                                     }
                                 }
                             }
+                        }
+                        .background {
+                            if t.focused && w.selected {
+                                Rectangle().fill(.secondary).opacity(0.07)
+                            }
+                        }
+                        .overlay(alignment: .leading) {
+                            if t.focused && w.selected {
+                                Rectangle().fill(.accentColor).frame(width: 2)
+                            }
+                        }
                 }
             }
             .padding(2)
