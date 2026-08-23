@@ -442,12 +442,21 @@ export interface TreeSummary {
 }
 
 /**
- * Everything above, guarded. Returns null when there is nothing to say.
+ * Everything above, guarded. Returns null ONLY when the tree could not be
+ * computed at all.
  *
  * An attention state alone is enough to say something. A session that has
  * never delegated still blocks on a permission prompt, and that is precisely
  * the session an operator most needs pointed out - so zero subagents is NOT a
  * reason to stay silent once `attention` is set.
+ *
+ * Nor is "nothing to say" a reason to stay silent. The published description is
+ * a PERSISTENT field: it is only ever overwritten, never expired. An empty tree
+ * that returns null therefore leaves the LAST non-empty description frozen on
+ * screen - agents that finished hours ago still rendering as running. So an
+ * empty tree is a real state and is summarised as one, with an empty row set
+ * that clears the surface back to a plain no-subagents presentation. Null is
+ * reserved for failure, where leaving the previous description alone is right.
  */
 export function summarize(
   cwd: string,
@@ -467,7 +476,15 @@ export function summarize(
     const derived = log ? detectAttention(log) : undefined
     const effective = derived ?? (attention?.kind === "permission" ? undefined : attention)
 
-    if (subs.size === 0 && !effective) return null
+    if (subs.size === 0 && !effective) {
+      return {
+        total: 0,
+        running: 0,
+        failed: 0,
+        attention: undefined,
+        encoded: surfaceID ? encodeOwner(surfaceID) : "",
+      }
+    }
     let running = 0
     let failed = 0
     for (const s of subs.values()) {
@@ -478,7 +495,9 @@ export function summarize(
       ...(surfaceID ? [encodeOwner(surfaceID)] : []),
       ...(effective ? [encodeAttention(effective)] : []),
       ...(subs.size > 0 ? [encodeTree(subs, Date.now(), dismissed)] : []),
-    ]
+      // An aged-out or fully dismissed tree encodes to "". Joining that in
+      // would publish a trailing separator and an empty row.
+    ].filter((row) => row.length > 0)
     return { total: subs.size, running, failed, attention: effective, encoded: rows.join(ROW_SEP) }
   } catch {
     return null
