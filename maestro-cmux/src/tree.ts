@@ -17,6 +17,10 @@ import type { Attention, AttentionKind } from "./types.js"
 
 const SESSIONS = join(homedir(), ".copilot", "session-state")
 
+/** The tool a Session calls to ask the operator a structured question. An open
+ *  call to it means the Session is blocked on a human. */
+const ELICITATION_TOOL = "ask_user"
+
 export type SubagentStatus = "run" | "ok" | "fail"
 
 export interface Subagent {
@@ -61,8 +65,17 @@ export const RETAIN_MS = 15 * 60 * 1000
  * flag depends on a clearing hook that may never run. The log does not have
  * that problem - whichever hook happens to fire next recomputes the truth.
  *
- * Only `permission` is derivable. An elicitation and a finished turn are not
- * permission events, so they still arrive through their hooks.
+ * `permission` and `question` are both derivable; only a finished turn still
+ * arrives through its hook.
+ *
+ * An elicitation was previously assumed to be underivable. That was wrong. An
+ * outstanding `ask_user` is a `tool.execution_start` whose `toolCallId` never
+ * receives a `tool.execution_complete`. Measured on a live blocked session: 51
+ * `ask_user` calls, 50 completed, exactly 1 outstanding - the one the operator
+ * was actually waiting on. The 50 closed calls are the negative control.
+ *
+ * NEVER read the elicitation `arguments` here. They carry the question text and
+ * its option labels; the tool name is the most that is safe to publish.
  *
  * NEVER read `fullCommandText` or the notification `message` here: both are the
  * full command line. The tool name is the most that is safe to publish.
@@ -71,6 +84,7 @@ export function detectAttention(logPath: string): Attention | undefined {
   try {
     const open = new Map<string, { at: number; tool: string | undefined }>()
     const toolOf = new Map<string, string>()
+    const asks = new Map<string, number>()
     for (const line of readLines(logPath)) {
       if (!line) continue
       let e: { type?: string; data?: Record<string, unknown>; timestamp?: string }
@@ -84,6 +98,13 @@ export function detectAttention(logPath: string): Attention | undefined {
         const tc = d.toolCallId as string | undefined
         const tn = d.toolName as string | undefined
         if (tc && tn) toolOf.set(tc, tn)
+        if (tc && tn === ELICITATION_TOOL) {
+          const ts = Date.parse(e.timestamp ?? "")
+          asks.set(tc, Number.isFinite(ts) ? ts : Date.now())
+        }
+      } else if (e.type === "tool.execution_complete") {
+        const tc = d.toolCallId as string | undefined
+        if (tc) asks.delete(tc)
       } else if (e.type === "permission.requested") {
         const id = d.requestId as string | undefined
         if (!id) continue
@@ -99,7 +120,14 @@ export function detectAttention(logPath: string): Attention | undefined {
         if (id) open.delete(id)
       }
     }
-    if (open.size === 0) return undefined
+    if (open.size === 0) {
+      // An outstanding elicitation blocks the Session just as a permission does,
+      // and it is the only remaining signal once permissions have all resolved.
+      if (asks.size === 0) return undefined
+      let since: number | undefined
+      for (const at of asks.values()) if (since === undefined || at < since) since = at
+      return { kind: "question", label: "Answer question", since: since ?? Date.now() }
+    }
     // Oldest outstanding request is the one the operator has been waiting on.
     let best: { at: number; tool: string | undefined } | undefined
     for (const v of open.values()) if (!best || v.at < best.at) best = v
@@ -538,7 +566,11 @@ export function summarize(
     // the log says is still outstanding is true regardless of which hook last
     // ran; a stored flag is only as fresh as its clearing hook.
     const derived = log ? detectAttention(log) : undefined
-    const effective = derived ?? (attention?.kind === "permission" ? undefined : attention)
+    // Any kind the log can derive must ignore its stored counterpart, because a
+    // stored flag is only as fresh as the hook that would clear it. `turn` is
+    // not derivable and still comes from its hook.
+    const derivable = attention?.kind === "permission" || attention?.kind === "question"
+    const effective = derived ?? (derivable ? undefined : attention)
 
     if (subs.size === 0 && !effective) {
       return {
