@@ -56,6 +56,9 @@ runner never executed. Setting `CMUX_COPILOT_HOOKS_DISABLED=1` or
   other wording in this repository.
 - [`docs/adr/`](docs/adr/) - Architecture Decision Records, including the
   retirement of terms whose referent dissolved.
+- [`docs/GAPS.md`](docs/GAPS.md) - known limitations of the current
+  architecture, recorded at the moment of impact. `maestro-cmux` is a reference
+  implementation; this is the requirement list for what replaces it.
 - [`docs/discovery/`](docs/discovery/) - durable discovery state and immutable
   per-cycle checkpoints. Anything predating cycle c-0025 records what was
   decided at the time, not current intent.

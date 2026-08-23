@@ -32,3 +32,13 @@ Use the five canonical triage labels. See `docs/agents/triage-labels.md`.
 
 This repository uses a single domain context: root `CONTEXT.md` and root
 `docs/adr/`. See `docs/agents/domain.md`.
+
+### Architecture gaps
+
+`maestro-cmux` is a reference implementation built inside the constraints of an
+interpreted cmux sidebar and a fixed Copilot hook surface. When one of those
+constraints blocks something we actually wanted, record it in `docs/GAPS.md`
+at the moment of impact, with measured evidence, the workaround shipped, and
+what would close it. That file is the requirement list for the real plugin.
+
+Record a gap when the architecture prevents it, not merely when it is hard.
