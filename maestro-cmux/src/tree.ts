@@ -21,6 +21,21 @@ const SESSIONS = join(homedir(), ".copilot", "session-state")
  *  call to it means the Session is blocked on a human. */
 const ELICITATION_TOOL = "ask_user"
 
+/**
+ * The Session's own terminal marker.
+ *
+ * A Session that has shut down is not waiting on anybody, whatever its log left
+ * outstanding. This is the only reliable liveness signal in the log: measured
+ * across 167 recent Sessions, `session.shutdown` appears 189 times and is the
+ * last event of an ended Session, while `session.end` is never emitted at all.
+ *
+ * It is applied IN ORDER rather than as a whole-file test, because
+ * `session.resume` (51 occurrences) appends to the same log. A request raised
+ * after a resume is genuinely outstanding again, and clearing in order keeps it
+ * that way.
+ */
+const SHUTDOWN = "session.shutdown"
+
 export type SubagentStatus = "run" | "ok" | "fail"
 
 export interface Subagent {
@@ -118,6 +133,15 @@ export function detectAttention(logPath: string): Attention | undefined {
       } else if (e.type === "permission.completed") {
         const id = d.requestId as string | undefined
         if (id) open.delete(id)
+      } else if (e.type === SHUTDOWN) {
+        // A dead Session blocks nobody. Without this, a Session killed while a
+        // prompt was open leaves that request outstanding FOREVER - and because
+        // derived attention outranks the stored flag and the published
+        // description is persistent, the badge sticks with nothing left alive to
+        // clear it. Measured: two Sessions, 20.6h and 39.6h dead, both still
+        // reporting "Approve bash" / "Approve run_factory".
+        open.clear()
+        asks.clear()
       }
     }
     if (open.size === 0) {

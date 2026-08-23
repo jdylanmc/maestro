@@ -138,9 +138,9 @@ Measured, each after costing real debugging time:
 
 **Wanted:** the ASK badge to clear the moment a permission is answered.
 **Blocked by:** the `notification` hook fires for `permission_prompt`, but nothing fires when that permission resolves. `agent.stop` deliberately preserves blocking attention, so the stale value survives the end of the turn and clears only on the next `user.prompt`.
-**Evidence:** root cause of the false-positive ASK badge, together with G-21.
-**Shipped:** attention is derived from the event log where possible, which is provably reliable; stored hook attention is the fallback and is the part that goes stale.
-**Closes with:** a permission-resolved hook, or making derived attention authoritative and failing silent when the log cannot be read.
+**Evidence:** root cause of the false-positive ASK badge, together with G-21 and G-23.
+**Shipped:** derived attention is now authoritative for `permission` and `question`, and a Session's own `session.shutdown` retires anything it left outstanding. Stored hook attention is the fallback for `turn` only.
+**Closes with:** a permission-resolved hook. The derivation covers the observable cases, but it is a reconstruction of state the runtime already knows.
 
 ### G-12 - Auto-approval is indistinguishable from a human answer
 
@@ -163,6 +163,14 @@ Measured, each after costing real debugging time:
 **Blocked by:** Copilot does not emit context usage as an event.
 **Shipped:** nothing; tracked in issue #41. Reading it means scraping the runtime status line through `cmux read-screen`, which is why it has not been built.
 **Closes with:** a context-usage event.
+
+### G-23 - A dead Session cannot retract what it published
+
+**Wanted:** a badge to disappear when the Session that raised it dies.
+**Blocked by:** Maestro only republishes when a hook fires, and a Session that has been killed fires nothing ever again. The workspace description is a persistent field, so the last thing a Session published outlives it.
+**Evidence:** two Sessions were found still advertising a blocking prompt **20.6h** and **39.6h** after death, each having logged a `permission.requested` with no completion. Derivation is now correct at read time, but a description published *before* death is only overwritten when some later Session runs a hook in that workspace.
+**Shipped:** `detectAttention` retires outstanding permissions and elicitations at `session.shutdown`, applied in log order so a `session.resume` correctly reopens later ones. One live Session in the same scan carried **3** shutdowns, so a whole-file "has shutdown" test would have muted a real blocking prompt.
+**Closes with:** a supervised plugin process that can observe Session death and publish on its behalf, rather than a hook that only runs while the Session is alive.
 
 ---
 
