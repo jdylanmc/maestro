@@ -42,6 +42,7 @@ npm install --silent
 npm run build
 
 [ -f "$RUNNER" ] || { echo "build produced no $RUNNER" >&2; exit 1; }
+[ -f "$ROOT/dist/watcher-main.js" ] || { echo "build produced no dist/watcher-main.js" >&2; exit 1; }
 
 echo "installing Maestro settings and sidebar..."
 mkdir -p "$MAESTRO_CONFIG_DIR" "$CMUX_SIDEBAR_DIR"

@@ -1,5 +1,6 @@
-import { execFile } from "node:child_process"
-import { basename, join } from "node:path"
+import { execFile, spawn } from "node:child_process"
+import { basename, dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { createCmuxClient } from "../cmux/client.js"
 import { detectCmuxEnvironment } from "../cmux/detect.js"
 import { loadConfig } from "../config.js"
@@ -71,6 +72,30 @@ async function readWorkspaceSurfaces(
       },
     )
   })
+}
+
+/**
+ * Start the attention watcher if it is not already running.
+ *
+ * Detached and fully disowned: a hook must never wait on it, and it must
+ * outlive the hook that started it. The watcher itself holds the single-instance
+ * lock, so a race between two Sessions starting at once resolves there rather
+ * than here. Failure is swallowed - no watcher simply means Maestro behaves as
+ * it did before #57.
+ */
+function ensureWatcher(config: PluginConfig, logger: HookLogger): void {
+  if (!config.watcherEnabled) return
+  try {
+    const entry = join(dirname(fileURLToPath(import.meta.url)), "..", "watcher-main.js")
+    const child = spawn(process.execPath, [entry], {
+      detached: true,
+      stdio: "ignore",
+      env: process.env,
+    })
+    child.unref()
+  } catch (error) {
+    void logger.log("debug", "watcher spawn failed", { error: String(error) })
+  }
 }
 
 function isFileEditTool(toolName: string): boolean {
@@ -283,6 +308,7 @@ export async function processHook(
 
   if (hookName === "sessionStart") {
     void cleanupStaleStateFiles()
+    ensureWatcher(config, logger)
   }
 
   const cmux = createCmuxClient({
@@ -318,7 +344,15 @@ export async function processHook(
 
     await emitEventEffects(cmux, config, projectLabel, previousState, nextState, event, logger)
     attention = nextState.attention
-    return nextState
+    // Identity is stamped on EVERY hook, not just session start. It is what
+    // lets the watcher publish for a Session that is blocked and therefore
+    // firing no hooks at all (#57), and a resumed Session gets a new surface.
+    return {
+      ...nextState,
+      surfaceID: environment.surfaceID ?? nextState.surfaceID,
+      sessionId: identity.sessionId ?? nextState.sessionId,
+      transcriptPath: identity.transcriptPath ?? nextState.transcriptPath,
+    }
   })
 
   // Mark the workspace unread when it starts waiting on the operator.

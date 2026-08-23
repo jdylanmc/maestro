@@ -25,6 +25,9 @@ export function createRuntimeState(
     lastError: undefined,
     lastSessionEndReason: undefined,
     attention: undefined,
+    surfaceID: undefined,
+    sessionId: undefined,
+    transcriptPath: undefined,
     dismissed: [],
   }
 }
@@ -86,6 +89,9 @@ export function reduceRuntimeState(
         lastError: undefined,
         lastSessionEndReason: undefined,
         attention: undefined,
+        surfaceID: currentState.surfaceID,
+        sessionId: currentState.sessionId,
+        transcriptPath: currentState.transcriptPath,
         dismissed: [],
       }
     }

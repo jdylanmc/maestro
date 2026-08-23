@@ -105,7 +105,8 @@ presentation preferences:
   "progressEnabled": true,
   "keepDoneStatus": true,
   "notifyOnSessionEnd": true,
-  "notifyOnErrors": true
+  "notifyOnErrors": true,
+  "watcherEnabled": true
 }
 ```
 
@@ -121,6 +122,9 @@ Environment variables override the file-backed values:
 | `COPILOT_CMUX_BIN` | `cmux` | Override the `cmux` executable path. |
 | `COPILOT_CMUX_STATUS_KEY` | `copilot` | Sidebar status key namespace. |
 | `COPILOT_CMUX_TRANSPORT` | `auto` | `auto`, `socket`, or `cli`. |
+| `MAESTRO_WATCHER` | `true` | Run the attention watcher (see below). |
+| `MAESTRO_WATCHER_INTERVAL_MS` | `2000` | How often the watcher re-derives attention. |
+| `MAESTRO_WATCHER_IDLE_MS` | `1800000` | How long the watcher runs with every Session quiet. |
 | `COPILOT_CMUX_PROGRESS` | `true` | Show progress while thinking or working. |
 | `COPILOT_CMUX_KEEP_DONE_STATUS` | `true` | Keep the final `done` pill visible. |
 | `COPILOT_CMUX_LOG_PROMPTS` | `true` | Log prompt submissions. |
@@ -171,6 +175,30 @@ reporting `OK` says nothing about whether anything rendered. It has reported
 bisection, not inspection, and changes are verified by reading the rendered
 accessibility tree. Constructs measured to fail silently are documented at the
 top of the file - read those comments before editing it.
+
+## The attention watcher
+
+Maestro publishes from hooks, and while a Session sits blocked **no hook
+fires**. The measured ordering is `tool.execution_start` → `preToolUse` →
+`permission.requested`, so even a tool-start hook runs before the request
+exists. The only hook that can catch a live block is `notification`, and it does
+not fire for every prompt variant — a Session blocked on "Allow directory
+access" showed no badge at all while its log carried an outstanding request the
+whole time.
+
+So a small watcher process re-derives attention on a timer instead. It:
+
+- starts from the `sessionStart` hook, detached, and holds a single-instance
+  lock so only one runs per machine
+- skips any Session whose event log has not changed since the last tick, because
+  deriving attention parses the whole log
+- publishes only its own Session's block, leaving co-resident Sessions alone
+- exits once every known Session has been quiet for `MAESTRO_WATCHER_IDLE_MS`,
+  so it never becomes immortal
+- fails silently: with the watcher off or broken, Maestro behaves exactly as it
+  did before, publishing on hooks alone
+
+Set `MAESTRO_WATCHER=0` or `"watcherEnabled": false` to turn it off.
 
 ## Known limitations
 

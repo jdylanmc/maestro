@@ -169,16 +169,16 @@ Measured, each after costing real debugging time:
 **Wanted:** a badge to disappear when the Session that raised it dies.
 **Blocked by:** Maestro only republishes when a hook fires, and a Session that has been killed fires nothing ever again. The workspace description is a persistent field, so the last thing a Session published outlives it.
 **Evidence:** two Sessions were found still advertising a blocking prompt **20.6h** and **39.6h** after death, each having logged a `permission.requested` with no completion. Derivation is now correct at read time, but a description published *before* death is only overwritten when some later Session runs a hook in that workspace.
-**Shipped:** `detectAttention` retires outstanding permissions and elicitations at `session.shutdown`, applied in log order so a `session.resume` correctly reopens later ones. One live Session in the same scan carried **3** shutdowns, so a whole-file "has shutdown" test would have muted a real blocking prompt.
-**Closes with:** a supervised plugin process that can observe Session death and publish on its behalf, rather than a hook that only runs while the Session is alive.
+**Shipped:** `detectAttention` retires outstanding permissions and elicitations at `session.shutdown`, applied in log order so a `session.resume` correctly reopens later ones. One live Session in the same scan carried **3** shutdowns, so a whole-file "has shutdown" test would have muted a real blocking prompt. The G-24 watcher then closes most of the remaining exposure: a killed Session appends its shutdown, which changes the log's mtime, so the watcher recomputes and clears the badge on that Session's behalf.
+**Closes with:** a supervised plugin process that observes Session death directly. The watcher approximates one, but it can only act while a state file survives and a log still exists to read.
 
 ### G-24 - A blocked Session cannot raise its own badge
 
 **Wanted:** the ASK badge to appear whenever a Session is waiting on the operator.
 **Blocked by:** publishing is hook-driven, and while a Session sits blocked NO hook fires. Measured ordering is `tool.execution_start` -> `preToolUse` -> `permission.requested`, so even a tool-start hook runs before the request exists. The only hook that can catch a live block is `notification`, and it does not fire for every prompt variant.
 **Evidence:** a Session blocked on an "Allow directory access" prompt showed no badge; its workspace description held the owner row and nothing else, so no attention row was ever written. Its log had an outstanding `permission.requested` at that moment, so `detectAttention` would have returned it - nothing called it. That log recorded 347 permission requests and zero `notification` events.
-**Shipped:** nothing. This is the opposite failure to G-11: that badge wrongly STAYED ON, this one never turns on, and better derivation cannot fix it because derivation is never invoked.
-**Closes with:** a watcher that recomputes attention on a timer rather than on a hook - the same supervised process as G-23.
+**Shipped:** a watcher process re-derives attention on a timer and publishes for the blocked Session. It is gated on the log's mtime so an idle Session costs one `stat` per tick, publishes only its own block, holds a single-instance lock, and exits once every Session has gone quiet. Verified live: a staged Session that fired no hook at all had its badge raised within one tick, and cleared within one tick of the prompt being answered.
+**Closes with:** shipped for the observable cases. A hook that fires when a Session BLOCKS would remove the need to poll at all - the watcher reconstructs, on a clock, a state the runtime already knows.
 
 ### G-25 - The interpreter cannot scope rows to one publisher
 

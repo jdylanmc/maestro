@@ -11,6 +11,7 @@ interface MaestroFileConfig {
   keepDoneStatus: boolean | undefined
   notifyOnSessionEnd: boolean | undefined
   notifyOnErrors: boolean | undefined
+  watcherEnabled: boolean | undefined
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -31,6 +32,15 @@ function parseTransport(value: string | undefined, fallback: TransportMode): Tra
   }
 
   return fallback
+}
+
+/** A malformed interval falls back rather than throwing: the watcher is an
+ *  enhancement, and a typo in it must never take the hooks down with it. */
+function parseInterval(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value.trim(), 10)
+  if (!Number.isFinite(parsed) || parsed < 250) return fallback
+  return parsed
 }
 
 function configPath(env: NodeJS.ProcessEnv): string {
@@ -67,6 +77,7 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
         keepDoneStatus: undefined,
         notifyOnSessionEnd: undefined,
         notifyOnErrors: undefined,
+        watcherEnabled: undefined,
       }
     }
     throw error
@@ -88,6 +99,7 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     keepDoneStatus: optionalBoolean(source, "keepDoneStatus", path),
     notifyOnSessionEnd: optionalBoolean(source, "notifyOnSessionEnd", path),
     notifyOnErrors: optionalBoolean(source, "notifyOnErrors", path),
+    watcherEnabled: optionalBoolean(source, "watcherEnabled", path),
   }
 }
 
@@ -110,5 +122,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PluginConfig {
     notifyOnErrors: parseBoolean(env.COPILOT_CMUX_NOTIFY_ERRORS, file.notifyOnErrors ?? true),
     logFileEdits: parseBoolean(env.COPILOT_CMUX_LOG_FILE_EDITS, true),
     debug: parseBoolean(env.COPILOT_CMUX_DEBUG, false),
+    watcherEnabled: parseBoolean(env.MAESTRO_WATCHER, file.watcherEnabled ?? true),
+    watcherIntervalMs: parseInterval(env.MAESTRO_WATCHER_INTERVAL_MS, 2_000),
+    watcherIdleMs: parseInterval(env.MAESTRO_WATCHER_IDLE_MS, 30 * 60_000),
   }
 }

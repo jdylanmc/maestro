@@ -59,6 +59,13 @@ export interface PluginConfig {
   notifyOnErrors: boolean
   logFileEdits: boolean
   debug: boolean
+  /**
+   * The watcher recomputes attention on a timer, because a blocked Session
+   * fires no hook and therefore cannot raise its own badge (#57).
+   */
+  watcherEnabled: boolean
+  watcherIntervalMs: number
+  watcherIdleMs: number
 }
 
 export interface SidebarStatusPayload {
@@ -138,6 +145,19 @@ export interface RuntimeState {
     | undefined
   lastSessionEndReason: SessionEndReason | undefined
   attention: Attention | undefined
+  /**
+   * Enough identity for something OTHER than this Session's hook to publish on
+   * its behalf.
+   *
+   * A blocked Session fires no hook, so the watcher recomputes attention on a
+   * timer instead (issue #57). To do that it must know which surface owns the
+   * block and which log to read - neither of which it can rediscover, because
+   * `CMUX_SURFACE_ID` lives in the Session's environment and cwd alone is
+   * ambiguous (G-21).
+   */
+  surfaceID: string | undefined
+  sessionId: string | undefined
+  transcriptPath: string | undefined
   /**
    * Names of finished subagents the operator dismissed from the sidebar.
    *
