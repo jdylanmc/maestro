@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { type TestContext, test } from "node:test"
-import { detectAttention } from "../src/tree.js"
+import { detectAttention, encodeAttention } from "../src/tree.js"
+import type { Attention } from "../src/types.js"
 
 // An outstanding elicitation is a blocking state, and it IS derivable.
 //
@@ -134,4 +135,36 @@ test("the question label never carries the question text", (t: TestContext) => {
     !attention?.label.includes("token") && !attention?.label.includes("ghp_"),
     "elicitation arguments must never reach a publishable label",
   )
+})
+
+test("a permission carries the runtime's own kind through to the wire", (t) => {
+  // Measured across 40 recent session logs: shell 1671, write 306, read 209,
+  // url 28, mcp 13, factory 6. The sibling `intention` and `path` fields are
+  // prose and a machine path, and must not travel with it.
+  const timestamp = "2026-08-24T12:00:00.000Z"
+  const path = log(t, [
+    event("tool.execution_start", { toolCallId: "tc1", toolName: "bash" }, timestamp),
+    event(
+      "permission.requested",
+      {
+        requestId: "r1",
+        permissionRequest: {
+          kind: "shell",
+          toolCallId: "tc1",
+          intention: "delete everything in the customer database",
+          path: "/Users/someone/private/repo",
+        },
+      },
+      timestamp,
+    ),
+  ])
+
+  const attention = detectAttention(path)
+  assert.equal(attention?.kind, "permission")
+  assert.equal(attention?.detail, "shell")
+
+  const row = encodeAttention(attention as Attention)
+  assert.equal(row, "! p shell Approve bash")
+  assert.equal(row.includes("customer database"), false, "intention is prose")
+  assert.equal(row.includes("/Users/"), false, "path is machine-specific")
 })

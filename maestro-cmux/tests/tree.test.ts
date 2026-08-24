@@ -73,6 +73,9 @@ test("detectAttention finds an unmatched permission older than the former tail w
   assert.deepEqual(detectAttention(log), {
     kind: "permission",
     label: "Approve bash",
+    // This fixture's request carries no `kind`, which is the honest shape for a
+    // payload the runtime did not classify.
+    detail: undefined,
     since: Date.parse(timestamp),
   })
 })

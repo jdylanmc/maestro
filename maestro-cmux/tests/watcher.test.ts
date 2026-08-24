@@ -180,7 +180,11 @@ test("an outstanding permission is published without any hook firing", async (t:
 
   assert.deepEqual(changed, [SURFACE])
   assert.equal(writes.length, 1)
-  assert.match(writes[0]?.description ?? "", /! p Approve bash/, "the badge must be published")
+  assert.match(
+    writes[0]?.description ?? "",
+    /! p (-|shell) Approve bash/,
+    "the badge must be published",
+  )
   assert.equal(writes[0]?.workspaceID, WORKSPACE)
 })
 
@@ -246,7 +250,7 @@ test("a resolved permission clears the badge", async (t: TestContext) => {
   const writes: string[] = []
   await watchTick([target({ transcriptPath })], new Map(), {
     now: () => 2000,
-    readDescription: async () => `@ o ${SURFACE}\u00a6! p Approve bash`,
+    readDescription: async () => `@ o ${SURFACE}\u00a6! p - Approve bash`,
     setDescription: async (_w, description) => {
       writes.push(description)
     },

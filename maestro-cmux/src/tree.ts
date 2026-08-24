@@ -118,7 +118,10 @@ export const RETAIN_MS = 15 * 1000
  */
 export function detectAttention(logPath: string): Attention | undefined {
   try {
-    const open = new Map<string, { at: number; tool: string | undefined }>()
+    const open = new Map<
+      string,
+      { at: number; tool: string | undefined; kind: string | undefined }
+    >()
     const toolOf = new Map<string, string>()
     const asks = new Map<string, number>()
     for (const line of readLines(logPath)) {
@@ -150,6 +153,11 @@ export function detectAttention(logPath: string): Attention | undefined {
         open.set(id, {
           at: Number.isFinite(ts) ? ts : Date.now(),
           tool: tc ? toolOf.get(tc) : undefined,
+          // WHY approval is being asked for. Measured across 40 recent session
+          // logs: shell 1671, write 306, read 209, url 28, mcp 13, factory 6.
+          // The sibling `intention` and `path` fields are free text and a
+          // machine path; neither is read here.
+          kind: typeof pr.kind === "string" && pr.kind ? pr.kind : undefined,
         })
       } else if (e.type === "permission.completed") {
         const id = d.requestId as string | undefined
@@ -171,16 +179,22 @@ export function detectAttention(logPath: string): Attention | undefined {
       if (asks.size === 0) return undefined
       let since: number | undefined
       for (const at of asks.values()) if (since === undefined || at < since) since = at
-      return { kind: "question", label: "Answer question", since: since ?? Date.now() }
+      return {
+        kind: "question",
+        label: "Answer question",
+        since: since ?? Date.now(),
+        detail: undefined,
+      }
     }
     // Oldest outstanding request is the one the operator has been waiting on.
-    let best: { at: number; tool: string | undefined } | undefined
+    let best: { at: number; tool: string | undefined; kind: string | undefined } | undefined
     for (const v of open.values()) if (!best || v.at < best.at) best = v
     if (!best) return undefined
     return {
       kind: "permission",
       label: best.tool ? `Approve ${best.tool}` : "Permission needed",
       since: best.at,
+      detail: best.kind,
     }
   } catch {
     return undefined
@@ -538,7 +552,13 @@ export const ROW_SEP = "¦"
  * already splits on spaces and reads field 0 first, so an old sidebar shows
  * the row harmlessly instead of misreading a subagent.
  *
- *     ! p Permission needed¦0 > folk-lyricist
+ *     ! p shell Permission needed¦0 > - - folk-lyricist
+ *
+ * Field 2 is the sub-kind and field 1 stays a single character, so the three
+ * kinds an operator reacts to differently - approve, answer, your turn - are
+ * still read the same way they always were. As on a subagent row the new field
+ * goes BEFORE the label, because the label is greedy-last, and an absent value
+ * is the `-` sentinel rather than an empty field.
  *
  * The label is the hook's own `title`. The hook's `message` is never encoded:
  * for a permission prompt it is the full command line.
@@ -662,13 +682,25 @@ const ATTENTION_GLYPH: Record<AttentionKind, string> = {
   turn: "t",
 }
 
+/**
+ * The permission sub-kinds the runtime emits.
+ *
+ * A CLOSED list on purpose: an unrecognised value is dropped rather than
+ * published, because field 2 must stay a short space-free token and an unknown
+ * value has no glyph in the sidebar anyway. Measured across 40 recent session
+ * logs - shell 1671, write 306, read 209, url 28, mcp 13, factory 6.
+ */
+const PERMISSION_KINDS = new Set(["shell", "write", "read", "url", "mcp", "factory"])
+
 export function encodeAttention(attention: Attention): string {
   const label = attention.label
     .replace(/[\n\r¦]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 44)
-  return `${ATTENTION_MARK} ${ATTENTION_GLYPH[attention.kind]} ${label}`
+  const detail =
+    attention.detail && PERMISSION_KINDS.has(attention.detail) ? attention.detail : FIELD_NONE
+  return `${ATTENTION_MARK} ${ATTENTION_GLYPH[attention.kind]} ${detail} ${label}`
 }
 
 /** Running sorts before finished. */

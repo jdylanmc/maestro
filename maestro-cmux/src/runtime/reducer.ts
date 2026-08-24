@@ -178,6 +178,9 @@ export function reduceRuntimeState(
         // needed", "Information requested"). `message` is NOT - for a
         // permission prompt it is the full command line.
         label: event.title ?? (kind === "permission" ? "Permission needed" : "Question"),
+        // The notification hook carries no sub-kind. Only the event log does,
+        // and derived attention outranks this anyway whenever a log is readable.
+        detail: undefined,
         since: event.timestamp,
       }
       return {
@@ -202,7 +205,12 @@ export function reduceRuntimeState(
         workspaceID,
         updatedAt: event.timestamp,
         phase: "idle",
-        attention: { kind: "turn", label: "Your turn", since: event.timestamp },
+        attention: {
+          kind: "turn",
+          label: "Your turn",
+          detail: undefined,
+          since: event.timestamp,
+        },
       }
     }
   }

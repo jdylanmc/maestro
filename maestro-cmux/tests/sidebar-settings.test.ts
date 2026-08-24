@@ -142,8 +142,9 @@ test("a subagent row's name is read from field 4, and an owner/attention name fr
   assert.match(sidebar, /func agentNameOf\(_ row: String\) -> String \{[\s\S]*?dropFirst\(4\)/)
   assert.match(sidebar, /func nameOf\(_ row: String\) -> String \{[\s\S]*?dropFirst\(2\)/)
   assert.match(sidebar, /let title = agentNameOf\(row\)/)
-  // The attention label is NOT a subagent row and must keep the 3-field reader.
-  assert.match(sidebar, /func attnLabel\([\s\S]*?nameOf\(hits\[0\]\)/)
+  // An attention row is `! <kind> <detail> <label>` - four leading fields, so
+  // its label has its own reader and must NOT use either of the other two.
+  assert.match(sidebar, /func attnLabel\([\s\S]*?dropFirst\(3\)/)
 })
 
 test("model and activity are read from their fixed positions, with the absent sentinel", () => {
@@ -193,4 +194,61 @@ test("the workspace row keeps a small UNIFORM padding, never an edge-specific on
     .join("\n")
   assert.doesNotMatch(code, /\.padding\(\.vertical,/)
   assert.doesNotMatch(code, /\.padding\(\.top,/)
+})
+
+test("the permission badge shows WHY approval is being asked", () => {
+  // The runtime publishes a closed vocabulary in field 2 of the attention row.
+  assert.match(sidebar, /func attnDetail\(_ d: String\) -> String/)
+  assert.match(sidebar, /func permGlyph\(_ k: String\) -> String/)
+  for (const kind of ["shell", "write", "read", "url", "mcp", "factory"]) {
+    assert.match(sidebar, new RegExp(`if k == "${kind}"`), `${kind} has no glyph`)
+  }
+  // An unknown kind keeps the generic raised hand rather than rendering nothing.
+  assert.match(sidebar, /return "hand\.raised\.fill"/)
+  // Two lets, never Image(systemName: permGlyph(attnDetail(d))): a nested call
+  // as a modifier argument is skipped in silence by this interpreter.
+  assert.match(sidebar, /let pk = attnDetail\(d\)\s+let pg = permGlyph\(pk\)/)
+  assert.match(sidebar, /Image\(systemName: pg\)/)
+  const code = sidebar
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
+    .join("\n")
+  assert.doesNotMatch(code, /permGlyph\(attnDetail\(/)
+})
+
+test("no variable-length Text is made incompressible", () => {
+  // `.fixedSize()` overrides truncation, so one long value - a git branch, a
+  // model - makes its row refuse to shrink, and the list then sizes to that row
+  // and scrolls horizontally, shifting EVERY row off its left edge. Observed
+  // live on branch `users/dylanmccurry/review-console-ad-dau`. Only genuinely
+  // fixed-width content may carry it.
+  const code = sidebar
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
+  for (const variable of [
+    "Text(b)",
+    "Text(tb)",
+    "Text(baseName(dir))",
+    "Text(dir)",
+    "Text(title)",
+    "Text(doing)",
+    "Text(model)",
+  ]) {
+    const at = code.findIndex((line) => line.trim() === variable)
+    assert.notEqual(at, -1, `${variable} not found`)
+    // Only the modifier chain, which is the run of lines beginning with a dot.
+    // Stopping there matters: the NEXT sibling view legitimately carries
+    // `.fixedSize()` because its width really is fixed.
+    const chain: string[] = []
+    for (let i = at + 1; i < code.length; i++) {
+      const line = code[i]?.trim() ?? ""
+      if (!line.startsWith(".")) break
+      chain.push(line)
+    }
+    assert.equal(
+      chain.join("\n").includes(".fixedSize()"),
+      false,
+      `${variable} must stay compressible`,
+    )
+  }
 })

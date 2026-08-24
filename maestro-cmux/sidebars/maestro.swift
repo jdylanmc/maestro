@@ -43,9 +43,15 @@
 //   - `.frame(width: 0)` DOES NOT HIDE A VIEW. Six running subagents rendered
 //     a red xmark that was supposed to be zero-width. Branch with if/else to
 //     choose between views; never collapse one to zero width.
-//   - A function CALL inside a ternary renders nothing at all. Measured:
-//     `let end = s < 0 ? 0 : blockEnd(rows, s)` emptied the whole subagent
-//     tree. Give every call its own `let`.
+//   - A ternary containing a function CALL is UNRELIABLE. Measured: replacing
+//     `let end = s < 0 ? 0 : blockEnd(rows, s)` with two plain `let`s, and
+//     changing nothing else, took `liveRowsFor` from rendering NOTHING to
+//     rendering every row. But `attnLabel` returns a ternary containing a call
+//     and works, so the boundary is not fully characterised - only that a
+//     `let`-bound one failed. Prefer plain bindings.
+//   - A NESTED call as a modifier argument -
+//     `Image(systemName: permGlyph(attnDetail(d)))` - is skipped. Bind each
+//     call to its own `let` first.
 //   - EDGE-SPECIFIC padding does not restrict padding, it ADDS inset.
 //     Measured on the workspace row: `.padding(4)` put the row icon at x=35;
 //     `.padding(.vertical, 4)` moved it to x=61, and
@@ -60,7 +66,11 @@ func part(_ row: String, _ i: Int) -> String {
     return p.count > i ? p[i] : ""
 }
 
-/** The name on an OWNER or ATTENTION row - three fields, name last. */
+/** The name on an OWNER or ATTENTION row - three leading fields, name last.
+ *
+ *  Kept as the shared shape for rows whose label starts at field 2. Subagent
+ *  rows use `agentNameOf` and attention rows use `attnLabel`, both of which
+ *  skip more leading fields. */
 func nameOf(_ row: String) -> String {
     return row.split(separator: " ").map { String($0) }.dropFirst(2)
         .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
@@ -349,9 +359,51 @@ func attnRow(_ d: String) -> String {
     return hits.count > 0 ? hits[0] : ""
 }
 
+/** The permission sub-kind on the attention row - "shell", "write", "read",
+ *  "url", "mcp", "factory" - or "" when the runtime did not say.
+ *
+ *  See encodeAttention in src/tree.ts, which publishes a CLOSED vocabulary:
+ *  anything unrecognised arrives as the "-" sentinel. */
+func attnDetail(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    let raw = hits.count > 0 ? part(hits[0], 2) : ""
+    return raw == "-" ? "" : raw
+}
+
+/** The icon for WHY approval is being asked.
+ *
+ *  A raised hand says "blocked"; it does not say whether the agent wants to
+ *  run a command, write a file, or reach the network - which is the whole
+ *  question the operator is about to answer. Unknown kinds keep the hand. */
+func permGlyph(_ k: String) -> String {
+    if k == "shell" {
+        return "terminal.fill"
+    }
+    if k == "write" {
+        return "square.and.pencil"
+    }
+    if k == "read" {
+        return "eye.fill"
+    }
+    if k == "url" {
+        return "globe"
+    }
+    if k == "mcp" {
+        return "puzzlepiece.extension.fill"
+    }
+    if k == "factory" {
+        return "gearshape.2.fill"
+    }
+    return "hand.raised.fill"
+}
+
 func attnLabel(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
-    return hits.count > 0 ? nameOf(hits[0]) : ""
+    if hits.count == 0 {
+        return ""
+    }
+    return hits[0].split(separator: " ").map { String($0) }.dropFirst(3)
+        .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
 }
 
 func countOf(_ d: String, _ g: String) -> Int {
@@ -414,7 +466,7 @@ VStack(alignment: .leading, spacing: 0) {
                         }
                         Text(w.title)
                             .font(.body).bold()
-                            .lineLimit(1).truncationMode(.tail).layoutPriority(1)
+                            .lineLimit(1).truncationMode(.tail)
                         if w.pinned {
                             Image(systemName: "pin.fill")
                                 .imageScale(.small)
@@ -430,7 +482,6 @@ VStack(alignment: .leading, spacing: 0) {
                                 .font(.system(size: 11)).fontDesign(.monospaced)
                                 .foregroundColor(.secondary)
                                 .lineLimit(1).truncationMode(.tail)
-                                .fixedSize()
                             if w.dirty {
                                 Circle().fill(.orange).frame(width: 4, height: 4).fixedSize()
                             }
@@ -446,8 +497,15 @@ VStack(alignment: .leading, spacing: 0) {
                             // a failure - red reads as "something broke" for
                             // what is a routine approval.
                             if attnKind(d) == "p" {
+                                // Two `let`s rather than
+                                // `Image(systemName: permGlyph(attnDetail(d)))`:
+                                // a nested call as a modifier argument is one of
+                                // the constructs this interpreter skips in
+                                // silence. See the header.
+                                let pk = attnDetail(d)
+                                let pg = permGlyph(pk)
                                 HStack(spacing: 3) {
-                                    Image(systemName: "hand.raised.fill").font(.system(size: 13))
+                                    Image(systemName: pg).font(.system(size: 13))
                                     Text("ASK").font(.system(size: 13)).bold()
                                 }
                                 .foregroundColor(.yellow)
@@ -690,8 +748,7 @@ VStack(alignment: .leading, spacing: 0) {
                                     Text(baseName(dir))
                                         .font(.system(size: 10)).fontDesign(.monospaced)
                                         .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .fixedSize()
+                                        .lineLimit(1).truncationMode(.tail)
                                 }
                             }
 
@@ -715,8 +772,7 @@ VStack(alignment: .leading, spacing: 0) {
                                             Text(tb)
                                                 .font(.system(size: 10)).fontDesign(.monospaced)
                                                 .foregroundColor(.secondary)
-                                                .lineLimit(1)
-                                                .fixedSize()
+                                                .lineLimit(1).truncationMode(.tail)
                                             if t.dirty {
                                                 Circle().fill(.orange).frame(width: 3, height: 3).fixedSize()
                                             }

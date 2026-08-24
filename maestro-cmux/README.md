@@ -202,6 +202,24 @@ So a small watcher process re-derives attention on a timer instead. It:
 
 Set `MAESTRO_WATCHER=0` or `"watcherEnabled": false` to turn it off.
 
+## Why a Session is asking
+
+Three different states raise the yellow badge, and they are not interchangeable -
+two block the Session and one does not.
+
+| Source | Sidebar | Meaning |
+| --- | --- | --- |
+| A `permission.requested` with no matching `permission.completed` | An icon for the **kind** - terminal, pencil, eye, globe, puzzle, gears - beside `ASK` | Blocked on approval |
+| A `tool.execution_start` for `ask_user` with no matching completion | `questionmark.bubble.fill` beside `ASK` | Blocked on a clarifying question |
+| The `agentStop` hook | `checkmark.circle.fill` | The turn finished; you are next |
+
+The permission kind is the runtime's own closed vocabulary, measured across 40
+recent session logs: `shell` 1671, `write` 306, `read` 209, `url` 28, `mcp` 13,
+`factory` 6. An unrecognised value falls back to the generic raised hand rather
+than being published. The `intention` and `path` fields on the same request are
+prose and a machine path and are never read - the kind is the most that is safe
+to show, and it is the part that tells you what you are about to approve.
+
 ## Known limitations
 
 These are measured, not suspected. The four limitations this section used to
@@ -244,7 +262,7 @@ is worse than a slightly leaky one.
 
 ```sh
 npm run build
-npm test        # 223 tests
+npm test        # 230 tests
 npm run check   # lint + test
 ```
 

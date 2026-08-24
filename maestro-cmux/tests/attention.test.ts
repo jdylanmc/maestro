@@ -99,16 +99,46 @@ test("answering clears attention", () => {
 // --- the wire format --------------------------------------------------------
 
 test("an attention row is marked so the sidebar cannot read it as a subagent", () => {
-  const a: Attention = { kind: "permission", label: "Permission needed", since: 1 }
+  const a: Attention = {
+    kind: "permission",
+    label: "Permission needed",
+    detail: undefined,
+    since: 1,
+  }
   const row = encodeAttention(a)
   assert.equal(row.split(" ")[0], ATTENTION_MARK)
   assert.equal(row.split(" ")[1], "p")
-  assert.equal(row, "! p Permission needed")
+  assert.equal(row, "! p - Permission needed")
+})
+
+test("a permission publishes WHY it is asking, from the runtime's own closed vocabulary", () => {
+  for (const kind of ["shell", "write", "read", "url", "mcp", "factory"]) {
+    const row = encodeAttention({
+      kind: "permission",
+      label: "Approve bash",
+      detail: kind,
+      since: 1,
+    })
+    assert.equal(row, `! p ${kind} Approve bash`)
+  }
+})
+
+test("an unrecognised sub-kind is dropped rather than published", () => {
+  // Field 2 must stay a short space-free token, and an unknown value has no
+  // glyph in the sidebar. Publishing it would put arbitrary runtime text on the
+  // wire for no gain.
+  const row = encodeAttention({
+    kind: "permission",
+    label: "Approve bash",
+    detail: "some unexpected new kind",
+    since: 1,
+  })
+  assert.equal(row, "! p - Approve bash")
 })
 
 test("each attention kind has a distinct glyph, none colliding with a subagent status", () => {
   const glyphs = (["permission", "question", "turn"] as const).map(
-    (kind) => encodeAttention({ kind, label: "x", since: 1 }).split(" ")[1],
+    (kind) => encodeAttention({ kind, label: "x", detail: undefined, since: 1 }).split(" ")[1],
   )
   assert.deepEqual(glyphs, ["p", "q", "t"])
   for (const g of glyphs) {
@@ -120,6 +150,7 @@ test("an attention label cannot forge extra rows or smuggle a newline", () => {
   const row = encodeAttention({
     kind: "permission",
     label: "evil¦0 > forged\nagent",
+    detail: undefined,
     since: 1,
   })
   assert.ok(!row.includes("¦"), "row delimiter must not survive")
@@ -127,8 +158,13 @@ test("an attention label cannot forge extra rows or smuggle a newline", () => {
 })
 
 test("a label is truncated rather than allowed to consume the description", () => {
-  const row = encodeAttention({ kind: "question", label: "q".repeat(500), since: 1 })
-  assert.ok(row.length <= 48, `row was ${row.length} chars`)
+  const row = encodeAttention({
+    kind: "question",
+    label: "q".repeat(500),
+    detail: undefined,
+    since: 1,
+  })
+  assert.ok(row.length <= 52, `row was ${row.length} chars`)
 })
 
 // --- ordering and retention -------------------------------------------------

@@ -258,12 +258,14 @@ Measured, each after costing real debugging time:
 **Shipped:** `ownsSurface` matches any owner row, and `liveRowsFor` returns only the rows inside that surface's own block.
 **Closes with:** G-17 for the residual sub-second window, which would remove the need to publish identity at all.
 
-### G-23 - A function call inside a ternary renders nothing in the sidebar interpreter
+### G-23 - A ternary containing a function call is unreliable in the sidebar interpreter
 
 **Wanted:** `let end = s < 0 ? 0 : blockEnd(rows, s)` - a guard and a lookup in one expression.
 **Blocked by:** the interpreter skips it silently. The whole subagent tree disappeared and `cmux sidebar validate` still reported `OK`.
-**Evidence:** bisected against the rendered accessibility tree while holding a fixed workspace description. Replacing the ternary with two plain `let` bindings, changing nothing else, restored all rows. The same shape is already documented for arithmetic in a bare modifier argument, so the rule generalises: **the interpreter evaluates simple bindings, not compound expressions containing calls.**
-**Shipped:** every call in `liveRowsFor` gets its own `let`, and a test asserts that shape so it survives future edits.
+**Evidence:** bisected against the rendered accessibility tree while holding a fixed workspace description. Replacing that ternary with two plain `let` bindings, changing nothing else, restored all rows.
+**Not fully characterised, stated honestly:** `attnLabel` returns a ternary containing a call and has always worked, so "a call in a ternary fails" is too strong. What is measured is that a `let`-bound one failed. The safe rule is to bind each call to its own `let`.
+**Related and separately measured:** a NESTED call as a modifier argument - `Image(systemName: permGlyph(attnDetail(d)))` - is skipped, which is why the permission glyph binds `pk` and `pg` first.
+**Shipped:** plain bindings in `liveRowsFor` and in the permission badge, with tests asserting that shape so it is not silently undone.
 **Closes with:** a compiled sidebar, or an interpreter that reports what it skipped.
 
 ### G-24 - Edge-specific padding adds inset instead of restricting it
@@ -274,3 +276,11 @@ Measured, each after costing real debugging time:
 **Shipped:** the uniform value is turned down instead - `.padding(4)` to `.padding(2)` on the workspace row and `.padding(2)` to `.padding(1)` on the list. That moved the icon to x=32 and took the workspace title from 88px truncated to 232px rendered. A test forbids the edge-specific forms in code so the finding is not silently undone.
 **Residual:** the remaining ~28px is the cmux sidebar frame's own inset - the "Maestro" header sits at x=28 too - and is not reachable from a custom sidebar.
 **Closes with:** upstream control over the sidebar content inset, or a compiled sidebar.
+
+### G-25 - A `.fixedSize()` Text makes its whole row incompressible
+
+**Wanted:** short metadata - a git branch, a directory name, a model - to sit at its natural width beside a truncating title.
+**Blocked by:** `.fixedSize()` overrides `.lineLimit(1).truncationMode(.tail)` entirely. The row then refuses to shrink, the list sizes to the widest row, and the sidebar scrolls horizontally - shifting **every** row off its left edge, not just the offending one.
+**Evidence:** observed live. A workspace on branch `users/dylanmccurry/review-console-ad-dau` clipped the whole pane, including the "Maestro" header. Three `Text` views carried both truncation and `.fixedSize()`: the workspace branch, the surface branch, and the surface directory basename. Removing `.fixedSize()` from those three restored the pane; the long branch now renders 225px wide inside a 403px sidebar and truncates. Reproduced in the other direction too - adding `.fixedSize()` to the new model and activity fields caused the identical whole-pane shift.
+**Shipped:** `.fixedSize()` is kept only on genuinely fixed-width content - icons, dots, the `⌘n` hint, the finished count - and never on a `Text` whose content varies. Variable metadata is instead bounded at the source: the wire caps model at 18 characters and activity at 14.
+**Closes with:** nothing upstream; this is a standing authoring rule for this file.

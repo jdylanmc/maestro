@@ -43,6 +43,19 @@ export interface Attention {
    * may be screenshotted or committed.
    */
   label: string
+  /**
+   * WHY, when the runtime says why (#-taxonomy work).
+   *
+   * For a permission this is `permissionRequest.kind` - measured values, across
+   * 40 recent session logs: `shell` 1671, `write` 306, `read` 209, `url` 28,
+   * `mcp` 13, `factory` 6. It is a closed vocabulary the runtime chose, not
+   * free text, which is what makes it publishable at all. The sibling
+   * `intention` and `path` fields on the same request are prose and a machine
+   * path, and are never read.
+   *
+   * Absent for `question` and `turn`, which carry no sub-kind.
+   */
+  detail: string | undefined
   since: number
 }
 
