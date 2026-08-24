@@ -9,6 +9,7 @@ const tree: TreeSummary = {
   failed: 0,
   attention: undefined,
   encoded: "@ o surface-1",
+  nextExpiryAt: undefined,
 }
 
 test("session end clears the owner marker so the surface returns to a terminal", () => {

@@ -61,7 +61,7 @@ export interface Subagent {
  * This is enforced HERE rather than in the sidebar, which has no clock it can
  * compare timestamps against and no state to remember a dismissal.
  */
-export const RETAIN_MS = 15 * 60 * 1000
+export const RETAIN_MS = 15 * 1000
 
 /**
  * Attention, DERIVED from the event log rather than stored.
@@ -646,6 +646,7 @@ export interface TreeSummary {
   failed: number
   attention: Attention | undefined
   encoded: string
+  nextExpiryAt: number | undefined
 }
 
 /**
@@ -672,6 +673,7 @@ export function summarize(
   dismissed: ReadonlySet<string> = new Set(),
   sessionId?: string,
   transcriptPath?: string,
+  now: number = Date.now(),
 ): TreeSummary | null {
   try {
     const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
@@ -694,22 +696,37 @@ export function summarize(
         failed: 0,
         attention: undefined,
         encoded: surfaceID ? encodeOwner(surfaceID) : "",
+        nextExpiryAt: undefined,
       }
     }
     let running = 0
     let failed = 0
+    let nextExpiryAt: number | undefined
     for (const s of subs.values()) {
       if (s.status === "run") running++
       else if (s.status === "fail") failed++
+      else if (s.doneAt !== undefined && !dismissed.has(s.name)) {
+        const expiresAt = s.doneAt + RETAIN_MS
+        if (expiresAt > now && (nextExpiryAt === undefined || expiresAt < nextExpiryAt)) {
+          nextExpiryAt = expiresAt
+        }
+      }
     }
     const rows = [
       ...(surfaceID ? [encodeOwner(surfaceID)] : []),
       ...(effective ? [encodeAttention(effective)] : []),
-      ...(subs.size > 0 ? [encodeTree(subs, Date.now(), dismissed)] : []),
+      ...(subs.size > 0 ? [encodeTree(subs, now, dismissed)] : []),
       // An aged-out or fully dismissed tree encodes to "". Joining that in
       // would publish a trailing separator and an empty row.
     ].filter((row) => row.length > 0)
-    return { total: subs.size, running, failed, attention: effective, encoded: rows.join(ROW_SEP) }
+    return {
+      total: subs.size,
+      running,
+      failed,
+      attention: effective,
+      encoded: rows.join(ROW_SEP),
+      nextExpiryAt,
+    }
   } catch {
     return null
   }

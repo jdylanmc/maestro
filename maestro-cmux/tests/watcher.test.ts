@@ -11,6 +11,7 @@ import {
   type WatchTarget,
   watchTick,
 } from "../src/runtime/watcher.js"
+import { RETAIN_MS } from "../src/tree.js"
 import type { RuntimeState } from "../src/types.js"
 
 // A blocked Session fires no hook, so it cannot raise its own ASK badge.
@@ -87,7 +88,7 @@ test("an unchanged log is not recomputed", (t: TestContext) => {
   const first = needsRecompute(path, undefined)
   assert.ok(first !== null, "a log never seen before must be recomputed")
 
-  const memo: WatchMemo = { logMtimeMs: first, encoded: "" }
+  const memo: WatchMemo = { logMtimeMs: first, encoded: "", nextExpiryAt: undefined }
   assert.equal(needsRecompute(path, memo), null, "an unchanged log must be skipped")
 })
 
@@ -101,8 +102,20 @@ test("a changed log is recomputed", (t: TestContext) => {
   const later = new Date(Date.now() + 5000)
   utimesSync(path, later, later)
 
-  const memo: WatchMemo = { logMtimeMs: first, encoded: "" }
+  const memo: WatchMemo = { logMtimeMs: first, encoded: "", nextExpiryAt: undefined }
   assert.ok(needsRecompute(path, memo) !== null, "an appended log must be recomputed")
+})
+
+test("an expired retention deadline recomputes an unchanged log", (t: TestContext) => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-watch-"))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const path = join(dir, "events.jsonl")
+  writeFileSync(path, "{}\n")
+  const mtime = needsRecompute(path, undefined) as number
+  const memo: WatchMemo = { logMtimeMs: mtime, encoded: "", nextExpiryAt: 2_000 }
+
+  assert.equal(needsRecompute(path, memo, 1_999), null)
+  assert.equal(needsRecompute(path, memo, 2_000), mtime)
 })
 
 test("a missing log is skipped rather than throwing", () => {
@@ -133,8 +146,13 @@ function log(t: TestContext, lines: string[]): string {
   return path
 }
 
-function event(type: string, data: Record<string, unknown>, timestamp: string): string {
-  return `${JSON.stringify({ type, agentId: null, data, timestamp })}\n`
+function event(
+  type: string,
+  data: Record<string, unknown>,
+  timestamp: string,
+  agentId: string | null = null,
+): string {
+  return `${JSON.stringify({ type, agentId, data, timestamp })}\n`
 }
 
 test("an outstanding permission is published without any hook firing", async (t: TestContext) => {
@@ -236,6 +254,51 @@ test("a resolved permission clears the badge", async (t: TestContext) => {
 
   assert.equal(writes.length, 1)
   assert.doesNotMatch(writes[0] ?? "", /! p /, "an answered prompt must clear")
+})
+
+test("a completed subagent is removed when its retention deadline passes", async (t) => {
+  const completedAt = Date.parse("2026-08-24T12:00:00.000Z")
+  const transcriptPath = log(t, [
+    event(
+      "tool.execution_start",
+      { toolCallId: "spawn-1", toolName: "task", arguments: { name: "short-lived" } },
+      "2026-08-24T11:59:50.000Z",
+    ),
+    event(
+      "subagent.started",
+      {
+        toolCallId: "spawn-1",
+        agentDisplayName: "short-lived",
+        agentName: "task",
+      },
+      "2026-08-24T11:59:51.000Z",
+      "agent-1",
+    ),
+    event(
+      "subagent.completed",
+      { toolCallId: "spawn-1", totalToolCalls: 1 },
+      "2026-08-24T12:00:00.000Z",
+      "agent-1",
+    ),
+  ])
+
+  let now = completedAt + 1
+  let published = `@ o ${SURFACE}`
+  const memos = new Map<string, WatchMemo>()
+  const deps = {
+    now: () => now,
+    readDescription: async () => published,
+    setDescription: async (_workspaceID: string, description: string) => {
+      published = description
+    },
+  }
+
+  await watchTick([target({ transcriptPath })], memos, deps)
+  assert.match(published, /short-lived/)
+
+  now = completedAt + RETAIN_MS
+  await watchTick([target({ transcriptPath })], memos, deps)
+  assert.doesNotMatch(published, /short-lived/)
 })
 
 test("a cmux failure never escapes the tick", async (t: TestContext) => {

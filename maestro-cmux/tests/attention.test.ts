@@ -147,6 +147,10 @@ function agent(over: Partial<Subagent>): Subagent {
   }
 }
 
+test("completed subagents are retained for 15 seconds", () => {
+  assert.equal(RETAIN_MS, 15_000)
+})
+
 test("running subagents sort above finished ones", () => {
   const subs = new Map<string, Subagent>([
     ["1", agent({ name: "done-first", status: "ok", doneAt: Date.now() })],
@@ -177,7 +181,7 @@ test("sorting never separates a child from its parent", () => {
 test("a subagent finished longer ago than RETAIN_MS is retired", () => {
   const now = Date.now()
   const subs = new Map<string, Subagent>([
-    ["1", agent({ name: "recent", status: "ok", doneAt: now - 60_000 })],
+    ["1", agent({ name: "recent", status: "ok", doneAt: now - RETAIN_MS + 1 })],
     ["2", agent({ name: "ancient", status: "ok", doneAt: now - RETAIN_MS - 1 })],
   ])
   const encoded = encodeTree(subs, now)

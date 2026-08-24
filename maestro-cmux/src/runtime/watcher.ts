@@ -60,6 +60,7 @@ export function toWatchTarget(key: string, state: RuntimeState): WatchTarget | n
 export interface WatchMemo {
   logMtimeMs: number
   encoded: string
+  nextExpiryAt: number | undefined
 }
 
 /**
@@ -72,14 +73,24 @@ export interface WatchMemo {
  * at an unanswered prompt nothing is appended and nothing needs recomputing,
  * because the answer cannot change until the log does.
  */
-export function needsRecompute(logPath: string, memo: WatchMemo | undefined): number | null {
+export function needsRecompute(
+  logPath: string,
+  memo: WatchMemo | undefined,
+  now: number = Date.now(),
+): number | null {
   let mtimeMs: number
   try {
     mtimeMs = statSync(logPath).mtimeMs
   } catch {
     return null
   }
-  if (memo && memo.logMtimeMs === mtimeMs) return null
+  if (
+    memo &&
+    memo.logMtimeMs === mtimeMs &&
+    (memo.nextExpiryAt === undefined || now < memo.nextExpiryAt)
+  ) {
+    return null
+  }
   return mtimeMs
 }
 
@@ -130,7 +141,8 @@ export async function watchTick(
     if (!logPath) continue
 
     const memo = memos.get(target.key)
-    const mtimeMs = needsRecompute(logPath, memo)
+    const now = deps.now()
+    const mtimeMs = needsRecompute(logPath, memo, now)
     if (mtimeMs === null) continue
 
     const tree = summarize(
@@ -140,13 +152,18 @@ export async function watchTick(
       new Set(target.dismissed),
       target.sessionId,
       target.transcriptPath,
+      now,
     )
     // `summarize` returns null only when it could not compute at all. Leaving
     // the description alone is right then - the same fail-open the hook uses.
     if (!tree) continue
 
     if (memo && memo.encoded === tree.encoded) {
-      memos.set(target.key, { logMtimeMs: mtimeMs, encoded: tree.encoded })
+      memos.set(target.key, {
+        logMtimeMs: mtimeMs,
+        encoded: tree.encoded,
+        nextExpiryAt: tree.nextExpiryAt,
+      })
       continue
     }
 
@@ -157,7 +174,11 @@ export async function watchTick(
         await deps.setDescription(target.workspaceID, merged)
         changed.push(target.surfaceID)
       }
-      memos.set(target.key, { logMtimeMs: mtimeMs, encoded: tree.encoded })
+      memos.set(target.key, {
+        logMtimeMs: mtimeMs,
+        encoded: tree.encoded,
+        nextExpiryAt: tree.nextExpiryAt,
+      })
     } catch {
       /* never let one workspace's failure stop the others */
     }

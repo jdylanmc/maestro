@@ -50,7 +50,7 @@ func rowsOf(_ d: String) -> [String] {
 /** Subagent rows, running and recently finished alike.
  *
  *  A finished row is NOT dropped here any more. The plugin retires it after
- *  RETAIN_MS (15 minutes), so a completed subagent greys out and lingers
+ *  RETAIN_MS (15 seconds), so a completed subagent greys out and lingers
  *  instead of vanishing the instant it lands - which made short-lived work
  *  impossible to see at all.
  *
