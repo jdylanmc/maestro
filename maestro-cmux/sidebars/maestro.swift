@@ -405,6 +405,45 @@ func treeBranchSlot(_ hasNext: Bool) -> some View {
     .frame(width: 13, height: 16)
 }
 
+/** Whether a row is a SKILL invocation rather than a subagent (#59).
+ *
+ *  Skills take over the status glyph rather than adding a field, so every
+ *  existing exact-glyph reader keeps working: a skill is not counted as running
+ *  by `countOf(d, ">")` and is not dismissible by the "v" tap, both correct. */
+func isSkill(_ g: String) -> Bool {
+    return g == "u" || g == "a" || g == "s"
+}
+
+/** How the skill started, as a colour.
+ *
+ *  Cyan for a skill the OPERATOR asked for, indigo for one the agent chose on
+ *  its own, grey when the runtime did not say. Measured across every session
+ *  log on disk: 191 user-invoked, 833 agent-invoked, and 83 carrying no trigger
+ *  at all - so the third colour is a recorded state, not a fallback.
+ *
+ *  Hex strings rather than colour tokens so this can be a `func` returning a
+ *  value; a call as a modifier argument works, a nested one does not. */
+func skillColor(_ g: String) -> String {
+    if g == "u" {
+        return "#32D3EE"
+    }
+    if g == "a" {
+        return "#BF80FF"
+    }
+    return "#8E8E93"
+}
+
+/** What the operator is told the row means, on hover. */
+func skillHelp(_ g: String) -> String {
+    if g == "u" {
+        return "Skill - you invoked it"
+    }
+    if g == "a" {
+        return "Skill - the agent chose it"
+    }
+    return "Skill"
+}
+
 func runningDot() -> some View {
     return ZStack {
         Circle().fill(.green).frame(width: 6, height: 6)
@@ -1066,6 +1105,58 @@ VStack(alignment: .leading, spacing: 0) {
                                         let title = agentNameOf(row)
                                         let model = shortModel(modelOf(row))
                                         let doing = activityOf(row)
+                                        // A SKILL invocation, not a subagent (#59). It sits in the
+                                        // tree at the point it was invoked - `agentId` on the
+                                        // event names the invoking subagent, so a skill the agent
+                                        // chose while working nests under it, and one the operator
+                                        // asked for sits at the root.
+                                        //
+                                        // Colour carries the distinction the ticket asks for, and
+                                        // it is DERIVED: the runtime records `trigger` as
+                                        // user-invoked or agent-invoked. Rows with no recorded
+                                        // trigger are grey rather than assumed to be either.
+                                        if isSkill(status) {
+                                            HStack(spacing: 6) {
+                                                Spacer().frame(width: 30)
+                                                HStack(spacing: 0) {
+                                                    if depth > 0 {
+                                                        if keep0 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 1 {
+                                                        if keep1 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 2 {
+                                                        if keep2 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 3 {
+                                                        if keep3 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 4 {
+                                                        if keep4 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    if depth > 5 {
+                                                        if keep5 { treeContinueSlot() } else { treeBlankSlot() }
+                                                    }
+                                                    treeBranchSlot(rowKeepsGoing)
+                                                }
+                                                .fixedSize()
+                                                Image(systemName: "wand.and.stars")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(skillColor(status))
+                                                    .frame(width: 12)
+                                                Text(title)
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(skillColor(status))
+                                                    .lineLimit(1).truncationMode(.tail)
+                                                Spacer(minLength: 0)
+                                            }
+                                            .padding(4)
+                                            .help(skillHelp(status))
+                                            .onTapGesture {
+                                                cmux("workspace.select", workspace_id: w.id)
+                                                cmux("surface.focus", surface_id: t.id)
+                                            }
+                                        } else {
                                         if status == "v" {
                                             HStack(spacing: 6) {
                                                 Spacer().frame(width: 30)
@@ -1235,6 +1326,7 @@ VStack(alignment: .leading, spacing: 0) {
                                             }
                                         }
                                     }
+                                        }
                                     if rows.count > 10 {
                                         HStack(spacing: 6) {
                                             Spacer().frame(width: 30)

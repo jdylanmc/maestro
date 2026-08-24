@@ -389,6 +389,31 @@ Subagents are not shown a worktree of their own. They run in their parent
 Session's working directory, and the event log carries no per-subagent `cwd` at
 all - so a per-row worktree would be invention rather than observation.
 
+## Skills in the tree
+
+A skill invocation appears as its own row, marked with a wand and coloured by
+**how it started**:
+
+| Colour | Meaning |
+| --- | --- |
+| Cyan | You invoked it |
+| Purple | The agent chose it |
+| Grey | The runtime did not record a trigger |
+
+The distinction is derived, not guessed. `skill.invoked` carries a `trigger`
+field; measured across every session log on disk, 833 events read
+`agent-invoked`, 191 read `user-invoked`, and **83 carry no trigger at all** —
+those get the third colour rather than being assumed to be either.
+
+A skill nests under the subagent that invoked it, because the event's `agentId`
+names that subagent. One the operator asked for sits at the root. If the
+invoking agent is no longer in the tree the row falls back to the root rather
+than disappearing, because the invocation still happened.
+
+Only the skill's **name** is published. `skill.invoked.data.content` is the
+entire skill markdown, `description` is free text and `path` is a machine path;
+none of the three ever reaches the wire.
+
 ## Why a Session is asking
 
 Three different states raise the yellow badge, and they are not interchangeable -

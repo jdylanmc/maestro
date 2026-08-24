@@ -38,6 +38,9 @@ const SHUTDOWN = "session.shutdown"
 
 export type SubagentStatus = "run" | "ok" | "fail"
 
+/** How a skill invocation started. `unknown` is a real, recorded state. */
+export type SkillTrigger = "user" | "agent" | "unknown"
+
 export interface Subagent {
   name: string
   kind: string
@@ -57,6 +60,19 @@ export interface Subagent {
    * window sizes would be an estimate wearing a gauge's clothing.
    */
   model: string | undefined
+  /**
+   * How a SKILL row started, when this node is a skill invocation rather than
+   * a subagent (#59).
+   *
+   * `undefined` on every subagent row, which is what keeps existing rows
+   * byte-identical when no skill is invoked. Measured across every session log
+   * on disk: 1,107 `skill.invoked` events, of which 1,024 carry a `trigger` -
+   * 833 `agent-invoked` and 191 `user-invoked`. The remaining 83 carry none, and
+   * those render neutrally rather than being assumed to be either. The ticket
+   * asks for the distinction to be DERIVED and not guessed, and a default would
+   * be a guess applied 83 times.
+   */
+  skill: SkillTrigger | undefined
   /**
    * What the subagent is doing right now (#60): the tool name of its most
    * recent `tool.execution_start` that has no matching `tool.execution_complete`.
@@ -332,6 +348,23 @@ const SPAWN_TOOLS = new Set(["task", "execution_subagent"])
  *  an `agentId`, so it can never collide with a real subagent. */
 const PENDING = "pending:"
 
+/** Key prefix for a skill-invocation node, kept out of the subagent id space. */
+const SKILL = "skill:"
+
+/**
+ * The recorded trigger, mapped to what the wire carries.
+ *
+ * Measured across every session log on disk: 833 `agent-invoked`, 191
+ * `user-invoked`, and 83 events carrying no trigger at all. The third case is
+ * `unknown` rather than a default, because #59 asks for the distinction to be
+ * derived and not guessed - and a default would be a guess made 83 times.
+ */
+function triggerOf(value: unknown): SkillTrigger {
+  if (value === "user-invoked") return "user"
+  if (value === "agent-invoked") return "agent"
+  return "unknown"
+}
+
 /**
  * Build the tree.
  *
@@ -373,6 +406,7 @@ export function buildTree(logPath: string): Map<string, Subagent> {
   const spawns = new Map<string, { name: string; kind: string }>()
   const claimed = new Set<string>()
   const openTools = new Map<string, { agent: string; tool: string }>()
+  const skills = new Map<string, Subagent>()
   try {
     for (const line of readLines(logPath)) {
       if (!line) continue
@@ -422,10 +456,33 @@ export function buildTree(logPath: string): Map<string, Subagent> {
           tools: 0,
           doneAt: undefined,
           model: typeof d.model === "string" && d.model ? d.model : undefined,
+          skill: undefined,
           activity: undefined,
           // toolCallId is resolved to a parent below.
           ...({ tc: d.toolCallId } as object),
         } as Subagent)
+      } else if (e.type === "skill.invoked") {
+        // ONLY the name is read. `data.content` is the FULL SKILL MARKDOWN,
+        // `data.description` is free text and `data.path` is a machine path -
+        // none of the three may be published (#52).
+        const name = typeof d.name === "string" ? d.name : ""
+        if (!name) continue
+        const ts = Date.parse((e as { timestamp?: string }).timestamp ?? "")
+        // `agentId` answers the nesting question the ticket left open: a skill
+        // invoked inside a subagent carries that subagent's id, so it nests
+        // under the agent that invoked it and sits at the root otherwise.
+        const parent = e.agentId ?? null
+        skills.set(`${SKILL}${parent ?? ""}:${name}`, {
+          name,
+          kind: "skill",
+          status: "ok",
+          parent,
+          tools: 0,
+          doneAt: Number.isFinite(ts) ? ts : Date.now(),
+          model: undefined,
+          skill: triggerOf(d.trigger),
+          activity: undefined,
+        })
       } else if (e.type === "subagent.completed") {
         // There is NO `subagent.failed`. Measured across 60 recent sessions: 133
         // `subagent.started`, 132 `subagent.completed`, zero failures. Nor does
@@ -472,8 +529,18 @@ export function buildTree(logPath: string): Map<string, Subagent> {
       // A placeholder is a spawn that has not reported itself yet: nothing has
       // named its model, and it has run no tools of its own.
       model: undefined,
+      skill: undefined,
       activity: undefined,
     })
+  }
+  // Skills are merged LAST so a skill can never displace a subagent that shares
+  // its key space, and so a log with no skill invocation produces a byte-identical
+  // map to before (#59). A skill whose invoking agent is not in the tree - the
+  // subagent ended and aged out, say - falls back to the root rather than being
+  // dropped, because the invocation still happened.
+  for (const [id, skill] of skills) {
+    if (skill.parent !== null && !subs.has(skill.parent)) skill.parent = null
+    subs.set(id, skill)
   }
   return subs
 }
@@ -556,6 +623,17 @@ export function flatten(subs: Map<string, Subagent>): Array<[number, Subagent]> 
  * halves together.
  */
 const GLYPH: Record<SubagentStatus, string> = { run: ">", ok: "v", fail: "x" }
+
+/**
+ * Skill rows carry their own glyph in the status position (#59).
+ *
+ * A skill is not a third subagent state - it is a different kind of thing that
+ * happens to sit in the same tree - so it takes over field 1 rather than adding
+ * a field. Existing readers keep working: `countOf(d, ">")` and the dismissal
+ * tap both match on an exact glyph, so a skill row is simply not counted as
+ * running and is not dismissible, which is correct for both.
+ */
+const SKILL_GLYPH: Record<SkillTrigger, string> = { user: "u", agent: "a", unknown: "s" }
 
 /**
  * The sentinel for an absent fixed-position field.
@@ -1003,7 +1081,7 @@ export function encodeTree(
       .slice(0, 60)
       .map(
         ([depth, s]) =>
-          `${Math.min(depth, 6)} ${GLYPH[s.status]} ${token(s.model, 18)} ${token(s.activity, 14)} ${clean(s.name, 44)}`,
+          `${Math.min(depth, 6)} ${s.skill ? SKILL_GLYPH[s.skill] : GLYPH[s.status]} ${token(s.model, 18)} ${token(s.activity, 14)} ${clean(s.name, 44)}`,
       )
       .join(ROW_SEP)
   )

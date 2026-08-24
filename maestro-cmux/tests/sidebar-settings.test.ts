@@ -405,3 +405,29 @@ test("variable-length Session metadata is never fixed-size", () => {
     assert.ok(!modifiers.includes(".fixedSize()"), "a variable-length Text must stay compressible")
   }
 })
+
+// --- skill rows (#59) --------------------------------------------------------
+
+test("skill rows render by trigger, in three distinct colours", () => {
+  // All three confirmed in the rendered accessibility tree: "Skill - you
+  // invoked it", "Skill - the agent chose it", and a bare "Skill" for an event
+  // that recorded no trigger.
+  assert.match(sidebar, /func isSkill\(_ g: String\) -> Bool/)
+  assert.match(sidebar, /func skillColor\(_ g: String\) -> String/)
+  assert.match(sidebar, /if isSkill\(status\) \{/)
+  const colours = sidebar.slice(sidebar.indexOf("func skillColor"))
+  const body = colours.slice(0, colours.indexOf("func skillHelp"))
+  const hexes = body.match(/#[0-9A-Fa-f]{6}/g) ?? []
+  assert.equal(new Set(hexes).size, 3, "user, agent and unknown must be visually distinct")
+})
+
+test("a skill row is neither counted as running nor dismissible", () => {
+  // Skills take over the status glyph rather than adding a field, which is only
+  // safe because every existing reader matches an EXACT glyph.
+  assert.match(sidebar, /func countOf\(_ d: String, _ g: String\) -> Int/)
+  assert.match(sidebar, /part\(\$0, 1\) == g/)
+  assert.ok(
+    !/isSkill\(status\)[\s\S]{0,600}Click to dismiss/.test(sidebar),
+    "the dismissal tap belongs to the finished branch, not the skill branch",
+  )
+})

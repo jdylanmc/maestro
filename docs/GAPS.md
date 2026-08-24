@@ -320,3 +320,11 @@ Measured, each after costing real debugging time:
 **Worth stating precisely:** the authoring guide lists BOTH constructs as supported - `Menu("Title") { <items> }` under Content, and `.contextMenu` with arbitrary nested views under Modifiers. Each works alone. The combination does not, and `if`/`if let` inside a `.contextMenu` is fine, so this is specific to `Menu`.
 **Shipped:** no nested `Menu` anywhere. Colour is dropped rather than flattened into six more items on an already long menu. A test walks every `.contextMenu` body and fails on a nested `Menu`, because this failure is invisible in review, invisible to validation, and invisible until someone right-clicks.
 **Closes with:** interpreter support for the combination, or any diagnostic at all for a construct it skips - see G-26, which is the same disease.
+
+### G-32 - A skill invocation's working directory is not recorded
+
+**Wanted:** to show which worktree each skill invocation ran in, alongside the model.
+**Blocked by:** `skill.invoked` carries `name`, `path`, `content`, `description`, `source`, `trigger`, `pluginName`, `model`, `allowedTools`, `pluginVersion` - and no `cwd`. `path` is the skill FILE's location, not the invoking session's directory.
+**Evidence:** all 1,107 `skill.invoked` events across every session log on disk; field frequencies counted, no working-directory field in any of them. The same holds for subagents: no event in the log carries a per-subagent `cwd`.
+**Shipped:** worktree is published once per SESSION, derived from the state file's `cwd`, and subagent and skill rows inherit it implicitly rather than claiming one of their own.
+**Closes with:** a `cwd` on the spawn or invocation event, which is the only thing that would make a per-row worktree observation rather than invention.
