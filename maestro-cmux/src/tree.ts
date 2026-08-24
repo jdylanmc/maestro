@@ -589,11 +589,127 @@ export const ATTENTION_MARK = "!"
  */
 export const OWNER_MARK = "@"
 
-export function encodeOwner(surfaceID: string, stalled = 0): string {
+/** A fixed-position wire field: space-free, bounded, `-` when absent. */
+export function fieldToken(value: string | undefined, max: number): string {
+  if (!value) return FIELD_NONE
+  const cleaned = value.replace(/[\s¦]/g, "").slice(0, max)
+  return cleaned.length > 0 ? cleaned : FIELD_NONE
+}
+
+/**
+ * The git worktree a Session is working out of, or undefined for a normal
+ * checkout.
+ *
+ * Worktrees are how parallel agent work is actually organised here - measured
+ * on this machine: 6 for one repository, 6 for another, 4 for a third. Three of
+ * those four are on a **detached HEAD**, which is what makes this worth
+ * publishing at all: cmux exposes a `branch` binding, and for a detached
+ * worktree that binding says nothing. The directory name is then the only thing
+ * that identifies which piece of parallel work a Session is doing.
+ *
+ * Detection is a single file read, deliberately. `git rev-parse
+ * --git-common-dir` would answer the same question and would mean spawning a
+ * process on the hook path, where the whole design rule is that Maestro cannot
+ * be the reason a session stalls. Git's own on-disk contract is enough: in a
+ * linked worktree `.git` is a FILE reading `gitdir: <main>/.git/worktrees/<name>`,
+ * and in the main working tree it is a directory. Verified against live
+ * worktrees and main checkouts of three repositories.
+ *
+ * Walks upward, because a Session's cwd is often a subdirectory of the worktree
+ * root rather than the root itself.
+ */
+export function resolveWorktree(cwd: string): string | undefined {
+  try {
+    let dir = cwd
+    for (let depth = 0; depth < 24; depth++) {
+      const marker = join(dir, ".git")
+      let stats: ReturnType<typeof statSync>
+      try {
+        stats = statSync(marker)
+      } catch {
+        const parent = join(dir, "..")
+        if (parent === dir) return undefined
+        dir = parent
+        continue
+      }
+      // A directory means the main working tree, which is not a worktree and
+      // has nothing extra worth saying about it.
+      if (!stats.isFile()) return undefined
+      const pointer = readFileSync(marker, "utf8").trim()
+      const match = /\/worktrees\/([^/\s]+)\/?$/.exec(pointer)
+      return match?.[1]
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The model the SESSION itself is running, as distinct from its subagents'.
+ *
+ * Subagent rows have carried a model since wire v2, which left the one agent
+ * the operator is actually talking to as the only one whose model was
+ * invisible.
+ *
+ * Read from the log rather than stored, for the same reason attention is: a
+ * stored value is only as fresh as the hook that would update it, and the model
+ * CHANGES mid-session - `session.model_change` is a real event, observed here
+ * switching gpt-5.6-sol to claude-opus-5. The last root event that names a
+ * model is therefore the answer, and `agentId` is what makes "root" decidable:
+ * a subagent's events carry one, the session's do not. Without that filter this
+ * would report whichever subagent happened to run most recently.
+ *
+ * Measured field coverage in one session log: `assistant.message` 883,
+ * `tool.execution_start` 898, `tool.execution_complete` 897 - all carrying
+ * `model`, so this is never guesswork on an active Session.
+ */
+export function detectSessionModel(logPath: string): string | undefined {
+  try {
+    let model: string | undefined
+    for (const line of readLines(logPath)) {
+      if (!line) continue
+      let e: { type?: string; agentId?: string | null; data?: Record<string, unknown> }
+      try {
+        e = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (e.agentId) continue
+      const d = e.data ?? {}
+      // An explicit switch wins over the model stamped on surrounding events,
+      // which may still be the previous one for a moment.
+      if (e.type === "session.model_change" && typeof d.newModel === "string") {
+        model = d.newModel
+        continue
+      }
+      if (typeof d.model === "string" && d.model) model = d.model
+    }
+    return model
+  } catch {
+    return undefined
+  }
+}
+
+export function encodeOwner(surfaceID: string, stalled = 0, session?: SessionFacts): string {
   const id = surfaceID.replace(/[\n\r¦ ]/g, "")
-  // Field 3 is omitted when healthy so a healthy workspace encodes exactly as
-  // it did before, and an older sidebar sees no change at all.
-  return stalled > 0 ? `${OWNER_MARK} o ${id} ${stalled}` : `${OWNER_MARK} o ${id}`
+  const worktree = fieldToken(session?.worktree, 20)
+  const model = fieldToken(session?.model, 18)
+  // The tail is omitted entirely when there is nothing in it, so a healthy
+  // Session in a normal checkout encodes exactly as it did before any of these
+  // fields existed. When any one is present all three are emitted, because they
+  // are POSITIONAL - a reader takes field 4 by index, and a field that
+  // sometimes disappears would shift the ones after it.
+  if (stalled <= 0 && worktree === FIELD_NONE && model === FIELD_NONE) {
+    return `${OWNER_MARK} o ${id}`
+  }
+  return `${OWNER_MARK} o ${id} ${stalled > 0 ? stalled : FIELD_NONE} ${worktree} ${model}`
+}
+
+/** What the owner row says about the Session itself, rather than its tree. */
+export interface SessionFacts {
+  worktree: string | undefined
+  model: string | undefined
 }
 
 /**
@@ -939,6 +1055,17 @@ export function summarize(
     const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
     const subs = log ? buildTree(log) : new Map<string, Subagent>()
 
+    // What the Session itself is - which model, and which git worktree - as
+    // opposed to what its subagents are. Computed here rather than passed in so
+    // every caller gets it; the watcher and the hooks would otherwise disagree.
+    // This is a third full pass over the log. The watcher gates on log mtime
+    // and a hook publishes once per event, so it is bounded by how fast the log
+    // grows rather than by a clock.
+    const facts: SessionFacts = {
+      worktree: resolveWorktree(cwd),
+      model: log ? detectSessionModel(log) : undefined,
+    }
+
     // Derived Attention wins over anything a hook stored. A blocking prompt that
     // the log says is still outstanding is true regardless of which hook last
     // ran; a stored flag is only as fresh as its clearing hook.
@@ -955,7 +1082,7 @@ export function summarize(
         running: 0,
         failed: 0,
         attention: undefined,
-        encoded: surfaceID ? encodeOwner(surfaceID, stalled) : "",
+        encoded: surfaceID ? encodeOwner(surfaceID, stalled, facts) : "",
         nextExpiryAt: undefined,
         resolved: log !== undefined,
       }
@@ -974,7 +1101,7 @@ export function summarize(
       }
     }
     const rows = [
-      ...(surfaceID ? [encodeOwner(surfaceID, stalled)] : []),
+      ...(surfaceID ? [encodeOwner(surfaceID, stalled, facts)] : []),
       ...(effective ? [encodeAttention(effective)] : []),
       ...(subs.size > 0 ? [encodeTree(subs, now, dismissed)] : []),
       // An aged-out or fully dismissed tree encodes to "". Joining that in

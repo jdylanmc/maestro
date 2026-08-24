@@ -163,7 +163,38 @@ func stalledFor(_ d: String, _ id: String) -> String {
     if hits.count == 0 {
         return ""
     }
-    return part(hits[0], 3)
+    let raw = part(hits[0], 3)
+    return raw == "-" ? "" : raw
+}
+
+/** The git worktree this Session is working out of - owner row field 4.
+ *
+ *  cmux publishes a `branch` binding already, so this would be redundant if
+ *  every worktree were on a branch. Measured, they are not: three of four live
+ *  worktrees of one repository were on a DETACHED HEAD, where the branch says
+ *  nothing at all and the worktree name is the only thing identifying which
+ *  piece of parallel work a Session is doing. */
+func worktreeOf(_ d: String, _ id: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }
+    if hits.count == 0 {
+        return ""
+    }
+    let raw = part(hits[0], 4)
+    return raw == "-" ? "" : raw
+}
+
+/** The model the SESSION itself is running - owner row field 5.
+ *
+ *  Subagent rows have shown a model since wire v2, which left the one agent
+ *  the operator is actually talking to as the only one whose model was
+ *  invisible. */
+func sessionModelOf(_ d: String, _ id: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }
+    if hits.count == 0 {
+        return ""
+    }
+    let raw = part(hits[0], 5)
+    return raw == "-" ? "" : raw
 }
 
 /** The index of `id`'s owner row, or -1. */
@@ -886,6 +917,45 @@ VStack(alignment: .leading, spacing: 0) {
                                     }
                                 }
                                 Spacer(minLength: 4)
+                                // What this Session IS, as opposed to what it
+                                // is doing: which model is driving it and which
+                                // git worktree it is working out of.
+                                //
+                                // Both sit before the directory rather than
+                                // replacing it - the directory is where the
+                                // work happens, the worktree is which parallel
+                                // line of work it belongs to, and with a
+                                // detached HEAD those are the only two facts
+                                // that distinguish one Session from another.
+                                //
+                                // No `.fixedSize()` on any of these. They are
+                                // variable-length Text, and a fixed one makes
+                                // its whole row incompressible - one long value
+                                // then widens the pane and shifts every row off
+                                // its left edge. Measured; see the header.
+                                if let d = w.description {
+                                    let wt = worktreeOf(d, t.id)
+                                    if wt != "" {
+                                        Image(systemName: "arrow.triangle.branch")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.secondary)
+                                            .fixedSize()
+                                        Text(wt)
+                                            .font(.system(size: 10)).fontDesign(.monospaced)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1).truncationMode(.tail)
+                                            .help("Worktree")
+                                    }
+                                    let sm = sessionModelOf(d, t.id)
+                                    if sm != "" {
+                                        Text(shortModel(sm))
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.secondary)
+                                            .opacity(0.75)
+                                            .lineLimit(1).truncationMode(.tail)
+                                            .help("Model")
+                                    }
+                                }
                                 if let dir = t.directory {
                                     Text(baseName(dir))
                                         .font(.system(size: 10)).fontDesign(.monospaced)

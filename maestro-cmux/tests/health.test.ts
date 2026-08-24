@@ -1,16 +1,18 @@
 import assert from "node:assert/strict"
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import { writeDiagnostic } from "../src/logger.js"
 import {
   countStalledCompletions,
+  detectSessionModel,
   encodeOwner,
   healthOf,
   mergeOwnedRows,
   ownedRows,
   ROW_SEP,
+  resolveWorktree,
   STALLED_COMPLETIONS,
   splitOwnedBlocks,
 } from "../src/tree.js"
@@ -149,7 +151,10 @@ test("a healthy owner row is byte-identical to before the health field existed",
 })
 
 test("an unhealthy owner row appends the count as field 3", () => {
-  assert.equal(encodeOwner(SURFACE, 7), `@ o ${SURFACE} 7`)
+  // The tail is all-or-nothing: the fields after it are positional, so a health
+  // count means the worktree and model slots are emitted as sentinels rather
+  // than omitted.
+  assert.equal(encodeOwner(SURFACE, 7), `@ o ${SURFACE} 7 - -`)
 })
 
 test("block ownership is keyed on the surface alone", () => {
@@ -232,4 +237,182 @@ test("a malformed health field reads as healthy", () => {
   // may degrade a badge; it must not invent one.
   assert.equal(healthOf(`@ o ${SURFACE} maybe`, SURFACE), 0)
   assert.equal(healthOf(`@ o ${SURFACE} -1`, SURFACE), 0)
+})
+
+// --- what the Session itself is: model and worktree --------------------------
+
+test("a Session in a normal checkout still encodes exactly as before", () => {
+  assert.equal(encodeOwner(SURFACE, 0, { worktree: undefined, model: undefined }), `@ o ${SURFACE}`)
+})
+
+test("the owner row carries the Session's worktree and model", () => {
+  // Both fields are POSITIONAL, so when any one is present all three are
+  // emitted. A field that sometimes disappears would shift the ones after it,
+  // and every reader here and in the sidebar takes them by index.
+  assert.equal(
+    encodeOwner(SURFACE, 0, { worktree: "as-wt-19", model: "claude-opus-5" }),
+    `@ o ${SURFACE} - as-wt-19 claude-opus-5`,
+  )
+  assert.equal(
+    encodeOwner(SURFACE, 4, { worktree: undefined, model: "gpt-5.6-luna" }),
+    `@ o ${SURFACE} 4 - gpt-5.6-luna`,
+  )
+})
+
+test("session facts do not disturb block ownership or the health field", () => {
+  const published = [
+    encodeOwner(SURFACE, 4, { worktree: "as-wt-19", model: "claude-opus-5" }),
+    "0 > alpha",
+    encodeOwner(OTHER, 0, { worktree: undefined, model: undefined }),
+  ].join(ROW_SEP)
+  assert.deepEqual(
+    splitOwnedBlocks(published).map((b) => b.owner),
+    [SURFACE, OTHER],
+  )
+  assert.equal(healthOf(published, SURFACE), 4)
+  assert.equal(healthOf(published, OTHER), 0)
+})
+
+test("a healthy Session with facts reads as healthy, not as a fault", () => {
+  // The health field is the `-` sentinel here, not absent. `healthOf` must not
+  // read a sentinel as a number.
+  const published = encodeOwner(SURFACE, 0, { worktree: "as-wt-19", model: "gpt-5.6-luna" })
+  assert.equal(healthOf(published, SURFACE), 0)
+})
+
+test("a long worktree name cannot widen the sidebar", () => {
+  // Measured: a `.fixedSize()` Text makes its whole row incompressible, and one
+  // long value shifts every row off its left edge. The fix is to bound the
+  // field at the source. Real names on this machine run to 54 characters:
+  // "squadron-maestro-1-20260823T130422Z-5a58e8-47-attempt-1".
+  const row = encodeOwner(SURFACE, 0, {
+    worktree: "squadron-maestro-1-20260823T130422Z-5a58e8-47-attempt-1",
+    model: undefined,
+  })
+  const worktree = row.split(" ")[4] ?? ""
+  assert.equal(worktree.length, 20)
+})
+
+test("a worktree name with spaces cannot break the field split", () => {
+  const row = encodeOwner(SURFACE, 0, { worktree: "two words", model: "a b" })
+  assert.equal(row.split(" ").length, 6, "every field must stay a single token")
+})
+
+test("the Session model is the last ROOT event that names one", () => {
+  // `agentId` is what makes "root" decidable: a subagent's events carry one,
+  // the Session's do not. Without that filter this reports whichever subagent
+  // ran most recently, which is precisely the wrong answer.
+  withLog(
+    [
+      { type: "assistant.message", timestamp: "2026-08-24T12:00:00Z", data: { model: "gpt-5.4" } },
+      {
+        type: "tool.execution_start",
+        agentId: "sub-1",
+        timestamp: "2026-08-24T12:01:00Z",
+        data: { model: "claude-haiku-4.5" },
+      },
+      {
+        type: "assistant.message",
+        timestamp: "2026-08-24T12:02:00Z",
+        data: { model: "gpt-5.6-luna" },
+      },
+    ],
+    (path) => {
+      assert.equal(detectSessionModel(path), "gpt-5.6-luna")
+    },
+  )
+})
+
+test("an explicit model change is honoured", () => {
+  // Measured live: `session.model_change` switched gpt-5.6-sol to claude-opus-5
+  // mid-session. A stored value would have been stale until some hook happened
+  // to refresh it, which is the same reason attention is derived and not stored.
+  withLog(
+    [
+      {
+        type: "assistant.message",
+        timestamp: "2026-08-24T12:00:00Z",
+        data: { model: "gpt-5.6-sol" },
+      },
+      {
+        type: "session.model_change",
+        timestamp: "2026-08-24T12:01:00Z",
+        data: { previousModel: "gpt-5.6-sol", newModel: "claude-opus-5" },
+      },
+    ],
+    (path) => {
+      assert.equal(detectSessionModel(path), "claude-opus-5")
+    },
+  )
+})
+
+test("a log with no model at all reports none", () => {
+  withLog([{ type: "user.message", timestamp: "2026-08-24T12:00:00Z" }], (path) => {
+    assert.equal(detectSessionModel(path), undefined)
+  })
+})
+
+test("an unreadable log reports no model rather than throwing", () => {
+  assert.equal(detectSessionModel(join(tmpdir(), "maestro-absent", "nope.jsonl")), undefined)
+})
+
+// --- worktree detection ------------------------------------------------------
+
+test("a linked worktree is identified by name", () => {
+  // Git's on-disk contract: in a linked worktree `.git` is a FILE reading
+  // `gitdir: <main>/.git/worktrees/<name>`. Reading it avoids spawning `git
+  // rev-parse` on the hook path, where Maestro must never be the reason a
+  // session stalls. Verified against live worktrees of three repositories.
+  const dir = mkdtempSync(join(tmpdir(), "maestro-wt-"))
+  try {
+    writeFileSync(
+      join(dir, ".git"),
+      "gitdir: /Users/x/git/atlas/.git/worktrees/atlas-rev-balerion\n",
+    )
+    assert.equal(resolveWorktree(dir), "atlas-rev-balerion")
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a main working tree is not a worktree", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-wt-"))
+  try {
+    mkdirSync(join(dir, ".git"))
+    assert.equal(resolveWorktree(dir), undefined)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a subdirectory of a worktree resolves to the same worktree", () => {
+  // A Session's cwd is often below the worktree root.
+  const dir = mkdtempSync(join(tmpdir(), "maestro-wt-"))
+  try {
+    writeFileSync(join(dir, ".git"), "gitdir: /Users/x/git/agent-skills/.git/worktrees/as-wt-19")
+    const nested = join(dir, "src", "runtime")
+    mkdirSync(nested, { recursive: true })
+    assert.equal(resolveWorktree(nested), "as-wt-19")
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a directory outside any repository is not a worktree", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-wt-"))
+  try {
+    assert.equal(resolveWorktree(dir), undefined)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a malformed gitdir pointer is not guessed at", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-wt-"))
+  try {
+    writeFileSync(join(dir, ".git"), "gitdir: /Users/x/git/atlas/.git")
+    assert.equal(resolveWorktree(dir), undefined, "a submodule pointer is not a worktree")
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

@@ -368,3 +368,40 @@ test("the sidebar claims no action cmux does not expose", () => {
     "rename needs a title parameter and the sidebar has no text input; only clear_name is offerable",
   )
 })
+
+// --- what the Session itself is ----------------------------------------------
+
+test("the Session row renders its own model and worktree", () => {
+  // Subagent rows have carried a model since wire v2, which left the one agent
+  // the operator is actually talking to as the only one whose model was
+  // invisible. Both confirmed in the rendered accessibility tree.
+  assert.match(sidebar, /func worktreeOf\(_ d: String, _ id: String\) -> String/)
+  assert.match(sidebar, /func sessionModelOf\(_ d: String, _ id: String\) -> String/)
+  assert.match(sidebar, /let wt = worktreeOf\(d, t\.id\)\s+if wt != "" \{/)
+  assert.match(sidebar, /let sm = sessionModelOf\(d, t\.id\)\s+if sm != "" \{/)
+})
+
+test("owner row fields are read positionally and treat the sentinel as absent", () => {
+  // Fields 3, 4 and 5 are positional; an absent one is the `-` sentinel rather
+  // than an empty field, because the sidebar recovers fields by splitting on
+  // spaces and a run of them collapses.
+  for (const field of [3, 4, 5]) {
+    assert.match(
+      sidebar,
+      new RegExp(`let raw = part\\(hits\\[0\\], ${field}\\)\\s+return raw == "-" \\? "" : raw`),
+      `owner row field ${field} must read the sentinel as absent`,
+    )
+  }
+})
+
+test("variable-length Session metadata is never fixed-size", () => {
+  // A `.fixedSize()` Text makes its whole row incompressible; one long value
+  // then widens the pane and shifts every row off its left edge. Measured.
+  const worktreeBlock = sidebar.slice(sidebar.indexOf("let wt = worktreeOf"))
+  const body = worktreeBlock.slice(0, worktreeBlock.indexOf("if let dir = t.directory"))
+  const textRuns = body.split("Text(").slice(1)
+  for (const run of textRuns) {
+    const modifiers = run.slice(0, run.indexOf(".help("))
+    assert.ok(!modifiers.includes(".fixedSize()"), "a variable-length Text must stay compressible")
+  }
+})

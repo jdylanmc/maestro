@@ -339,6 +339,33 @@ So a small watcher process re-derives attention on a timer instead. It:
 
 Set `MAESTRO_WATCHER=0` or `"watcherEnabled": false` to turn it off.
 
+## What each agent is, not just what it is doing
+
+Every row says which **model** is driving it. Subagent rows have carried one
+since wire v2; the Session row now does too, which had left the one agent you
+are actually talking to as the only one whose model was invisible. It is read
+from the event log rather than stored, because the model can change mid-session
+- `session.model_change` is a real event - and a stored value is only as fresh
+as the hook that would update it.
+
+A Session also shows the **git worktree** it is working out of, when it is in
+one. cmux already publishes a branch, so this would be redundant if every
+worktree were on a branch. Measured on this machine, they are not: of four live
+worktrees of one repository, three were on a **detached HEAD**, where the branch
+says nothing and the directory name is the only thing identifying which line of
+parallel work a Session belongs to.
+
+Detection is a single file read, never a subprocess. Git's on-disk contract is
+enough: in a linked worktree `.git` is a file reading
+`gitdir: <main>/.git/worktrees/<name>`, and in a main working tree it is a
+directory. Spawning `git rev-parse` would answer the same question and would put
+a process launch on the hook path, where the whole rule is that Maestro cannot
+be the reason a session stalls.
+
+Subagents are not shown a worktree of their own. They run in their parent
+Session's working directory, and the event log carries no per-subagent `cwd` at
+all - so a per-row worktree would be invention rather than observation.
+
 ## Why a Session is asking
 
 Three different states raise the yellow badge, and they are not interchangeable -

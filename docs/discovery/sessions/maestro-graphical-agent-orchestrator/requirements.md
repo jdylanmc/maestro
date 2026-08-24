@@ -140,6 +140,15 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
   watcher may derive it - a hook cannot report the absence of hooks - and every
   other publisher carries the field forward rather than recomputing it. A
   `postToolUse` hook clears it, because its own execution is the proof.
+- Show, for every agent and subagent, the MODEL driving it and - for a Session
+  - the git worktree it is working out of. Both are what distinguishes one
+  parallel line of work from another; measured, three of four live worktrees of
+  one repository were on a detached HEAD, where the branch cmux publishes says
+  nothing at all. Worktree detection reads git's on-disk `.git` contract and
+  never spawns a process, because nothing on the hook path may.
+- Do NOT show a per-subagent worktree. Subagents run in their parent's working
+  directory and the event log carries no per-subagent `cwd`, so a per-row value
+  would be invented rather than observed.
 - Bound the diagnostic log. It is append-only, written from a path that must
   never fail, and grows fastest exactly when something is wrong; it reached
   17 MB.
