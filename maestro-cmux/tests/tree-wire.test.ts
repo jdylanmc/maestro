@@ -106,3 +106,22 @@ test("status maps to the glyph the sidebar reads", () => {
   assert.equal(rows[1]?.split(" ")[1], "v")
   assert.equal(rows[2]?.split(" ")[1], "x")
 })
+
+test("metadata fields are bounded so they cannot crowd out the agent name", () => {
+  // All three fields share one sidebar row and all three compress, so an
+  // unbounded model or tool name steals width from the name.
+  const encoded = encodeTree(
+    subs([
+      {
+        name: "alpha",
+        status: "run",
+        model: "some-extremely-long-vendor-model-identifier",
+        activity: "execution_subagent_with_a_long_name",
+      },
+    ]),
+  )
+  const parts = encoded.split(" ")
+  assert.equal(parts[2]?.length, 18)
+  assert.equal(parts[3]?.length, 14)
+  assert.equal(parts[4], "alpha")
+})

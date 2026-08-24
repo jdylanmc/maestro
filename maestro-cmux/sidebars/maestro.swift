@@ -43,6 +43,17 @@
 //   - `.frame(width: 0)` DOES NOT HIDE A VIEW. Six running subagents rendered
 //     a red xmark that was supposed to be zero-width. Branch with if/else to
 //     choose between views; never collapse one to zero width.
+//   - A function CALL inside a ternary renders nothing at all. Measured:
+//     `let end = s < 0 ? 0 : blockEnd(rows, s)` emptied the whole subagent
+//     tree. Give every call its own `let`.
+//   - EDGE-SPECIFIC padding does not restrict padding, it ADDS inset.
+//     Measured on the workspace row: `.padding(4)` put the row icon at x=35;
+//     `.padding(.vertical, 4)` moved it to x=61, and
+//     `.padding(.top, 4).padding(.bottom, 4)` to x=93. The only lever that
+//     behaves is a smaller UNIFORM value, so horizontal space is reclaimed by
+//     turning `.padding(4)` down rather than by naming an edge.
+//     (`.padding(.horizontal, 4)` and `.padding(.bottom, 40)` at the outermost
+//     level are unaffected - the misbehaviour is on these nested containers.)
 
 func part(_ row: String, _ i: Int) -> String {
     let p = row.split(separator: " ").map { String($0) }
@@ -528,7 +539,19 @@ VStack(alignment: .leading, spacing: 0) {
                                 .fixedSize()
                         }
                     }
-                    .padding(4)
+                    // Vertical padding only. Horizontal padding here bought
+                    // nothing - the sidebar frame already supplies its own left
+                    // inset - and every pixel of it came out of the width the
+                    // workspace title had to render in.
+                    // Uniform, and deliberately small. This padding is the only
+                    // left inset Maestro owns - the remaining ~28px is the cmux
+                    // sidebar frame's own - and it came straight out of the
+                    // width the workspace title had to render in. Turning it
+                    // from 4 down to 2 took the title from 88px truncated to
+                    // 232px. Do NOT reach for `.padding(.vertical,)` here: on
+                    // this container an edge-specific padding ADDS inset rather
+                    // than restricting it (measured, see the header).
+                    .padding(2)
                     .onTapGesture { cmux("workspace.select", workspace_id: w.id) }
                     .contextMenu {
                         Button("Move to Top") { cmux("workspace.action", action: "move_top", workspace_id: w.id) }
@@ -884,7 +907,7 @@ VStack(alignment: .leading, spacing: 0) {
                         }
                 }
             }
-            .padding(2)
+            .padding(1)
         }
     }
     .padding(.bottom, 40)

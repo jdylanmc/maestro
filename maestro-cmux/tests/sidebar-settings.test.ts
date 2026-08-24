@@ -179,3 +179,18 @@ test("a tab claims only the block its own surface published", () => {
     /let start = ownerIndex\(rows, id\) \+ 1\s+let end = blockEnd\(rows, start\)/,
   )
 })
+
+test("the workspace row keeps a small UNIFORM padding, never an edge-specific one", () => {
+  // Measured: on these nested containers an edge-specific padding ADDS inset
+  // rather than restricting it. `.padding(4)` put the workspace icon at x=35,
+  // `.padding(.vertical, 4)` at x=61, and `.padding(.top, 4).padding(.bottom, 4)`
+  // at x=93. Only turning the uniform value down reclaims width.
+  assert.match(sidebar, /\.padding\(2\)\s+\.onTapGesture \{ cmux\("workspace\.select"/)
+  // Comments name the forbidden constructs on purpose, so check code only.
+  const code = sidebar
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
+    .join("\n")
+  assert.doesNotMatch(code, /\.padding\(\.vertical,/)
+  assert.doesNotMatch(code, /\.padding\(\.top,/)
+})

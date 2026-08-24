@@ -265,3 +265,12 @@ Measured, each after costing real debugging time:
 **Evidence:** bisected against the rendered accessibility tree while holding a fixed workspace description. Replacing the ternary with two plain `let` bindings, changing nothing else, restored all rows. The same shape is already documented for arithmetic in a bare modifier argument, so the rule generalises: **the interpreter evaluates simple bindings, not compound expressions containing calls.**
 **Shipped:** every call in `liveRowsFor` gets its own `let`, and a test asserts that shape so it survives future edits.
 **Closes with:** a compiled sidebar, or an interpreter that reports what it skipped.
+
+### G-24 - Edge-specific padding adds inset instead of restricting it
+
+**Wanted:** to reclaim the left gutter on workspace rows while keeping their vertical rhythm - the ordinary SwiftUI `.padding(.vertical, 4)`.
+**Blocked by:** on these nested containers the interpreter treats an edge-specific padding as *more* padding, not narrower padding.
+**Evidence:** measured against the rendered accessibility tree, same content, one modifier changed at a time. Workspace row icon at **x=35** with `.padding(4)`, **x=61** with `.padding(.vertical, 4)`, **x=93** with `.padding(.top, 4).padding(.bottom, 4)`. `.padding(.horizontal, 4)` and `.padding(.bottom, 40)` at the outermost level behave, so the defect is not universal.
+**Shipped:** the uniform value is turned down instead - `.padding(4)` to `.padding(2)` on the workspace row and `.padding(2)` to `.padding(1)` on the list. That moved the icon to x=32 and took the workspace title from 88px truncated to 232px rendered. A test forbids the edge-specific forms in code so the finding is not silently undone.
+**Residual:** the remaining ~28px is the cmux sidebar frame's own inset - the "Maestro" header sits at x=28 too - and is not reachable from a custom sidebar.
+**Closes with:** upstream control over the sidebar content inset, or a compiled sidebar.

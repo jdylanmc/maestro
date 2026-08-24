@@ -689,6 +689,14 @@ export function encodeTree(
       .slice(0, n)
   // A fixed-position field must never contain a space or it would shift every
   // field after it. Whitespace is stripped outright rather than collapsed.
+  //
+  // The bounds are TIGHT on purpose. All three fields share one sidebar row and
+  // all three compress, so a long model or tool name steals width from the
+  // agent's NAME - which is the field the operator actually reads. Capping the
+  // metadata is the only lever available: forcing them to intrinsic width with
+  // `.fixedSize()` instead makes the row incompressible, and one long row then
+  // widens the whole pane and shifts every other row off its left edge.
+  // Measured, on a live sidebar.
   const token = (v: string | undefined, n: number) => {
     if (!v) return FIELD_NONE
     const cleaned = v.replace(/[\s¦]/g, "").slice(0, n)
@@ -703,7 +711,7 @@ export function encodeTree(
       .slice(0, 60)
       .map(
         ([depth, s]) =>
-          `${Math.min(depth, 6)} ${GLYPH[s.status]} ${token(s.model, 24)} ${token(s.activity, 20)} ${clean(s.name, 44)}`,
+          `${Math.min(depth, 6)} ${GLYPH[s.status]} ${token(s.model, 18)} ${token(s.activity, 14)} ${clean(s.name, 44)}`,
       )
       .join(ROW_SEP)
   )
