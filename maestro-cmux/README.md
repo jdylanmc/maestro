@@ -180,13 +180,33 @@ presentation preferences:
   "notifyOnSessionEnd": true,
   "notifyOnErrors": true,
   "watcherEnabled": true,
-  "publishRawText": false
+  "watcherIntervalMs": 2000,
+  "watcherIdleMs": 1800000,
+  "publishRawText": false,
+  "logPrompts": true,
+  "logToolCalls": true,
+  "logSessionLifecycle": true,
+  "logFileEdits": true,
+  "debug": false
 }
 ```
 
+That is every setting the file accepts, and `config.example.json` is asserted
+against the list so it cannot drift. Three settings are deliberately absent:
+`cmuxBin`, `statusKey`, and `transport` select how to reach cmux at all, so a
+bad value in a file read by every hook would silence the plugin everywhere with
+the file itself as the only way back. They stay environment-only, where a
+mistake is scoped to one session.
+
+A malformed interval in the file is **reported**, not ignored — unlike the
+environment path, which falls back silently. An ambient variable may be set by
+something you did not write; a config file is a deliberate statement, and a
+value quietly discarded would leave you believing a setting had taken effect.
+
 Each hook invocation reloads this file, so changes apply to the next event
 without reinstalling the plugin. The gear in the Maestro sidebar's compact top
-toolbar opens cmux's native Custom Sidebars settings pane.
+toolbar opens cmux's native Custom Sidebars settings pane, and right-clicking
+the header offers the same plus the notification actions cmux exposes.
 
 Environment variables override the file-backed values:
 

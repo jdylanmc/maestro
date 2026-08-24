@@ -6,6 +6,21 @@ import type { PluginConfig, TransportMode } from "./types.js"
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"])
 const FALSE_VALUES = new Set(["0", "false", "no", "off"])
 
+/**
+ * Every setting the config file may carry.
+ *
+ * Issue #43 opens with the real complaint: settings are split across two
+ * mechanisms and neither is reachable from the UI. The file half is now
+ * complete - every boolean in `PluginConfig` can be set here, and the two
+ * watcher intervals too. Environment variables remain the override, so an
+ * operator can still change one setting for one session without editing a file.
+ *
+ * `cmuxBin`, `statusKey` and `transport` are deliberately NOT here. They select
+ * how to reach cmux at all, so a bad value in a file read by every hook would
+ * silence the plugin everywhere at once, with the file itself as the only way
+ * back. An environment variable is scoped to one session and is the safer home
+ * for them.
+ */
 interface MaestroFileConfig {
   progressEnabled: boolean | undefined
   keepDoneStatus: boolean | undefined
@@ -13,6 +28,13 @@ interface MaestroFileConfig {
   notifyOnErrors: boolean | undefined
   watcherEnabled: boolean | undefined
   publishRawText: boolean | undefined
+  logPrompts: boolean | undefined
+  logToolCalls: boolean | undefined
+  logSessionLifecycle: boolean | undefined
+  logFileEdits: boolean | undefined
+  debug: boolean | undefined
+  watcherIntervalMs: number | undefined
+  watcherIdleMs: number | undefined
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -66,6 +88,48 @@ function optionalBoolean(
   return value
 }
 
+/**
+ * An interval read from the file.
+ *
+ * Unlike the environment path, which falls back silently on a typo, a bad
+ * value HERE throws. The two are not inconsistent: an environment variable is
+ * ambient and may be set by something the operator did not write, so failing
+ * open is right, whereas a config file is a deliberate statement and a value
+ * that was quietly ignored would leave the operator believing a setting had
+ * taken effect. The throw is caught by `hook-runner`, so it still cannot break
+ * a session.
+ */
+function optionalInterval(
+  source: Record<string, unknown>,
+  key: keyof MaestroFileConfig,
+  path: string,
+): number | undefined {
+  const value = source[key]
+  if (value === undefined) return undefined
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 250) {
+    throw new Error(
+      `Invalid Maestro config at ${path}: "${key}" must be a number of milliseconds >= 250`,
+    )
+  }
+  return value
+}
+
+const EMPTY_FILE_CONFIG: MaestroFileConfig = {
+  progressEnabled: undefined,
+  keepDoneStatus: undefined,
+  notifyOnSessionEnd: undefined,
+  notifyOnErrors: undefined,
+  watcherEnabled: undefined,
+  publishRawText: undefined,
+  logPrompts: undefined,
+  logToolCalls: undefined,
+  logSessionLifecycle: undefined,
+  logFileEdits: undefined,
+  debug: undefined,
+  watcherIntervalMs: undefined,
+  watcherIdleMs: undefined,
+}
+
 function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
   const path = configPath(env)
   let raw: string
@@ -73,14 +137,7 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     raw = readFileSync(path, "utf8")
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return {
-        progressEnabled: undefined,
-        keepDoneStatus: undefined,
-        notifyOnSessionEnd: undefined,
-        notifyOnErrors: undefined,
-        watcherEnabled: undefined,
-        publishRawText: undefined,
-      }
+      return EMPTY_FILE_CONFIG
     }
     throw error
   }
@@ -103,6 +160,13 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     notifyOnErrors: optionalBoolean(source, "notifyOnErrors", path),
     watcherEnabled: optionalBoolean(source, "watcherEnabled", path),
     publishRawText: optionalBoolean(source, "publishRawText", path),
+    logPrompts: optionalBoolean(source, "logPrompts", path),
+    logToolCalls: optionalBoolean(source, "logToolCalls", path),
+    logSessionLifecycle: optionalBoolean(source, "logSessionLifecycle", path),
+    logFileEdits: optionalBoolean(source, "logFileEdits", path),
+    debug: optionalBoolean(source, "debug", path),
+    watcherIntervalMs: optionalInterval(source, "watcherIntervalMs", path),
+    watcherIdleMs: optionalInterval(source, "watcherIdleMs", path),
   }
 }
 
@@ -115,21 +179,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PluginConfig {
     transport: parseTransport(env.COPILOT_CMUX_TRANSPORT, "auto"),
     progressEnabled: parseBoolean(env.COPILOT_CMUX_PROGRESS, file.progressEnabled ?? true),
     keepDoneStatus: parseBoolean(env.COPILOT_CMUX_KEEP_DONE_STATUS, file.keepDoneStatus ?? true),
-    logPrompts: parseBoolean(env.COPILOT_CMUX_LOG_PROMPTS, true),
-    logToolCalls: parseBoolean(env.COPILOT_CMUX_LOG_TOOLS, true),
-    logSessionLifecycle: parseBoolean(env.COPILOT_CMUX_LOG_SESSION_LIFECYCLE, true),
+    logPrompts: parseBoolean(env.COPILOT_CMUX_LOG_PROMPTS, file.logPrompts ?? true),
+    logToolCalls: parseBoolean(env.COPILOT_CMUX_LOG_TOOLS, file.logToolCalls ?? true),
+    logSessionLifecycle: parseBoolean(
+      env.COPILOT_CMUX_LOG_SESSION_LIFECYCLE,
+      file.logSessionLifecycle ?? true,
+    ),
     notifyOnSessionEnd: parseBoolean(
       env.COPILOT_CMUX_NOTIFY_SESSION_END,
       file.notifyOnSessionEnd ?? true,
     ),
     notifyOnErrors: parseBoolean(env.COPILOT_CMUX_NOTIFY_ERRORS, file.notifyOnErrors ?? true),
-    logFileEdits: parseBoolean(env.COPILOT_CMUX_LOG_FILE_EDITS, true),
+    logFileEdits: parseBoolean(env.COPILOT_CMUX_LOG_FILE_EDITS, file.logFileEdits ?? true),
     // Defaults to FALSE. See PluginConfig.publishRawText - the shipped
     // configuration must not be able to publish prompt or argument text.
     publishRawText: parseBoolean(env.COPILOT_CMUX_PUBLISH_RAW_TEXT, file.publishRawText ?? false),
-    debug: parseBoolean(env.COPILOT_CMUX_DEBUG, false),
+    debug: parseBoolean(env.COPILOT_CMUX_DEBUG, file.debug ?? false),
     watcherEnabled: parseBoolean(env.MAESTRO_WATCHER, file.watcherEnabled ?? true),
-    watcherIntervalMs: parseInterval(env.MAESTRO_WATCHER_INTERVAL_MS, 2_000),
-    watcherIdleMs: parseInterval(env.MAESTRO_WATCHER_IDLE_MS, 30 * 60_000),
+    watcherIntervalMs: parseInterval(
+      env.MAESTRO_WATCHER_INTERVAL_MS,
+      file.watcherIntervalMs ?? 2_000,
+    ),
+    watcherIdleMs: parseInterval(env.MAESTRO_WATCHER_IDLE_MS, file.watcherIdleMs ?? 30 * 60_000),
   }
 }

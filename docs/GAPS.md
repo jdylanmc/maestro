@@ -297,3 +297,17 @@ Measured, each after costing real debugging time:
 **Shipped:** derivation belongs to the out-of-process watcher, which is the only part of Maestro still running when hooks are not. Health is a per-hook timestamp (`lastToolAt`), carried forward untouched by every hook except `postToolUse` - whose own execution is the proof of life that clears it - and floored at the watcher's start time so an upgrade cannot badge history it never observed.
 **Residual, stated plainly:** if the watcher itself never starts, nothing detects anything. `watcherEnabled` defaults on and `sessionStart` starts it, but a `sessionStart` that fails to parse takes the detector down with the thing it detects.
 **Closes with:** a runtime that reports hook delivery failures to the plugin that registered them, which would let the reporter be something other than the reported-on.
+
+### G-30 - A sidebar can fire cmux actions but cannot ask a question or read a result
+
+**Wanted:** the context menus issue #61 asks for, and the header actions issue #43 proposes - reload the sidebar, open the diagnostic log, copy the tree, rename a workspace.
+**Blocked by:** `cmux(...)` is fire-and-forget. It takes literal arguments, returns nothing, and reports nothing. The sidebar has no `@State`, no `TextField`, and no environment access.
+**Evidence:** enumerated against the live socket rather than assumed.
+- **Rename is unreachable.** `workspace.action rename` requires a `title`, measured: `invalid_params: Missing or invalid title`. With no text input there is no title to send. `clear-name` takes no argument and IS offerable, so the menus offer "Reset Name" instead.
+- **Reload is unreachable.** `cmux sidebar reload` is a CLI command with no socket method behind it; `sidebar.custom.open` opens a sidebar as a pane rather than reloading the running one.
+- **Open log is unreachable.** `file.open` exists and works, but the diagnostic log lives under `$TMPDIR` and the sidebar cannot read the environment. Hard-coding a machine path into a committed file is also against this repository's rules.
+- **Copy is unreachable.** There is NO clipboard method in the socket API - 303 methods, none of them clipboard.
+- **An invalid verb fails invisibly.** `cmux rpc` rejects an unknown action with `invalid_params`, but a sidebar tap swallows it. A wrong action name and a working one are indistinguishable in the UI, which is the same silent-failure class as the interpreter constructs in G-26.
+**Also measured, and useful:** action names are accepted in either spelling. `cmux docs api` documents `move-top` and `mark-read`; this sidebar has always sent `move_top` and `mark_read`; the socket normalises both. The pre-existing menu was never inert.
+**Shipped:** menus built only from verbs confirmed against the socket, with the ones that do not apply HIDDEN rather than inert - `reload`/`duplicate` gated on a surface having no directory, because both return `invalid_state: only available for browser tabs`, and the remote verbs gated on the optional `remote` binding, because `workspace.remote.reconnect` returns `invalid_state: Remote workspace is not configured` on a local one. Tests assert each verb string so a typo cannot ship silently.
+**Closes with:** a sidebar action channel that can return a result, or any prompt primitive at all. Even a plain confirm would make rename reachable.

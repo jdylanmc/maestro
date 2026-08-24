@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
@@ -103,4 +103,97 @@ test("loadConfig reports malformed Maestro settings", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+// --- file coverage (#43) -----------------------------------------------------
+
+test("every plugin boolean can be set from the config file", () => {
+  // #43's first complaint is that settings are split across two mechanisms.
+  // The file half now covers every boolean, so an operator never has to edit a
+  // shell profile to change behaviour that persists.
+  const dir = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(dir, "config.json")
+  writeFileSync(
+    path,
+    JSON.stringify({
+      logPrompts: false,
+      logToolCalls: false,
+      logSessionLifecycle: false,
+      logFileEdits: false,
+      debug: true,
+      watcherIntervalMs: 5000,
+      watcherIdleMs: 600000,
+    }),
+  )
+  try {
+    const config = loadConfig({ MAESTRO_CONFIG_PATH: path } as NodeJS.ProcessEnv)
+    assert.equal(config.logPrompts, false)
+    assert.equal(config.logToolCalls, false)
+    assert.equal(config.logSessionLifecycle, false)
+    assert.equal(config.logFileEdits, false)
+    assert.equal(config.debug, true)
+    assert.equal(config.watcherIntervalMs, 5000)
+    assert.equal(config.watcherIdleMs, 600000)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("an environment variable still overrides the file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(dir, "config.json")
+  writeFileSync(path, JSON.stringify({ debug: true, watcherIntervalMs: 5000 }))
+  try {
+    const config = loadConfig({
+      MAESTRO_CONFIG_PATH: path,
+      COPILOT_CMUX_DEBUG: "0",
+      MAESTRO_WATCHER_INTERVAL_MS: "9000",
+    } as NodeJS.ProcessEnv)
+    assert.equal(config.debug, false, "the file is the default, not the authority")
+    assert.equal(config.watcherIntervalMs, 9000)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a bad interval in the file is reported rather than ignored", () => {
+  // The environment path falls back silently, because an ambient variable may
+  // be set by something the operator did not write. A config file is a
+  // deliberate statement, and silently ignoring one would leave the operator
+  // believing a setting had taken effect.
+  const dir = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(dir, "config.json")
+  writeFileSync(path, JSON.stringify({ watcherIntervalMs: 10 }))
+  try {
+    assert.throws(
+      () => loadConfig({ MAESTRO_CONFIG_PATH: path } as NodeJS.ProcessEnv),
+      /watcherIntervalMs/,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the shipped example lists every file-settable key", () => {
+  // An example that drifts behind the code is how a config surface becomes
+  // folklore.
+  const example = JSON.parse(
+    readFileSync(join(import.meta.dirname, "..", "config.example.json"), "utf8"),
+  ) as Record<string, unknown>
+  const expected = [
+    "progressEnabled",
+    "keepDoneStatus",
+    "notifyOnSessionEnd",
+    "notifyOnErrors",
+    "watcherEnabled",
+    "watcherIntervalMs",
+    "watcherIdleMs",
+    "publishRawText",
+    "logPrompts",
+    "logToolCalls",
+    "logSessionLifecycle",
+    "logFileEdits",
+    "debug",
+  ]
+  assert.deepEqual(Object.keys(example).sort(), [...expected].sort())
 })

@@ -227,6 +227,38 @@ func without(_ d: String, _ row: String) -> String {
         .reduce("") { $0 == "" ? $1 : $0 + "¦" + $1 }
 }
 
+/** The description with every FINISHED row of one Session removed.
+ *
+ *  "Dismiss all finished" as one action, rather than tapping each row. The
+ *  plugin reads the removal as the dismissal signal - `detectDismissed` in
+ *  src/runtime/processor.ts diffs the published rows against the computed tree
+ *  and records the difference in runtime state - so removing rows here is what
+ *  makes a dismissal stick rather than reappearing on the next publish.
+ *
+ *  Rows are matched by their exact string, which is the same approach `without`
+ *  has always taken. The honest limitation: two Sessions in one workspace that
+ *  both finished an identically named agent, on the same model, showing the
+ *  same activity, encode to the same row - and this would dismiss both. The
+ *  block-scoped alternative needs a running owner cursor while rebuilding the
+ *  string, and mutable accumulation is not something this interpreter has been
+ *  measured to support. The consequence is one extra dismissal of already
+ *  finished work, which the plugin will not resurrect. */
+func withoutFinished(_ d: String, _ id: String) -> String {
+    let mine = liveRowsFor(d, id).filter { part($0, 1) == "v" }
+    return rowsOf(d).filter { !mine.contains($0) }
+        .reduce("") { $0 == "" ? $1 : $0 + "¦" + $1 }
+}
+
+/** Whether this Session has any finished row to dismiss.
+ *
+ *  Gates the menu item. #61 is explicit that an item which does not apply is
+ *  hidden rather than shown as a no-op, and an interpreted sidebar gives no
+ *  feedback when an action does nothing - a wrong verb and a working one look
+ *  identical on tap. */
+func hasFinished(_ d: String, _ id: String) -> Bool {
+    return liveRowsFor(d, id).filter { part($0, 1) == "v" }.count > 0
+}
+
 /** Terminal cursor blink, 1 Hz off the monotonic epoch. */
 func blinkCursor(_ e: Int) -> Bool {
     return e % 2 == 0
@@ -452,6 +484,27 @@ VStack(alignment: .leading, spacing: 0) {
             }
     }
     .padding(.horizontal, 4)
+    // Header menu (#43). Three actions were proposed on that ticket - reload,
+    // open log, copy tree - and all three were measured to be UNREACHABLE from
+    // a sidebar, so none is offered:
+    //
+    //   - Reload: `cmux sidebar reload` is a CLI command with no socket method
+    //     behind it. `sidebar.custom.open` opens a sidebar as a pane; it does
+    //     not reload the running one.
+    //   - Open log: `file.open` exists and works, but the diagnostic log lives
+    //     under $TMPDIR and the sidebar has no environment access. Hard-coding
+    //     a machine-specific path into a committed file is also against this
+    //     repository's rules.
+    //   - Copy tree: there is NO clipboard method anywhere in the socket API.
+    //
+    // What is offered instead is what the API actually supports and an
+    // operator of this sidebar actually wants. See G-30.
+    .contextMenu {
+        Button("Sidebar Settings") { cmux("settings.open", target: "customSidebars") }
+        Divider()
+        Button("Jump to Unread") { cmux("notification.jump_to_unread") }
+        Button("Mark All Notifications Read") { cmux("notification.mark_read", all: true) }
+    }
 
     Divider()
         .offset(y: -6)
@@ -628,12 +681,64 @@ VStack(alignment: .leading, spacing: 0) {
                     .padding(2)
                     .onTapGesture { cmux("workspace.select", workspace_id: w.id) }
                     .contextMenu {
+                        // Every verb here was checked against the live socket
+                        // before it was written. `cmux docs api` documents
+                        // hyphenated action names (`move-top`, `mark-read`)
+                        // while this file has always sent underscores; both
+                        // were tested and the socket normalises them, so the
+                        // pre-existing items were never inert. An UNKNOWN verb
+                        // is rejected with `invalid_params` - which the CLI
+                        // prints and a sidebar tap silently swallows. That is
+                        // why the list is measured rather than transcribed.
                         Button("Move to Top") { cmux("workspace.action", action: "move_top", workspace_id: w.id) }
                         Button("Move Up") { cmux("workspace.action", action: "move_up", workspace_id: w.id) }
                         Button("Move Down") { cmux("workspace.action", action: "move_down", workspace_id: w.id) }
+                        Divider()
                         Button(w.pinned ? "Unpin" : "Pin") { cmux("workspace.action", action: w.pinned ? "unpin" : "pin", workspace_id: w.id) }
                         Button("Mark as Read") { cmux("workspace.action", action: "mark_read", workspace_id: w.id) }
+                        Button("Mark as Unread") { cmux("workspace.action", action: "mark_unread", workspace_id: w.id) }
+                        Divider()
+                        // No "Rename". `workspace.action rename` requires a
+                        // `title` parameter and the sidebar has no TextField,
+                        // no @State, and no way to prompt - so the only rename
+                        // this file could offer would rename to a value chosen
+                        // in advance. Clearing needs no argument, so that is
+                        // offered instead. See G-30.
+                        if w.title != "" {
+                            Button("Reset Name") { cmux("workspace.action", action: "clear_name", workspace_id: w.id) }
+                        }
+                        // Colour is only offered where it can be UNDONE from
+                        // the same menu; a set-only control in a sidebar with
+                        // no other surface for it would be a trap.
+                        Menu("Color") {
+                            Button("Red") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "red") }
+                            Button("Orange") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "orange") }
+                            Button("Green") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "green") }
+                            Button("Blue") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "blue") }
+                            Button("Purple") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "purple") }
+                            Divider()
+                            Button("Clear Color") { cmux("workspace.action", action: "clear_color", workspace_id: w.id) }
+                        }
+                        Divider()
+                        // Remote verbs appear only on a remote workspace.
+                        // Measured: `workspace.remote.reconnect` on a local
+                        // workspace returns `invalid_state: Remote workspace is
+                        // not configured`, and a sidebar cannot show that. The
+                        // `remote` binding is documented as present only when
+                        // the workspace has one, so `if let` is the gate.
+                        if let rem = w.remote {
+                            if rem.connected {
+                                Button("Disconnect Remote") { cmux("workspace.remote.disconnect", workspace_id: w.id) }
+                            } else {
+                                Button("Reconnect Remote") { cmux("workspace.remote.reconnect", workspace_id: w.id) }
+                            }
+                            Divider()
+                        }
                         Button("New Tab") { cmux("surface.create", workspace_id: w.id, focus: true) }
+                        Divider()
+                        Button("Close Others") { cmux("workspace.action", action: "close_others", workspace_id: w.id) }
+                        Button("Close Above") { cmux("workspace.action", action: "close_above", workspace_id: w.id) }
+                        Button("Close Below") { cmux("workspace.action", action: "close_below", workspace_id: w.id) }
                         Button("Close Workspace") { cmux("workspace.close", workspace_id: w.id) }
                     }
 
@@ -823,6 +928,42 @@ VStack(alignment: .leading, spacing: 0) {
                             cmux("workspace.select", workspace_id: w.id)
                             cmux("surface.focus", surface_id: t.id)
                         }
+                        // Session / tab row menu (#61). `tab.action` takes
+                        // `surface_id`, and `surface.action` is the same
+                        // handler under another name - it rejects an unknown
+                        // verb with "Unknown tab action".
+                        .contextMenu {
+                            Button("Focus") {
+                                cmux("workspace.select", workspace_id: w.id)
+                                cmux("surface.focus", surface_id: t.id)
+                            }
+                            Divider()
+                            Button(t.pinned ? "Unpin Tab" : "Pin Tab") { cmux("tab.action", action: t.pinned ? "unpin" : "pin", surface_id: t.id) }
+                            Button("Mark as Unread") { cmux("tab.action", action: "mark_unread", surface_id: t.id) }
+                            Button("Reset Name") { cmux("tab.action", action: "clear_name", surface_id: t.id) }
+                            Divider()
+                            // Reload and Duplicate are BROWSER-ONLY. Measured:
+                            // both return `invalid_state: only available for
+                            // browser tabs` on a terminal surface, and a
+                            // sidebar tap shows no error - so on a Copilot
+                            // Session they would be silent no-ops. The sidebar
+                            // already distinguishes the two kinds by the
+                            // `directory` binding, which a browser surface does
+                            // not carry; that is the same test the tab icon
+                            // uses a few lines above.
+                            if t.directory == nil {
+                                Button("Reload") { cmux("tab.action", action: "reload", surface_id: t.id) }
+                                Button("Duplicate") { cmux("tab.action", action: "duplicate", surface_id: t.id) }
+                                Divider()
+                            }
+                            Button("New Terminal to the Right") { cmux("tab.action", action: "new_terminal_right", surface_id: t.id) }
+                            Button("New Browser to the Right") { cmux("tab.action", action: "new_browser_right", surface_id: t.id) }
+                            Divider()
+                            Button("Close Others") { cmux("tab.action", action: "close_others", surface_id: t.id) }
+                            Button("Close to the Left") { cmux("tab.action", action: "close_left", surface_id: t.id) }
+                            Button("Close to the Right") { cmux("tab.action", action: "close_right", surface_id: t.id) }
+                            Button("Close Tab") { cmux("surface.close", surface_id: t.id) }
+                        }
 
                             // The subagent tree belongs to the Copilot session
                             // that produced it, not to the workspace. It renders
@@ -905,6 +1046,35 @@ VStack(alignment: .leading, spacing: 0) {
                                                      action: "set-description",
                                                      description: without(d, row))
                                             }
+                                            .contextMenu {
+                                                // A subagent is MAESTRO's
+                                                // concept, not cmux's - there
+                                                // is no `subagent.*` method and
+                                                // no clipboard verb anywhere in
+                                                // the socket API, so "copy
+                                                // name" is not offerable. What
+                                                // is left is dismissal, which
+                                                // this plugin already owns, and
+                                                // navigation to the Session
+                                                // that produced the work.
+                                                Button("Dismiss") {
+                                                    cmux("workspace.action",
+                                                         workspace_id: w.id,
+                                                         action: "set-description",
+                                                         description: without(d, row))
+                                                }
+                                                Button("Dismiss All Finished") {
+                                                    cmux("workspace.action",
+                                                         workspace_id: w.id,
+                                                         action: "set-description",
+                                                         description: withoutFinished(d, t.id))
+                                                }
+                                                Divider()
+                                                Button("Focus Session") {
+                                                    cmux("workspace.select", workspace_id: w.id)
+                                                    cmux("surface.focus", surface_id: t.id)
+                                                }
+                                            }
                                         } else {
                                             HStack(spacing: 6) {
                                                 Spacer().frame(width: 30)
@@ -967,6 +1137,30 @@ VStack(alignment: .leading, spacing: 0) {
                                             .onTapGesture {
                                                 cmux("workspace.select", workspace_id: w.id)
                                                 cmux("surface.focus", surface_id: t.id)
+                                            }
+                                            .contextMenu {
+                                                // No "Dismiss" on a RUNNING or
+                                                // FAILED row. encodeTree in
+                                                // src/tree.ts republishes both
+                                                // within seconds, so the item
+                                                // would appear to work and then
+                                                // undo itself - the sidebar
+                                                // lying about state it does not
+                                                // own. Only the finished branch
+                                                // above carries dismissal.
+                                                Button("Focus Session") {
+                                                    cmux("workspace.select", workspace_id: w.id)
+                                                    cmux("surface.focus", surface_id: t.id)
+                                                }
+                                                if hasFinished(d, t.id) {
+                                                    Divider()
+                                                    Button("Dismiss All Finished") {
+                                                        cmux("workspace.action",
+                                                             workspace_id: w.id,
+                                                             action: "set-description",
+                                                             description: withoutFinished(d, t.id))
+                                                    }
+                                                }
                                             }
                                         }
                                     }

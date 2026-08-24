@@ -16,7 +16,7 @@ test("sidebar renders one settings gear in a top toolbar", () => {
   assert.match(sidebar, /\.onTapGesture \{\s+cmux\("settings\.open", target: "customSidebars"\)/)
   assert.match(
     sidebar,
-    /\}\s+\.padding\(\.horizontal, 4\)\s+Divider\(\)\s+\.offset\(y: -6\)\s+VStack/,
+    /\}\s+\.padding\(\.horizontal, 4\)[\s\S]*?Divider\(\)\s+\.offset\(y: -6\)\s+VStack/,
   )
   assert.doesNotMatch(sidebar, /\bScrollView\b/)
   assert.match(sidebar, /\.padding\(\.bottom, 40\)\s+\.offset\(y: -16\)/)
@@ -272,4 +272,87 @@ test("the owner row is still read positionally", () => {
   // The health field is appended AFTER the surface id. That is only safe while
   // every reader takes field 2 by index rather than taking the rest of the row.
   assert.match(sidebar, /part\(\$0, 0\) == "@" && part\(\$0, 2\) == id/)
+})
+
+// --- context menus (#61, #43) ------------------------------------------------
+//
+// Every verb below was checked against the live cmux socket before it was
+// written into the sidebar. That matters more than usual here: `cmux rpc`
+// reports an unknown verb as `invalid_params`, but a sidebar tap is
+// fire-and-forget, so a wrong action name looks exactly like a working one.
+
+test("the workspace row menu uses only verified workspace actions", () => {
+  const verbs = [
+    "move_top",
+    "move_up",
+    "move_down",
+    "mark_read",
+    "mark_unread",
+    "clear_name",
+    "set_color",
+    "clear_color",
+    "close_others",
+    "close_above",
+    "close_below",
+  ]
+  for (const verb of verbs) {
+    assert.ok(
+      sidebar.includes(`action: "${verb}"`),
+      `workspace menu should offer ${verb}, which cmux docs api documents and the socket accepted`,
+    )
+  }
+})
+
+test("the Session row menu is scoped to its surface", () => {
+  // `tab.action` takes `surface_id`. Sending `workspace_id` would act on the
+  // wrong thing or nothing at all, with no error visible in the UI.
+  assert.match(sidebar, /cmux\("tab\.action", action: "mark_unread", surface_id: t\.id\)/)
+  assert.match(sidebar, /cmux\("tab\.action", action: "close_others", surface_id: t\.id\)/)
+  assert.match(sidebar, /cmux\("surface\.close", surface_id: t\.id\)/)
+})
+
+test("browser-only tab actions are hidden on a terminal surface", () => {
+  // Measured: `reload` and `duplicate` return `invalid_state: only available
+  // for browser tabs`. A sidebar cannot show that error, so on a Copilot
+  // Session they would be silent no-ops. #61 requires hidden, not inert.
+  assert.match(
+    sidebar,
+    /if t\.directory == nil \{\s+Button\("Reload"\)[\s\S]*?Button\("Duplicate"\)/,
+    "reload and duplicate must be gated on the surface having no directory",
+  )
+})
+
+test("remote actions are hidden on a local workspace", () => {
+  // Measured: `workspace.remote.reconnect` on a local workspace returns
+  // `invalid_state: Remote workspace is not configured`.
+  assert.match(
+    sidebar,
+    /if let rem = w\.remote \{[\s\S]*?workspace\.remote\.(disconnect|reconnect)/,
+    "remote verbs must be gated on the documented optional `remote` binding",
+  )
+})
+
+test("dismissal is offered only where the plugin will honour it", () => {
+  // encodeTree republishes running and failed rows within seconds, so a
+  // Dismiss item on those would appear to work and then undo itself.
+  assert.match(sidebar, /func withoutFinished\(_ d: String, _ id: String\) -> String/)
+  assert.match(sidebar, /func hasFinished\(_ d: String, _ id: String\) -> Bool/)
+  assert.match(sidebar, /if hasFinished\(d, t\.id\) \{/)
+})
+
+test("the sidebar claims no action cmux does not expose", () => {
+  // There is no clipboard method anywhere in the socket API, and no socket
+  // method reloads a running sidebar. #43 proposed both; neither is offerable.
+  assert.ok(
+    !/cmux\("[a-z.]*clipboard/.test(sidebar),
+    "cmux exposes no clipboard method, so no menu item may claim to copy",
+  )
+  assert.ok(
+    !/cmux\("sidebar\.reload/.test(sidebar),
+    "no socket method reloads a running sidebar; `cmux sidebar reload` is CLI-only",
+  )
+  assert.ok(
+    !/Button\("Rename/.test(sidebar),
+    "rename needs a title parameter and the sidebar has no text input; only clear_name is offerable",
+  )
 })

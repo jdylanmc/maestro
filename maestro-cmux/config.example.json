@@ -4,5 +4,12 @@
   "notifyOnSessionEnd": true,
   "notifyOnErrors": true,
   "watcherEnabled": true,
-  "publishRawText": false
+  "watcherIntervalMs": 2000,
+  "watcherIdleMs": 1800000,
+  "publishRawText": false,
+  "logPrompts": true,
+  "logToolCalls": true,
+  "logSessionLifecycle": true,
+  "logFileEdits": true,
+  "debug": false
 }
