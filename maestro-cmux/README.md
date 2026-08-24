@@ -176,6 +176,50 @@ Environment variables override the file-backed values:
 | `COPILOT_CMUX_PUBLISH_RAW_TEXT` | `false` | Publish prompt, argument, and result text. See Privacy. |
 | `COPILOT_CMUX_DEBUG` | `false` | Verbose diagnostics on stderr. |
 
+## Quieting push notifications
+
+**The noise is not Maestro's.** cmux registers its own Copilot hooks in
+`~/.copilot/settings.json`, independently of this plugin, and its `Notification`
+hook runs `cmux hooks copilot stop` for **every** Copilot notification with no
+reference to the type. Measured types in one session:
+
+| `notificationType` | count | blocks the operator? |
+| --- | --- | --- |
+| `permission_prompt` | 135 | yes |
+| `agent_idle` | 7 | no — a subagent going quiet |
+| `elicitation_dialog` | 2 | yes |
+| `shell_completed` | 1 | no |
+| `shell_detached_completed` | 1 | no |
+
+So every subagent going idle raises a push notification (#64).
+
+```sh
+./quiet-notifications.sh install    # forward only blocking prompts
+./quiet-notifications.sh status     # which hook is in place
+./quiet-notifications.sh restore    # put cmux's own hook back, exactly
+```
+
+It backs up `settings.json`, stores cmux's original hook verbatim so `restore`
+is exact rather than reconstructed, and touches no other hook. It is **opt-in**;
+`install.sh` never runs it, because it edits a file this repository does not own.
+
+The filter fails **open**, and open here means *forwarding*. Elsewhere in
+Maestro the safe direction is to do nothing; this hook sits between the runtime
+and a prompt you may be waiting on, so a missing Node, a disabled plugin, a
+crashed filter, malformed input, or an unrecognised notification type all
+forward. Only the three measured non-blocking types are ever suppressed — a new
+blocking type Copilot adds will be noisy rather than silent, which is the
+direction that can be fixed by adding one string.
+
+Two things worth knowing:
+
+- `CMUX_COPILOT_HOOKS_DISABLED=1` also silences the noise, but it disables every
+  Maestro hook too — you would lose the tree. This script exists so those are
+  not the same choice.
+- If cmux rewrites its hook block on upgrade, the override is silently replaced
+  and the noise returns. Run `status` to check and `install` again to reapply.
+  That is the real cost of overriding another product's configuration.
+
 ## Scope
 
 Inherited from upstream and unchanged: session start and end, prompt
@@ -301,7 +345,7 @@ is worse than a slightly leaky one.
 
 ```sh
 npm run build
-npm test        # 238 tests
+npm test        # 245 tests
 npm run check   # lint + test
 ```
 
