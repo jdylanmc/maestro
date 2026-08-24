@@ -13,6 +13,7 @@ import {
   mergeOwnedRows,
   ownedRows,
   pruneOwnedBlocks,
+  ROW_SEP,
   summarize,
   type TreeSummary,
 } from "../tree.js"
@@ -112,6 +113,30 @@ export function treeDescriptionForEvent(
 ): string | undefined {
   if (eventType === "session.end") return ""
   return tree?.encoded
+}
+
+/**
+ * Whether this publish would replace real rows with ignorance.
+ *
+ * A summary that never found a session log encodes to the owner row alone,
+ * which is byte-identical to "this Session has finished everything". Publishing
+ * it erases whatever the last successful publish put there.
+ *
+ * Measured: a Session flipped between four subagent rows and none every few
+ * seconds, with the watcher stopped, so hooks alone were fighting each other.
+ * `resolveSessionLog` fails closed when it is given an identity that does not
+ * resolve - and `agentStop`'s `sessionId` is documented as NOT being the
+ * session-state directory name - so those hooks summarised to an empty tree and
+ * wiped the rows `postToolUse` had just written.
+ *
+ * The rule: only a publisher that actually READ a log may clear rows. A
+ * publisher that found nothing still writes its owner row when the block has no
+ * rows to lose, because a Session with no tree yet still needs to identify
+ * itself as a Copilot surface (#54).
+ */
+export function wouldEraseWithIgnorance(tree: TreeSummary | null, publishedBlock: string): boolean {
+  if (!tree || tree.resolved) return false
+  return publishedBlock.split(ROW_SEP).some((row) => /^[0-9] /.test(row))
 }
 
 /**
@@ -502,6 +527,17 @@ export async function processHook(
             identity.transcriptPath,
           )
     const mine = treeDescriptionForEvent(event.type, tree)
+    // A publisher that never found a session log must not clear rows a
+    // publisher that DID find one wrote. See wouldEraseWithIgnorance.
+    const priorBlock = environment.surfaceID
+      ? ownedRows(published ?? "", environment.surfaceID)
+      : (published ?? "")
+    if (event.type !== "session.end" && wouldEraseWithIgnorance(tree, priorBlock)) {
+      await logger.log("debug", "tree publish skipped: log unresolved", {
+        surfaceID: environment.surfaceID,
+      })
+      return
+    }
     // An EMPTY tree is published, not swallowed. `summarize` returns null only
     // when it could not compute at all; a session whose subagents have all
     // finished and aged out summarises to an empty row set, and publishing that

@@ -774,6 +774,22 @@ export interface TreeSummary {
   attention: Attention | undefined
   encoded: string
   nextExpiryAt: number | undefined
+  /**
+   * Whether a session log was actually found.
+   *
+   * "I read the log and this Session has no subagents" and "I could not find
+   * the log at all" produce identical row sets and must NOT be treated
+   * identically. The first is news and should be published, because publishing
+   * it is what clears a finished tree. The second is ignorance, and publishing
+   * it WIPES a perfectly good tree.
+   *
+   * Measured: a Session flipped between four rows and none every few seconds.
+   * `resolveSessionLog` fails closed when an identity is supplied that does not
+   * resolve to a file - `agentStop`'s `sessionId` is documented as not being the
+   * session-state directory name - so those hooks summarised to an empty tree
+   * and erased the rows the other hooks had just published.
+   */
+  resolved: boolean
 }
 
 /**
@@ -824,6 +840,7 @@ export function summarize(
         attention: undefined,
         encoded: surfaceID ? encodeOwner(surfaceID) : "",
         nextExpiryAt: undefined,
+        resolved: log !== undefined,
       }
     }
     let running = 0
@@ -853,6 +870,7 @@ export function summarize(
       attention: effective,
       encoded: rows.join(ROW_SEP),
       nextExpiryAt,
+      resolved: log !== undefined,
     }
   } catch {
     return null
