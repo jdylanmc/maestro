@@ -6,6 +6,7 @@ import { test } from "node:test"
 import { writeDiagnostic } from "../src/logger.js"
 import {
   countStalledCompletions,
+  detectSessionActivity,
   detectSessionModel,
   encodeOwner,
   healthOf,
@@ -154,7 +155,7 @@ test("an unhealthy owner row appends the count as field 3", () => {
   // The tail is all-or-nothing: the fields after it are positional, so a health
   // count means the worktree and model slots are emitted as sentinels rather
   // than omitted.
-  assert.equal(encodeOwner(SURFACE, 7), `@ o ${SURFACE} 7 - -`)
+  assert.equal(encodeOwner(SURFACE, 7), `@ o ${SURFACE} 7 - - -`)
 })
 
 test("block ownership is keyed on the surface alone", () => {
@@ -239,10 +240,13 @@ test("a malformed health field reads as healthy", () => {
   assert.equal(healthOf(`@ o ${SURFACE} -1`, SURFACE), 0)
 })
 
-// --- what the Session itself is: model and worktree --------------------------
+// --- what the Session itself is: model, worktree and current activity -------
 
 test("a Session in a normal checkout still encodes exactly as before", () => {
-  assert.equal(encodeOwner(SURFACE, 0, { worktree: undefined, model: undefined }), `@ o ${SURFACE}`)
+  assert.equal(
+    encodeOwner(SURFACE, 0, { worktree: undefined, model: undefined, activity: undefined }),
+    `@ o ${SURFACE}`,
+  )
 })
 
 test("the owner row carries the Session's worktree and model", () => {
@@ -250,20 +254,20 @@ test("the owner row carries the Session's worktree and model", () => {
   // emitted. A field that sometimes disappears would shift the ones after it,
   // and every reader here and in the sidebar takes them by index.
   assert.equal(
-    encodeOwner(SURFACE, 0, { worktree: "as-wt-19", model: "claude-opus-5" }),
-    `@ o ${SURFACE} - as-wt-19 claude-opus-5`,
+    encodeOwner(SURFACE, 0, { worktree: "as-wt-19", model: "claude-opus-5", activity: undefined }),
+    `@ o ${SURFACE} - as-wt-19 claude-opus-5 -`,
   )
   assert.equal(
-    encodeOwner(SURFACE, 4, { worktree: undefined, model: "gpt-5.6-luna" }),
-    `@ o ${SURFACE} 4 - gpt-5.6-luna`,
+    encodeOwner(SURFACE, 4, { worktree: undefined, model: "gpt-5.6-luna", activity: undefined }),
+    `@ o ${SURFACE} 4 - gpt-5.6-luna -`,
   )
 })
 
 test("session facts do not disturb block ownership or the health field", () => {
   const published = [
-    encodeOwner(SURFACE, 4, { worktree: "as-wt-19", model: "claude-opus-5" }),
+    encodeOwner(SURFACE, 4, { worktree: "as-wt-19", model: "claude-opus-5", activity: undefined }),
     "0 > alpha",
-    encodeOwner(OTHER, 0, { worktree: undefined, model: undefined }),
+    encodeOwner(OTHER, 0, { worktree: undefined, model: undefined, activity: undefined }),
   ].join(ROW_SEP)
   assert.deepEqual(
     splitOwnedBlocks(published).map((b) => b.owner),
@@ -276,7 +280,11 @@ test("session facts do not disturb block ownership or the health field", () => {
 test("a healthy Session with facts reads as healthy, not as a fault", () => {
   // The health field is the `-` sentinel here, not absent. `healthOf` must not
   // read a sentinel as a number.
-  const published = encodeOwner(SURFACE, 0, { worktree: "as-wt-19", model: "gpt-5.6-luna" })
+  const published = encodeOwner(SURFACE, 0, {
+    worktree: "as-wt-19",
+    model: "gpt-5.6-luna",
+    activity: undefined,
+  })
   assert.equal(healthOf(published, SURFACE), 0)
 })
 
@@ -288,14 +296,15 @@ test("a long worktree name cannot widen the sidebar", () => {
   const row = encodeOwner(SURFACE, 0, {
     worktree: "squadron-maestro-1-20260823T130422Z-5a58e8-47-attempt-1",
     model: undefined,
+    activity: undefined,
   })
   const worktree = row.split(" ")[4] ?? ""
   assert.equal(worktree.length, 20)
 })
 
 test("a worktree name with spaces cannot break the field split", () => {
-  const row = encodeOwner(SURFACE, 0, { worktree: "two words", model: "a b" })
-  assert.equal(row.split(" ").length, 6, "every field must stay a single token")
+  const row = encodeOwner(SURFACE, 0, { worktree: "two words", model: "a b", activity: undefined })
+  assert.equal(row.split(" ").length, 7, "every field must stay a single token")
 })
 
 test("the Session model is the last ROOT event that names one", () => {
@@ -354,6 +363,99 @@ test("a log with no model at all reports none", () => {
 
 test("an unreadable log reports no model rather than throwing", () => {
   assert.equal(detectSessionModel(join(tmpdir(), "maestro-absent", "nope.jsonl")), undefined)
+})
+
+// --- the Session's own current activity --------------------------------------
+
+test("the Session activity is its most recent uncompleted ROOT tool call", () => {
+  withLog(
+    [
+      {
+        type: "tool.execution_start",
+        timestamp: "2026-08-24T12:00:00Z",
+        data: { toolCallId: "a", toolName: "grep" },
+      },
+      {
+        type: "tool.execution_complete",
+        timestamp: "2026-08-24T12:00:01Z",
+        data: { toolCallId: "a" },
+      },
+      {
+        type: "tool.execution_start",
+        timestamp: "2026-08-24T12:00:02Z",
+        data: { toolCallId: "b", toolName: "bash" },
+      },
+    ],
+    (path) => {
+      assert.equal(detectSessionActivity(path), "bash")
+    },
+  )
+})
+
+test("a subagent's tool call is never reported as the Session's", () => {
+  // Same filter that makes the model decidable. Without it the row the operator
+  // is talking to shows whatever a subagent happens to be doing.
+  withLog(
+    [
+      {
+        type: "tool.execution_start",
+        agentId: "sub-1",
+        timestamp: "2026-08-24T12:00:00Z",
+        data: { toolCallId: "s", toolName: "view" },
+      },
+    ],
+    (path) => {
+      assert.equal(detectSessionActivity(path), undefined)
+    },
+  )
+})
+
+test("the end of a turn clears an abandoned root tool call", () => {
+  // Measured, and the reason this rule exists at all: across three logs, 6,832
+  // root starts produced 6,830 completions. Both strays were backgrounded
+  // `bash` calls sitting 6,000 and 10,000 events from the end of the log, so
+  // "last surviving open call" alone pins a dead tool to an idle Session
+  // forever. `assistant.turn_end` appeared between a start and its completion
+  // ZERO times across 6,831 matched pairs, which makes it safe to clear on.
+  withLog(
+    [
+      {
+        type: "tool.execution_start",
+        timestamp: "2026-08-24T12:00:00Z",
+        data: { toolCallId: "orphan", toolName: "bash" },
+      },
+      { type: "assistant.turn_end", timestamp: "2026-08-24T12:00:05Z" },
+      { type: "user.message", timestamp: "2026-08-24T12:05:00Z" },
+    ],
+    (path) => {
+      assert.equal(detectSessionActivity(path), undefined)
+    },
+  )
+})
+
+test("an idle Session reports no activity, and encodes as it always did", () => {
+  withLog([{ type: "assistant.turn_end", timestamp: "2026-08-24T12:00:00Z" }], (path) => {
+    assert.equal(detectSessionActivity(path), undefined)
+  })
+  assert.equal(
+    encodeOwner(SURFACE, 0, { worktree: undefined, model: undefined, activity: undefined }),
+    `@ o ${SURFACE}`,
+  )
+})
+
+test("the activity field is bounded and space-free", () => {
+  const row = encodeOwner(SURFACE, 0, {
+    worktree: undefined,
+    model: undefined,
+    activity: "a tool with a very long name indeed",
+  })
+  const activity = row.split(" ")[6] ?? ""
+  assert.equal(activity.length, 14)
+  assert.equal(row.split(" ").length, 7)
+})
+
+test("an unreadable log reports no activity rather than throwing", () => {
+  assert.equal(detectSessionActivity(join(tmpdir(), "maestro-absent", "nope.jsonl")), undefined)
 })
 
 // --- worktree detection ------------------------------------------------------

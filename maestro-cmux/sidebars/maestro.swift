@@ -197,6 +197,22 @@ func sessionModelOf(_ d: String, _ id: String) -> String {
     return raw == "-" ? "" : raw
 }
 
+/** The tool call the SESSION itself is running right now - owner row field 6.
+ *
+ *  Subagent rows have shown an activity since #60, which left the one agent
+ *  the operator is actually talking to as the only one that never said what it
+ *  was doing. Absent on an idle Session, which is the common case: the plugin
+ *  clears it at `assistant.turn_end` rather than letting an abandoned
+ *  background call linger. */
+func sessionActivityOf(_ d: String, _ id: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }
+    if hits.count == 0 {
+        return ""
+    }
+    let raw = part(hits[0], 6)
+    return raw == "-" ? "" : raw
+}
+
 /** The index of `id`'s owner row, or -1. */
 func ownerIndex(_ rows: [String], _ id: String) -> Int {
     for i in 0..<rows.count {
@@ -993,6 +1009,18 @@ VStack(alignment: .leading, spacing: 0) {
                                             .opacity(0.75)
                                             .lineLimit(1).truncationMode(.tail)
                                             .help("Model")
+                                    }
+                                    // What the Session is doing RIGHT NOW, as
+                                    // opposed to what it is. Styled like the
+                                    // subagent activity field so the same fact
+                                    // reads the same way at every depth.
+                                    let sa = sessionActivityOf(d, t.id)
+                                    if sa != "" {
+                                        Text(sa)
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1).truncationMode(.tail)
+                                            .help("Running now")
                                     }
                                 }
                                 if let dir = t.directory {

@@ -685,12 +685,16 @@ export const ATTENTION_MARK = "!"
  *
  *     @ o 06DF8701-7CFD-428E-99D2-85F43C0EEDD2¦0 > probe-agent
  *
- * An optional field 3 carries the count of tool completions that landed after
- * the hook runtime last wrote state - the issue #63 health signal. It is
- * POSITIONAL and appended last, which is safe here in a way it is not on a
- * subagent row: a surface ID cannot contain a space, so field 2 is recoverable
- * without knowing the field count, and every existing reader takes field 2 by
- * index. The field is omitted entirely when the count is zero.
+ * An optional POSITIONAL tail carries what the Session itself is doing: field 3
+ * is the count of tool completions that landed after the hook runtime last
+ * wrote state (the issue #63 health signal), field 4 the git worktree, field 5
+ * the model, and field 6 the tool call the Session is running right now.
+ * Appending is safe here in a way it is not on a subagent row: a surface ID
+ * cannot contain a space, so field 2 is recoverable without knowing the field
+ * count, and every existing reader takes field 2 by index. The tail is
+ * all-or-nothing - omitted entirely when every part of it is absent, emitted
+ * whole when any part is present - because a field that sometimes disappears
+ * would shift the ones after it.
  */
 export const OWNER_MARK = "@"
 
@@ -770,8 +774,49 @@ export function resolveWorktree(cwd: string): string | undefined {
  * `model`, so this is never guesswork on an active Session.
  */
 export function detectSessionModel(logPath: string): string | undefined {
+  return scanRoot(logPath).model
+}
+
+/**
+ * The tool call the SESSION itself is running right now.
+ *
+ * Subagent rows have carried an activity field since #60, which left the one
+ * agent the operator is actually talking to as the only one that never said
+ * what it was doing.
+ *
+ * Derivation mirrors #60 - the most recent `tool.execution_start` with no
+ * matching completion - with one addition that measurement forced. A root tool
+ * call is NOT always completed: across three logs, 6,832 root starts produced
+ * 6,830 completions, and the two strays were backgrounded `bash` calls sitting
+ * 6,000 and 10,000 events from the end. "Last surviving open call" alone would
+ * therefore pin a dead `bash` to an idle Session indefinitely.
+ *
+ * `assistant.turn_end` is the correction, and it is measured rather than
+ * assumed: across 6,831 matched start/complete pairs it appeared between a
+ * start and its completion exactly ZERO times. A turn that has ended cannot
+ * still be running a tool, so the end of a turn clears every open root call.
+ * That also gives the right answer for an idle Session, which is the state an
+ * operator sees most often - no activity at all, rather than a stale one.
+ */
+export function detectSessionActivity(logPath: string): string | undefined {
+  return scanRoot(logPath).activity
+}
+
+/**
+ * One pass over the ROOT events, answering both questions the owner row asks.
+ *
+ * Kept as a single scan because both callers want both answers at the same
+ * moment and the log is already read three times per summarise. `agentId` is
+ * what makes "root" decidable: a subagent's events carry one, the Session's do
+ * not. Without that filter each of these would confidently report whichever
+ * subagent happened to run most recently.
+ */
+function scanRoot(logPath: string): { model?: string | undefined; activity?: string | undefined } {
   try {
     let model: string | undefined
+    // Insertion-ordered, so the last surviving entry is the most recently
+    // started root call that never completed.
+    const openRoot = new Map<string, string>()
     for (const line of readLines(logPath)) {
       if (!line) continue
       let e: { type?: string; agentId?: string | null; data?: Record<string, unknown> }
@@ -789,10 +834,24 @@ export function detectSessionModel(logPath: string): string | undefined {
         continue
       }
       if (typeof d.model === "string" && d.model) model = d.model
+      if (e.type === "assistant.turn_end") {
+        openRoot.clear()
+        continue
+      }
+      const tc = d.toolCallId as string | undefined
+      if (!tc) continue
+      if (e.type === "tool.execution_start") {
+        const tn = d.toolName as string | undefined
+        if (tn) openRoot.set(tc, tn)
+      } else if (e.type === "tool.execution_complete") {
+        openRoot.delete(tc)
+      }
     }
-    return model
+    let activity: string | undefined
+    for (const tool of openRoot.values()) activity = tool
+    return { model, activity }
   } catch {
-    return undefined
+    return {}
   }
 }
 
@@ -800,21 +859,23 @@ export function encodeOwner(surfaceID: string, stalled = 0, session?: SessionFac
   const id = surfaceID.replace(/[\n\r¦ ]/g, "")
   const worktree = fieldToken(session?.worktree, 20)
   const model = fieldToken(session?.model, 18)
+  const activity = fieldToken(session?.activity, 14)
   // The tail is omitted entirely when there is nothing in it, so a healthy
   // Session in a normal checkout encodes exactly as it did before any of these
-  // fields existed. When any one is present all three are emitted, because they
-  // are POSITIONAL - a reader takes field 4 by index, and a field that
+  // fields existed. When any one is present all of them are emitted, because
+  // they are POSITIONAL - a reader takes field 4 by index, and a field that
   // sometimes disappears would shift the ones after it.
-  if (stalled <= 0 && worktree === FIELD_NONE && model === FIELD_NONE) {
+  if (stalled <= 0 && worktree === FIELD_NONE && model === FIELD_NONE && activity === FIELD_NONE) {
     return `${OWNER_MARK} o ${id}`
   }
-  return `${OWNER_MARK} o ${id} ${stalled > 0 ? stalled : FIELD_NONE} ${worktree} ${model}`
+  return `${OWNER_MARK} o ${id} ${stalled > 0 ? stalled : FIELD_NONE} ${worktree} ${model} ${activity}`
 }
 
 /** What the owner row says about the Session itself, rather than its tree. */
 export interface SessionFacts {
   worktree: string | undefined
   model: string | undefined
+  activity: string | undefined
 }
 
 /**
@@ -1168,9 +1229,11 @@ export function summarize(
     // This is a third full pass over the log. The watcher gates on log mtime
     // and a hook publishes once per event, so it is bounded by how fast the log
     // grows rather than by a clock.
+    const root = log ? scanRoot(log) : {}
     const facts: SessionFacts = {
       worktree: resolveWorktree(cwd),
-      model: log ? detectSessionModel(log) : undefined,
+      model: root.model,
+      activity: root.activity,
     }
 
     // Derived Attention wins over anything a hook stored. A blocking prompt that

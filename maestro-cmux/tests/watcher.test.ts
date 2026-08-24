@@ -366,7 +366,7 @@ test("the watcher reports a Session whose hooks have stopped landing", async (t:
 
   assert.match(
     writes[0] ?? "",
-    new RegExp(`@ o ${SURFACE} 3 - -`),
+    new RegExp(`@ o ${SURFACE} 3 - - -`),
     "three completions with no state write is a publisher that is not landing",
   )
 })
@@ -517,7 +517,7 @@ test("a genuinely dead pipeline still badges after the observer starts", async (
     },
   })
 
-  assert.equal(writes[0], `@ o ${SURFACE} 3 - -`)
+  assert.equal(writes[0], `@ o ${SURFACE} 3 - - -`)
 })
 
 // --- live configuration (#56) ------------------------------------------------
