@@ -328,3 +328,15 @@ Measured, each after costing real debugging time:
 **Evidence:** all 1,107 `skill.invoked` events across every session log on disk; field frequencies counted, no working-directory field in any of them. The same holds for subagents: no event in the log carries a per-subagent `cwd`.
 **Shipped:** worktree is published once per SESSION, derived from the state file's `cwd`, and subagent and skill rows inherit it implicitly rather than claiming one of their own.
 **Closes with:** a `cwd` on the spawn or invocation event, which is the only thing that would make a per-row worktree observation rather than invention.
+
+### G-33 - `cmux sidebar validate` does not check binding names, and unknown ones render empty
+
+**Wanted:** to know whether `t.ports` and `t.portCount` were real bindings before writing a feature against them.
+**Blocked by:** validation is a syntax check, not a binding check, and an unknown binding renders as nothing rather than as an error.
+**Evidence:** measured with a throwaway probe sidebar, against the rendered accessibility tree.
+- `cmux sidebar validate` reported `OK` for `t.definitelyNotARealBinding`. It rubber-stamps any identifier, so it cannot be used as an oracle for whether a binding exists.
+- `t.ports` is real: 19 rows rendered across the workspace, with values.
+- `t.portCount` is NOT real despite being named like one. `Text("N=\(t.portCount)")` rendered `N=` and nothing else. `t.ports.count` is the working form.
+**Also measured, and worse:** `var` MUTATION silently produces nothing. A helper building a string with `var out = ""` and `for p in ports { out = out + "\(p)" }` returned the empty string for every input, while a `ForEach` over the same array rendered every element. This is specific to reassignment: `.reduce` builds strings correctly and is used by `nameOf` and `agentNameOf` today. Negation (`!b`) and `.count` also work. Treat every binding as immutable.
+**Shipped:** ports rendered with `ForEach(Array(t.ports.prefix(3)))`, and the feature narrowed by what the measurement showed: on a COPILOT row `t.ports` is the agent runtime's own ephemeral listeners - 60559, 58371, 54083, and nine on one Session - so ports are shown on plain shell rows only, where a port means the dev server the operator started. Verified by starting a real server on 8765 in a temporary surface and reading `:8765` back out of the accessibility tree.
+**Closes with:** validation that resolves binding names, and any diagnostic for a construct the interpreter evaluates to nothing - the same disease as G-26 and G-31.

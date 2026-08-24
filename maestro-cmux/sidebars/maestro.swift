@@ -60,6 +60,15 @@
 //     turning `.padding(4)` down rather than by naming an edge.
 //     (`.padding(.horizontal, 4)` and `.padding(.bottom, 40)` at the outermost
 //     level are unaffected - the misbehaviour is on these nested containers.)
+//   - `var` MUTATION produces nothing. A helper accumulating with
+//     `var out = ""` and `out = out + ...` in a loop returned "" for every
+//     input, while `ForEach` over the same array rendered every element.
+//     `.reduce` is fine and is used below; treat bindings as immutable.
+//   - An UNKNOWN binding renders empty rather than failing, and validation
+//     does not catch it: `cmux sidebar validate` reported OK for
+//     `t.definitelyNotARealBinding`. `t.portCount` is one of these - it looks
+//     like a binding and is not. Use `t.ports.count`. Probe a new binding by
+//     rendering it, never by validating it.
 
 func part(_ row: String, _ i: Int) -> String {
     let p = row.split(separator: " ").map { String($0) }
@@ -1028,6 +1037,40 @@ VStack(alignment: .leading, spacing: 0) {
                                         .font(.system(size: 10)).fontDesign(.monospaced)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1).truncationMode(.tail)
+                                }
+                                // Listening ports, on plain shell rows only.
+                                //
+                                // Measurement narrowed this feature rather than
+                                // confirming it. `t.ports` is real and is
+                                // per-surface, but on a COPILOT row it is the
+                                // agent runtime's own ephemeral listeners -
+                                // 60559, 58371, 54083, and NINE of them on one
+                                // Session. That is noise dressed as
+                                // information. On a shell row a port means what
+                                // an operator thinks it means: the dev server
+                                // they just started.
+                                //
+                                // Capped at three. A row must never be widened
+                                // by data - see the header - and the tail here
+                                // is the same trap the worktree field was.
+                                if let d = w.description {
+                                    if ownsSurface(d, t.id) == false {
+                                        ForEach(Array(t.ports.prefix(3))) { p in
+                                            Text(":\(p)")
+                                                .font(.system(size: 9)).fontDesign(.monospaced)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                                .help("Listening port")
+                                        }
+                                    }
+                                } else {
+                                    ForEach(Array(t.ports.prefix(3))) { p in
+                                        Text(":\(p)")
+                                            .font(.system(size: 9)).fontDesign(.monospaced)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                            .help("Listening port")
+                                    }
                                 }
                             }
 

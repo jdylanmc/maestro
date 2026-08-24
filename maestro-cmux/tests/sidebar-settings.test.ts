@@ -170,7 +170,9 @@ test("a tab claims only the block its own surface published", () => {
   // under this one's tab (#54).
   assert.match(sidebar, /func ownsSurface\(_ d: String, _ id: String\) -> Bool/)
   assert.doesNotMatch(sidebar, /ownerOf\(d\) == t\.id/)
-  assert.equal(sidebar.match(/if ownsSurface\(d, t\.id\)/g)?.length, 2)
+  // Three call sites: the icon branch, the tree branch, and the ports branch,
+  // which shows ports only where they are NOT a Copilot runtime's own.
+  assert.equal(sidebar.match(/if ownsSurface\(d, t\.id\)/g)?.length, 3)
   assert.match(sidebar, /func liveRowsFor\(_ d: String, _ id: String\) -> \[String\]/)
   assert.match(sidebar, /func blockEnd\(_ rows: \[String\], _ from: Int\) -> Int/)
   // Measured: a function call inside a ternary renders NOTHING, silently. Each
@@ -350,6 +352,38 @@ test("no Menu is nested inside a contextMenu", () => {
     const body = block.slice(0, block.indexOf("\n                        }"))
     assert.ok(!/\bMenu\(/.test(body), "a nested Menu silently kills the whole context menu")
   }
+})
+
+test("the sidebar uses no construct the interpreter evaluates to nothing", () => {
+  // Both measured against the rendered accessibility tree with a throwaway
+  // probe sidebar, because `cmux sidebar validate` cannot catch either - it
+  // reported OK for `t.definitelyNotARealBinding`. See G-33.
+  //
+  // `var` mutation: a helper accumulating with `var out = ""` in a loop
+  // returned "" for every input while a ForEach over the same array rendered
+  // every element. `.reduce` is unaffected and is used by `nameOf`.
+  //
+  // Comments are stripped first - the header documents the failing construct
+  // by quoting it, and a guard that trips on its own documentation is useless.
+  const code = sidebar
+    .split("\n")
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join("\n")
+  assert.ok(!/\bvar\s+\w+\s*=/.test(code), "var mutation silently produces nothing")
+  // `portCount` looks like a binding and is not: it rendered empty.
+  assert.ok(!/\.portCount\b/.test(code), "portCount is not a binding - use ports.count")
+})
+
+test("ports are shown on plain shell rows only", () => {
+  // Measured before shipping, and the measurement narrowed the feature: on a
+  // COPILOT row `t.ports` is the agent runtime's own ephemeral listeners -
+  // 60559, 58371, 54083, and NINE on one Session. Shown there it is noise
+  // dressed as information. Verified on a real shell row by starting a server
+  // on 8765 and reading `:8765` back out of the accessibility tree.
+  assert.match(sidebar, /if ownsSurface\(d, t\.id\) == false \{/)
+  // Bounded, like every other variable-length field on a row.
+  assert.match(sidebar, /ForEach\(Array\(t\.ports\.prefix\(3\)\)\)/)
+  assert.ok(!/ForEach\(t\.ports\)/.test(sidebar), "an unbounded port list can widen the row")
 })
 
 test("the sidebar claims no action cmux does not expose", () => {
