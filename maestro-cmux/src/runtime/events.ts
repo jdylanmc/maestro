@@ -30,6 +30,32 @@ export type CopilotHookEvent =
   | ({ type: "notification" } & NotificationHookInput)
   | ({ type: "agent.stop" } & AgentStopHookInput)
 
+/**
+ * Field lookup that tolerates the runtime renaming a key.
+ *
+ * Copilot CLI renamed `notificationType` to `notification_type` and shipped it
+ * alongside `hook_event_name`, so this is a migration in progress rather than
+ * one field's quirk. Measured in the diagnostic log: 5,275 rejected
+ * `notification` payloads from 2026-08-22 20:02 onward.
+ *
+ * The lesson upstream taught this fork applies to the fork: a parser that
+ * insists on the exact shape it was written against turns a runtime rename into
+ * a silent outage. Maestro failed OPEN, so no tool call was ever denied - but it
+ * published nothing for two days, which is its own kind of failure.
+ *
+ * camelCase is tried first, then the snake_case spelling of the same name.
+ */
+function snakeCase(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
+}
+
+function lookup(object: Record<string, unknown>, key: string): unknown {
+  const direct = object[key]
+  if (direct !== undefined) return direct
+  const snake = snakeCase(key)
+  return snake === key ? undefined : object[snake]
+}
+
 function expectObject(value: unknown, context: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${context} must be a JSON object`)
@@ -38,8 +64,12 @@ function expectObject(value: unknown, context: string): Record<string, unknown> 
   return value as Record<string, unknown>
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
 function expectString(object: Record<string, unknown>, key: string, context: string): string {
-  const value = object[key]
+  const value = lookup(object, key)
   if (typeof value !== "string") {
     const presentKeys = Object.keys(object).join(", ")
     throw new Error(`${context}.${key} must be a string (present keys: ${presentKeys})`)
@@ -48,12 +78,12 @@ function expectString(object: Record<string, unknown>, key: string, context: str
 }
 
 function optionalString(object: Record<string, unknown>, key: string): string | undefined {
-  const value = object[key]
+  const value = lookup(object, key)
   return typeof value === "string" ? value : undefined
 }
 
 function expectNumber(object: Record<string, unknown>, key: string, context: string): number {
-  const value = object[key]
+  const value = lookup(object, key)
   if (typeof value !== "number" || !Number.isFinite(value)) {
     const presentKeys = Object.keys(object).join(", ")
     throw new Error(`${context}.${key} must be a finite number (present keys: ${presentKeys})`)
@@ -74,6 +104,25 @@ function parseJsonObjectString(raw: string): Record<string, unknown> | undefined
     return undefined
   }
 
+  return undefined
+}
+
+/**
+ * Tool arguments, however the runtime chooses to carry them.
+ *
+ * They arrived as a JSON **string** when this parser was written, and are now an
+ * **object**. Measured in the diagnostic log: 13,589 `postToolUse` payloads
+ * rejected from 2026-08-22 00:38 onward, every one of them carrying a perfectly
+ * good `toolArgs` that simply was not a string any more.
+ *
+ * Neither shape is required. The arguments are optional colour on top of
+ * `toolName`, so an unrecognised shape yields `undefined` rather than throwing -
+ * a rejected payload costs the whole publish, and the tool name alone is enough
+ * to render.
+ */
+function parseToolArgs(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value === "string") return parseJsonObjectString(value)
+  if (isPlainObject(value)) return value
   return undefined
 }
 
@@ -101,9 +150,12 @@ function parseToolResult(value: unknown): ToolResult | undefined {
   if (value === undefined) return undefined
 
   const object = expectObject(value, "toolResult")
-  const resultType = object.resultType
+  const resultType = lookup(object, "resultType")
   if (resultType !== "success" && resultType !== "failure" && resultType !== "denied") {
-    throw new Error("toolResult.resultType must be success, failure, or denied")
+    // An unrecognised or renamed result type degrades to "success" rather than
+    // throwing. The tool RAN; refusing the whole payload over how its outcome
+    // was spelled is what took Maestro dark for two days.
+    return { resultType: "success", textResultForLlm: optionalString(object, "textResultForLlm") }
   }
 
   return {
@@ -225,9 +277,8 @@ export function parseHookInput(
 
     case "postToolUse": {
       const toolName = expectString(parsed, "toolName", context)
-      const toolArgs = expectString(parsed, "toolArgs", context)
-      const parsedToolArgs = parseJsonObjectString(toolArgs)
-      const toolResult = parseToolResult(parsed.toolResult)
+      const parsedToolArgs = parseToolArgs(lookup(parsed, "toolArgs"))
+      const toolResult = parseToolResult(lookup(parsed, "toolResult"))
 
       return {
         type: "tool.post",
@@ -242,7 +293,7 @@ export function parseHookInput(
     }
 
     case "errorOccurred": {
-      const error = expectObject(parsed.error, `${context}.error`)
+      const error = expectObject(lookup(parsed, "error"), `${context}.error`)
       return {
         type: "error.occurred",
         timestamp: expectNumber(parsed, "timestamp", context),

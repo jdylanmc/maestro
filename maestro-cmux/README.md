@@ -80,6 +80,45 @@ Upstream's 68 tests all still pass. They were never wrong; they only ever
 exercised the payload shape upstream assumed, which is exactly why a fully green
 suite did not prevent this.
 
+### It happened to this fork too
+
+On 2026-08-24 the same class of bug was found here, by looking at the sidebar
+and noticing it was lying.
+
+Copilot CLI changed two payload shapes, and `parseHookInput` rejected every
+affected hook:
+
+| Rejected | From | Count |
+| --- | --- | --- |
+| `postToolUse.toolArgs` — a JSON string became an object | Aug 22, 00:38 | 13,589 |
+| `notification.notificationType` — renamed `notification_type` | Aug 22, 20:02 | 5,275 |
+
+The fail-open rule held: `hook-runner` forces exit 0, so **not one tool call was
+denied**. But Maestro published almost nothing for two days. The visible symptom
+was a Session showing `ASK` while it was demonstrably working, and another
+sitting on a live permission prompt with no badge at all — a tree that was
+plausible rather than empty, which is the failure mode this repository keeps
+writing down and then shipping anyway.
+
+Two things changed as a result:
+
+- Field lookup tries camelCase and then the snake_case spelling of the same
+  name. `hook_event_name` arriving beside `notification_type` says this is a
+  migration in progress, not one field's quirk, so the fix is a general rule
+  rather than two special cases.
+- Optional detail no longer costs the whole payload. Unparseable `toolArgs`
+  yields `undefined` and an unrecognised `resultType` degrades to `success`,
+  because the tool name alone is enough to render and rejecting the payload
+  loses the publish entirely.
+
+`tests/payload-drift.test.ts` holds both observed shapes verbatim, and asserts
+every hook reads its fields in either casing. A genuinely missing field still
+throws with the present keys listed — that diagnostic is how this was found.
+
+**Fail-open is necessary and was not sufficient.** A plugin that cannot break
+the session can still go blind, and a blind observer that keeps drawing is worse
+than one that stops.
+
 ## Install
 
 ```sh
@@ -262,7 +301,7 @@ is worse than a slightly leaky one.
 
 ```sh
 npm run build
-npm test        # 230 tests
+npm test        # 238 tests
 npm run check   # lint + test
 ```
 
