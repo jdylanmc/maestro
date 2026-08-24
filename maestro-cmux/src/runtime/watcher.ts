@@ -139,6 +139,9 @@ export interface WatchDeps {
   readDescription(workspaceID: string): Promise<string | undefined>
   setDescription(workspaceID: string, description: string): Promise<void>
   now(): number
+  /** How long a finished subagent is retained (#56). The watcher reads config
+   *  once at start-up, so this arrives as a dep rather than being re-read here. */
+  retainFinishedMs?: number
   /**
    * When THIS watcher started, and the floor under every health judgement.
    *
@@ -203,6 +206,7 @@ export async function watchTick(
       target.transcriptPath,
       now,
       stalled,
+      deps.retainFinishedMs,
     )
     // `summarize` returns null only when it could not compute at all. Leaving
     // the description alone is right then - the same fail-open the hook uses.

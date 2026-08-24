@@ -94,6 +94,7 @@ async function main(): Promise<void> {
     // existed. See WatchDeps.startedAt - without this floor an upgrade badges
     // every long-running Session at once.
     startedAt: Date.now(),
+    retainFinishedMs: config.retainFinishedMs,
     readDescription: (workspaceID: string) => readDescription(config.cmuxBin, workspaceID),
     setDescription: async (workspaceID: string, description: string) => {
       await run(config.cmuxBin, [

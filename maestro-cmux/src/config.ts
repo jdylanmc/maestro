@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { RETAIN_MS, RETENTION_CHOICES } from "./tree.js"
 import type { PluginConfig, TransportMode } from "./types.js"
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"])
@@ -28,6 +29,7 @@ interface MaestroFileConfig {
   notifyOnErrors: boolean | undefined
   watcherEnabled: boolean | undefined
   publishRawText: boolean | undefined
+  retainFinished: string | undefined
   logPrompts: boolean | undefined
   logToolCalls: boolean | undefined
   logSessionLifecycle: boolean | undefined
@@ -114,6 +116,38 @@ function optionalInterval(
   return value
 }
 
+/**
+ * How long a finished subagent stays on screen (#56).
+ *
+ * A CLOSED vocabulary rather than a free duration string. The value is only
+ * useful at a handful of scales, and an unrecognised one has to fall back to
+ * something - which would mean an operator who typed "30min" would see the
+ * default and conclude the setting does nothing.
+ *
+ * Rejected loudly for the same reason the intervals are: an ambient environment
+ * variable may be set by something the operator did not write, so that path
+ * falls back, but a config file is a deliberate statement.
+ */
+function optionalRetention(source: Record<string, unknown>, path: string): string | undefined {
+  const value = source.retainFinished
+  if (value === undefined) return undefined
+  if (typeof value !== "string" || !(value in RETENTION_CHOICES)) {
+    throw new Error(
+      `Invalid Maestro config at ${path}: "retainFinished" must be one of ${Object.keys(
+        RETENTION_CHOICES,
+      ).join(", ")}`,
+    )
+  }
+  return value
+}
+
+/** The environment override. Falls back rather than throwing - see above. */
+function parseRetention(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const choice = RETENTION_CHOICES[value.trim().toLowerCase()]
+  return choice === undefined ? fallback : choice
+}
+
 const EMPTY_FILE_CONFIG: MaestroFileConfig = {
   progressEnabled: undefined,
   keepDoneStatus: undefined,
@@ -121,6 +155,7 @@ const EMPTY_FILE_CONFIG: MaestroFileConfig = {
   notifyOnErrors: undefined,
   watcherEnabled: undefined,
   publishRawText: undefined,
+  retainFinished: undefined,
   logPrompts: undefined,
   logToolCalls: undefined,
   logSessionLifecycle: undefined,
@@ -160,6 +195,7 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     notifyOnErrors: optionalBoolean(source, "notifyOnErrors", path),
     watcherEnabled: optionalBoolean(source, "watcherEnabled", path),
     publishRawText: optionalBoolean(source, "publishRawText", path),
+    retainFinished: optionalRetention(source, path),
     logPrompts: optionalBoolean(source, "logPrompts", path),
     logToolCalls: optionalBoolean(source, "logToolCalls", path),
     logSessionLifecycle: optionalBoolean(source, "logSessionLifecycle", path),
@@ -194,6 +230,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PluginConfig {
     // Defaults to FALSE. See PluginConfig.publishRawText - the shipped
     // configuration must not be able to publish prompt or argument text.
     publishRawText: parseBoolean(env.COPILOT_CMUX_PUBLISH_RAW_TEXT, file.publishRawText ?? false),
+    retainFinishedMs: parseRetention(
+      env.MAESTRO_RETAIN_FINISHED,
+      // `optionalRetention` has already rejected anything not in the table, so
+      // a present key always resolves; the fallback satisfies the type checker
+      // rather than covering a reachable case.
+      file.retainFinished === undefined
+        ? RETAIN_MS
+        : (RETENTION_CHOICES[file.retainFinished] ?? RETAIN_MS),
+    ),
     debug: parseBoolean(env.COPILOT_CMUX_DEBUG, file.debug ?? false),
     watcherEnabled: parseBoolean(env.MAESTRO_WATCHER, file.watcherEnabled ?? true),
     watcherIntervalMs: parseInterval(

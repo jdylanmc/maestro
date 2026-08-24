@@ -169,7 +169,14 @@ test("a label is truncated rather than allowed to consume the description", () =
 
 // --- ordering and retention -------------------------------------------------
 
-import { detectDismissed, encodeTree, RETAIN_MS, ROW_SEP, type Subagent } from "../src/tree.js"
+import {
+  detectDismissed,
+  encodeTree,
+  RETAIN_MS,
+  RETENTION_CHOICES,
+  ROW_SEP,
+  type Subagent,
+} from "../src/tree.js"
 
 function agent(over: Partial<Subagent>): Subagent {
   return {
@@ -340,4 +347,52 @@ test("resolution falls back to cwd only when it identifies one session", (t) => 
     pjoin(sessionDir, "events.jsonl"),
   )
   assert.equal(resolveSessionLog(cwd, undefined, pjoin(root, "missing.jsonl"), root), null)
+})
+
+// --- configurable retention (#56) --------------------------------------------
+
+test("each retention window retires exactly what is older than it", () => {
+  const now = Date.now()
+  for (const [choice, window] of Object.entries(RETENTION_CHOICES)) {
+    if (!Number.isFinite(window)) continue
+    const subs = new Map<string, Subagent>([
+      ["1", agent({ name: "inside", status: "ok", doneAt: now - window + 1 })],
+      ["2", agent({ name: "outside", status: "ok", doneAt: now - window - 1 })],
+    ])
+    const encoded = encodeTree(subs, now, new Set(), window)
+    assert.match(encoded, /inside/, `${choice}: a row newer than the window must stay`)
+    assert.doesNotMatch(encoded, /outside/, `${choice}: a row older than the window must go`)
+  }
+})
+
+test("never retains a subagent that finished longer ago than any finite window", () => {
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "ancient", status: "ok", doneAt: now - 365 * 24 * 60 * 60 * 1000 })],
+  ])
+  assert.match(encodeTree(subs, now, new Set(), RETENTION_CHOICES.never), /ancient/)
+})
+
+test("never does not disable dismissal", () => {
+  // Retention alone never ages a row out; the tap still does.
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "finished", status: "ok", doneAt: now - 10_000 })],
+  ])
+  const encoded = encodeTree(subs, now, new Set(["finished"]), RETENTION_CHOICES.never)
+  assert.doesNotMatch(encoded, /finished/)
+})
+
+test("no retention window retires a RUNNING subagent", () => {
+  // Including the shortest. A running agent is never hidden, however old.
+  const now = Date.now()
+  const subs = new Map<string, Subagent>([
+    ["1", agent({ name: "long-runner", status: "run" })],
+    ["2", agent({ name: "long-failure", status: "fail" })],
+  ])
+  for (const window of Object.values(RETENTION_CHOICES)) {
+    const encoded = encodeTree(subs, now, new Set(), window)
+    assert.match(encoded, /long-runner/)
+    assert.match(encoded, /long-failure/)
+  }
 })

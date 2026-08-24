@@ -537,6 +537,7 @@ export async function processHook(
             event.type === "tool.post" || !environment.surfaceID
               ? 0
               : healthOf(published ?? "", environment.surfaceID),
+            config.retainFinishedMs,
           )
     const mine = treeDescriptionForEvent(event.type, tree)
     // A publisher that never found a session log must not clear rows a

@@ -183,6 +183,7 @@ presentation preferences:
   "watcherIntervalMs": 2000,
   "watcherIdleMs": 1800000,
   "publishRawText": false,
+  "retainFinished": "15s",
   "logPrompts": true,
   "logToolCalls": true,
   "logSessionLifecycle": true,
@@ -228,6 +229,7 @@ Environment variables override the file-backed values:
 | `COPILOT_CMUX_NOTIFY_ERRORS` | `true` | Notify on error. |
 | `COPILOT_CMUX_LOG_FILE_EDITS` | `true` | Log file edit and create events. |
 | `COPILOT_CMUX_PUBLISH_RAW_TEXT` | `false` | Publish prompt, argument, and result text. See Privacy. |
+| `MAESTRO_RETAIN_FINISHED` | `15s` | How long a finished subagent stays on screen: `5s`, `15s`, `1m`, `5m`, `15m`, `1h`, `never`. |
 | `COPILOT_CMUX_DEBUG` | `false` | Verbose diagnostics on stderr. |
 
 ## Quieting push notifications
@@ -338,6 +340,27 @@ So a small watcher process re-derives attention on a timer instead. It:
   did before, publishing on hooks alone
 
 Set `MAESTRO_WATCHER=0` or `"watcherEnabled": false` to turn it off.
+
+## How long finished work stays on screen
+
+A finished subagent is retained briefly so the tree stays legible - look away
+for ten seconds and otherwise the work is simply gone, with no way to tell
+whether it succeeded or never started. `retainFinished` chooses the window:
+`5s`, `15s`, `1m`, `5m`, `15m`, `1h`, or `never`.
+
+`never` means retention alone never ages a row out. It does not disable
+tap-to-dismiss, and it does not survive the description clearing that happens at
+session end.
+
+The default is **`15s`**, which is what Maestro has always done. Issue #56 asked
+for `15m`, describing the existing window as fifteen minutes - it is fifteen
+seconds. Since the same ticket also required that the published description stay
+identical for an operator who never touches the setting, and those two cannot
+both be true, the behaviour-preserving reading won and `15s` was added to the
+list. Every window the ticket asked for is still available.
+
+Retention is enforced in the plugin, not the sidebar, which has no clock to
+compare timestamps against and no state with which to remember a dismissal.
 
 ## What each agent is, not just what it is doing
 

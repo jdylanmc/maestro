@@ -81,6 +81,17 @@ export interface PluginConfig {
    * labels and is a deliberate opt-in.
    */
   publishRawText: boolean
+  /**
+   * How long a FINISHED subagent stays on screen, in milliseconds (#56).
+   *
+   * `Infinity` is the `never` choice: retention alone never ages a row out.
+   * That does not disable tap-to-dismiss, and it does not survive the
+   * description clearing that already happens at session end.
+   *
+   * Enforced in the plugin rather than the sidebar, which has no clock to
+   * compare timestamps against and no state with which to remember a dismissal.
+   */
+  retainFinishedMs: number
   debug: boolean
   /**
    * The watcher recomputes attention on a timer, because a blocked Session

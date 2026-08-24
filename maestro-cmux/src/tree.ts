@@ -85,6 +85,33 @@ export interface Subagent {
 export const RETAIN_MS = 15 * 1000
 
 /**
+ * The retention windows an operator may choose (#56).
+ *
+ * `never` is `Infinity`, which makes the age comparison in `encodeTree`
+ * unconditionally true without a second code path. The one place that needs
+ * care is `nextExpiryAt`, which must stay `undefined` for `never` - there is no
+ * future moment to wake the watcher for.
+ *
+ * NOTE ON THE DEFAULT. Issue #56 describes the current window as "15 minutes"
+ * and asks for a `15m` default, while also requiring that "the published
+ * description is identical to today's for the same event log". Those two cannot
+ * both hold, because `RETAIN_MS` is 15 **seconds** - the ticket is wrong about
+ * the code. Behaviour preservation is the criterion that can actually be
+ * tested, and is the one an operator who never touches this setting will
+ * notice, so the default stays at today's value and `15s` is added to the
+ * offered list. Every window the ticket asked for is still available.
+ */
+export const RETENTION_CHOICES: Record<string, number> = {
+  "5s": 5 * 1000,
+  "15s": 15 * 1000,
+  "1m": 60 * 1000,
+  "5m": 5 * 60 * 1000,
+  "15m": 15 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  never: Number.POSITIVE_INFINITY,
+}
+
+/**
  * Attention, DERIVED from the event log rather than stored.
  *
  * The predicate is the runtime's own: a `permission.requested` with no
@@ -944,6 +971,7 @@ export function encodeTree(
   subs: Map<string, Subagent>,
   now: number = Date.now(),
   dismissed: ReadonlySet<string> = new Set(),
+  retainMs: number = RETAIN_MS,
 ): string {
   const clean = (v: string, n: number) =>
     v
@@ -968,7 +996,7 @@ export function encodeTree(
   }
   return (
     flatten(subs)
-      .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < RETAIN_MS)
+      .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < retainMs)
       // A dismissed agent stays dismissed. Only FINISHED work can be dismissed -
       // a running agent is never hidden, however emphatically it is clicked.
       .filter(([, s]) => s.status !== "ok" || !dismissed.has(s.name))
@@ -1050,6 +1078,7 @@ export function summarize(
   transcriptPath?: string,
   now: number = Date.now(),
   stalled = 0,
+  retainMs: number = RETAIN_MS,
 ): TreeSummary | null {
   try {
     const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
@@ -1094,8 +1123,15 @@ export function summarize(
       if (s.status === "run") running++
       else if (s.status === "fail") failed++
       else if (s.doneAt !== undefined && !dismissed.has(s.name)) {
-        const expiresAt = s.doneAt + RETAIN_MS
-        if (expiresAt > now && (nextExpiryAt === undefined || expiresAt < nextExpiryAt)) {
+        // `never` has no future moment to wake the watcher for, and an
+        // infinite deadline would make the mtime gate believe an expiry is
+        // always pending.
+        const expiresAt = s.doneAt + retainMs
+        if (
+          Number.isFinite(expiresAt) &&
+          expiresAt > now &&
+          (nextExpiryAt === undefined || expiresAt < nextExpiryAt)
+        ) {
           nextExpiryAt = expiresAt
         }
       }
@@ -1103,7 +1139,7 @@ export function summarize(
     const rows = [
       ...(surfaceID ? [encodeOwner(surfaceID, stalled, facts)] : []),
       ...(effective ? [encodeAttention(effective)] : []),
-      ...(subs.size > 0 ? [encodeTree(subs, now, dismissed)] : []),
+      ...(subs.size > 0 ? [encodeTree(subs, now, dismissed, retainMs)] : []),
       // An aged-out or fully dismissed tree encodes to "". Joining that in
       // would publish a trailing separator and an empty row.
     ].filter((row) => row.length > 0)

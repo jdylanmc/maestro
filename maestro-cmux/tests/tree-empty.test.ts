@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { type TestContext, test } from "node:test"
-import { encodeOwner, RETAIN_MS, ROW_SEP, summarize } from "../src/tree.js"
+import { encodeOwner, RETAIN_MS, RETENTION_CHOICES, ROW_SEP, summarize } from "../src/tree.js"
 
 // An empty tree is a REAL state, not silence.
 //
@@ -91,4 +91,77 @@ test("a live subagent is still published, so clearing never eats real work", (t)
   const tree = summarize(NOWHERE, undefined, SURFACE, new Set(), undefined, path)
   assert.equal(tree?.running, 1)
   assert.ok(tree?.encoded.includes("source-mapper"))
+})
+
+// --- configurable retention through the summarize seam (#56) -----------------
+
+test("never keeps an aged-out subagent, and sets no expiry to wake for", (t) => {
+  // `nextExpiryAt` is what the watcher's mtime gate uses to force a recompute at
+  // a known future moment. `never` has no such moment, and an infinite deadline
+  // would make the gate believe an expiry is permanently pending.
+  const done = new Date(Date.now() - RETAIN_MS - 60_000).toISOString()
+  const path = log(t, [
+    event("tool.execution_start", null, { toolCallId: "spawn-auditor" }),
+    event("subagent.started", "auditor", {
+      agentDisplayName: "sidebar-auditor",
+      agentName: "explore",
+      toolCallId: "spawn-auditor",
+    }),
+    event("subagent.completed", "auditor", { totalToolCalls: 3 }, done),
+  ])
+
+  const forever = summarize(
+    NOWHERE,
+    undefined,
+    SURFACE,
+    new Set(),
+    undefined,
+    path,
+    Date.now(),
+    0,
+    RETENTION_CHOICES.never,
+  )
+  assert.ok(forever?.encoded.includes("sidebar-auditor"), "never must retain it")
+  assert.equal(forever?.nextExpiryAt, undefined, "never has no future expiry to schedule")
+
+  const brief = summarize(
+    NOWHERE,
+    undefined,
+    SURFACE,
+    new Set(),
+    undefined,
+    path,
+    Date.now(),
+    0,
+    RETENTION_CHOICES["5s"],
+  )
+  assert.ok(!brief?.encoded.includes("sidebar-auditor"), "5s must retire it")
+})
+
+test("a longer window schedules an expiry the watcher can wake for", (t) => {
+  const done = new Date().toISOString()
+  const path = log(t, [
+    event("tool.execution_start", null, { toolCallId: "spawn-auditor" }),
+    event("subagent.started", "auditor", {
+      agentDisplayName: "sidebar-auditor",
+      agentName: "explore",
+      toolCallId: "spawn-auditor",
+    }),
+    event("subagent.completed", "auditor", { totalToolCalls: 3 }, done),
+  ])
+
+  const now = Date.now()
+  const tree = summarize(
+    NOWHERE,
+    undefined,
+    SURFACE,
+    new Set(),
+    undefined,
+    path,
+    now,
+    0,
+    RETENTION_CHOICES["1h"],
+  )
+  assert.ok(tree?.nextExpiryAt !== undefined)
+  assert.ok((tree?.nextExpiryAt ?? 0) > now)
 })

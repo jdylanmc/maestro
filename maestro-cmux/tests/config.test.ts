@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 import { loadConfig } from "../src/config.js"
+import { RETAIN_MS, RETENTION_CHOICES } from "../src/tree.js"
 
 test("loadConfig parses booleans and transport overrides", () => {
   const config = loadConfig({
@@ -189,6 +190,7 @@ test("the shipped example lists every file-settable key", () => {
     "watcherIntervalMs",
     "watcherIdleMs",
     "publishRawText",
+    "retainFinished",
     "logPrompts",
     "logToolCalls",
     "logSessionLifecycle",
@@ -196,4 +198,82 @@ test("the shipped example lists every file-settable key", () => {
     "debug",
   ]
   assert.deepEqual(Object.keys(example).sort(), [...expected].sort())
+})
+
+// --- finished-subagent retention (#56) ---------------------------------------
+
+test("retention defaults to today's behaviour, not to the ticket's number", () => {
+  // Issue #56 describes the current window as "15 minutes" and asks for a `15m`
+  // default, while also requiring the published description stay identical for
+  // the same event log. Both cannot hold: RETAIN_MS is 15 SECONDS. Behaviour
+  // preservation is the criterion that can be tested, and the one an operator
+  // who never touches this setting would notice, so it wins.
+  const config = loadConfig({
+    MAESTRO_CONFIG_PATH: join(tmpdir(), "maestro-config-does-not-exist.json"),
+  } as NodeJS.ProcessEnv)
+  assert.equal(config.retainFinishedMs, RETAIN_MS)
+  assert.equal(RETAIN_MS, 15_000, "if this changes, the default above changes with it")
+})
+
+test("every offered retention window resolves", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(dir, "config.json")
+  try {
+    for (const [choice, expected] of Object.entries(RETENTION_CHOICES)) {
+      writeFileSync(path, JSON.stringify({ retainFinished: choice }))
+      const config = loadConfig({ MAESTRO_CONFIG_PATH: path } as NodeJS.ProcessEnv)
+      assert.equal(config.retainFinishedMs, expected, `retainFinished: ${choice}`)
+    }
+    assert.deepEqual(Object.keys(RETENTION_CHOICES), [
+      "5s",
+      "15s",
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "never",
+    ])
+    assert.equal(RETENTION_CHOICES.never, Number.POSITIVE_INFINITY)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("an unrecognised retention window is reported, not silently defaulted", () => {
+  // An operator who typed "30min" and saw the default would conclude the
+  // setting does nothing.
+  const dir = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(dir, "config.json")
+  writeFileSync(path, JSON.stringify({ retainFinished: "30min" }))
+  try {
+    assert.throws(
+      () => loadConfig({ MAESTRO_CONFIG_PATH: path } as NodeJS.ProcessEnv),
+      /retainFinished/,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the environment overrides the retention window and falls back quietly", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(dir, "config.json")
+  writeFileSync(path, JSON.stringify({ retainFinished: "1h" }))
+  try {
+    const overridden = loadConfig({
+      MAESTRO_CONFIG_PATH: path,
+      MAESTRO_RETAIN_FINISHED: "5s",
+    } as NodeJS.ProcessEnv)
+    assert.equal(overridden.retainFinishedMs, 5_000)
+
+    // An ambient variable may be set by something the operator did not write,
+    // so this path falls back to the file value rather than throwing.
+    const nonsense = loadConfig({
+      MAESTRO_CONFIG_PATH: path,
+      MAESTRO_RETAIN_FINISHED: "banana",
+    } as NodeJS.ProcessEnv)
+    assert.equal(nonsense.retainFinishedMs, RETENTION_CHOICES["1h"])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
