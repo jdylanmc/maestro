@@ -119,6 +119,40 @@ throws with the present keys listed — that diagnostic is how this was found.
 the session can still go blind, and a blind observer that keeps drawing is worse
 than one that stops.
 
+### Saying so, next time
+
+The two days are the ticket, not the parse bug. A dead publisher and an idle one
+looked identical, so Maestro now measures the difference and publishes it: a
+Session badges an orange warning when tool calls keep completing and no
+`postToolUse` hook lands behind them.
+
+Three cheaper detectors were built and each was measured to fail:
+
+| Detector | Why it does not work |
+| --- | --- |
+| A heartbeat | "Nothing to say" and "gone deaf" are byte-identical on the wire |
+| Log mtime | One long `bash` call appends nothing for minutes |
+| Time since any hook | Every hook stamps it, and during the outage the hooks that still parsed kept stamping it — this one sat at zero through a deliberately broken parser |
+
+What works is a per-hook timestamp. `lastToolAt` moves only when a `postToolUse`
+lands, so completions accumulating past it isolate that one pipeline. Three in a
+row is the threshold; one is a race between the tool finishing and its hook.
+
+Two rules keep it honest rather than noisy:
+
+- **Only the watcher may derive it.** A hook cannot report the absence of hooks.
+  Every other hook carries the field forward untouched instead of recomputing it
+  as zero — without that, `agentStop` erased the finding within a second, which
+  is exactly the dynamic that kept the stale tree looking alive.
+- **The watcher may not judge history older than itself.** After an upgrade a
+  state file has no `lastToolAt` yet; measured, a perfectly healthy 44-hour
+  Session reported 634. Health is measured from the later of the last landed
+  hook and the watcher's own start.
+
+Verified by breaking `parseToolArgs` on a live machine and watching the badge
+appear on three Sessions and then clear, not only by unit test. The diagnostic
+log is also bounded now — it had reached 17 MB.
+
 ## Install
 
 ```sh

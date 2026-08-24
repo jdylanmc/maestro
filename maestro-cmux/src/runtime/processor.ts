@@ -10,6 +10,7 @@ import {
   buildTree,
   detectDismissed,
   findSessionDir,
+  healthOf,
   mergeOwnedRows,
   ownedRows,
   pruneOwnedBlocks,
@@ -525,6 +526,17 @@ export async function processHook(
             dismissed,
             identity.sessionId,
             identity.transcriptPath,
+            Date.now(),
+            // Carried forward, never recomputed. Deriving health costs a full
+            // log scan and, more fundamentally, a hook cannot report the
+            // absence of hooks. A `tool.post` hook is the one exception: it is
+            // running, so the pipeline it would report on demonstrably works,
+            // and clearing the field here is what makes recovery self-healing.
+            // See `healthOf` - without this the watcher's finding was erased by
+            // the next surviving hook within a second, measured.
+            event.type === "tool.post" || !environment.surfaceID
+              ? 0
+              : healthOf(published ?? "", environment.surfaceID),
           )
     const mine = treeDescriptionForEvent(event.type, tree)
     // A publisher that never found a session log must not clear rows a

@@ -17,6 +17,7 @@ export function createRuntimeState(
     lastPrompt: undefined,
     toolInvocations: 0,
     completedTools: 0,
+    lastToolAt: undefined,
     lastToolName: undefined,
     lastToolSummary: undefined,
     lastResultType: undefined,
@@ -85,6 +86,7 @@ export function reduceRuntimeState(
         lastPrompt: publishRawText ? event.initialPrompt : undefined,
         toolInvocations: 0,
         completedTools: 0,
+        lastToolAt: undefined,
         lastToolName: undefined,
         lastToolSummary: undefined,
         lastResultType: undefined,
@@ -134,6 +136,10 @@ export function reduceRuntimeState(
         phase: "working",
         toolInvocations: currentState.toolInvocations + 1,
         completedTools: currentState.completedTools + 1,
+        // The health signal for issue #63. Only THIS branch may stamp it: its
+        // whole value is that it moves when `postToolUse` lands and not when
+        // any other hook does.
+        lastToolAt: event.timestamp,
         lastToolName: event.toolName,
         lastToolSummary: event.summary,
         lastResultType: event.resultType,

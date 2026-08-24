@@ -2,7 +2,13 @@ import { statSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { mergeOwnedRows, resolveSessionLog, summarize } from "../tree.js"
+import {
+  countStalledCompletions,
+  mergeOwnedRows,
+  resolveSessionLog,
+  STALLED_COMPLETIONS,
+  summarize,
+} from "../tree.js"
 import type { Attention, RuntimeState } from "../types.js"
 
 /**
@@ -35,6 +41,18 @@ export interface WatchTarget {
   transcriptPath: string | undefined
   dismissed: string[]
   updatedAt: number
+  /**
+   * When a `postToolUse` hook last landed, or - for a Session that has not seen
+   * one yet - when the Session started.
+   *
+   * The fallback is what keeps a RESUMED Session from badging itself the
+   * instant it opens: its log already holds thousands of completions, and
+   * without a floor every one of them would read as evidence that hooks are
+   * failing. `startedAt` is set by the same `sessionStart` that resets the
+   * counters, so it is the right floor. A Session with neither is not yet
+   * demonstrably anything, and reports healthy.
+   */
+  healthSince: number | undefined
 }
 
 /**
@@ -53,6 +71,7 @@ export function toWatchTarget(key: string, state: RuntimeState): WatchTarget | n
     transcriptPath: state.transcriptPath,
     dismissed: state.dismissed ?? [],
     updatedAt: state.updatedAt,
+    healthSince: state.lastToolAt ?? state.startedAt,
   }
 }
 
@@ -120,6 +139,25 @@ export interface WatchDeps {
   readDescription(workspaceID: string): Promise<string | undefined>
   setDescription(workspaceID: string, description: string): Promise<void>
   now(): number
+  /**
+   * When THIS watcher started, and the floor under every health judgement.
+   *
+   * A watcher cannot attest to hooks that were supposed to fire before it
+   * existed. That sounds like pedantry until an upgrade: a state file written
+   * by an older build has no `lastToolAt`, so the floor falls back to
+   * `startedAt`, and a Session that has been running for two days is judged on
+   * two days of completions it was never going to be able to explain.
+   * Measured on exactly that upgrade - a live, perfectly healthy Session
+   * reported 634.
+   *
+   * Taking the later of the two floors fixes it in both directions. A stale
+   * state file starts counting from now, so a genuinely broken pipeline still
+   * accumulates and still badges; a healthy one simply starts at zero.
+   *
+   * Optional, and absent means no floor, because the tests supply their own
+   * fixture time. Production must pass it.
+   */
+  startedAt?: number
 }
 
 /**
@@ -145,6 +183,17 @@ export async function watchTick(
     const mtimeMs = needsRecompute(logPath, memo, now)
     if (mtimeMs === null) continue
 
+    // The health check belongs HERE and nowhere else. A hook cannot report that
+    // hooks have stopped arriving; the watcher is the only part of Maestro
+    // still running when they have. See `countStalledCompletions`.
+    //
+    // A Session with no floor to measure from reports healthy rather than
+    // guessing: this signal is only worth having if it is never noise.
+    const floors = [target.healthSince, deps.startedAt].filter((v) => v !== undefined)
+    const since = floors.length > 0 ? Math.max(...floors) : undefined
+    const completions = since === undefined ? 0 : countStalledCompletions(logPath, since)
+    const stalled = completions >= STALLED_COMPLETIONS ? completions : 0
+
     const tree = summarize(
       target.cwd,
       undefined,
@@ -153,6 +202,7 @@ export async function watchTick(
       target.sessionId,
       target.transcriptPath,
       now,
+      stalled,
     )
     // `summarize` returns null only when it could not compute at all. Leaving
     // the description alone is right then - the same fail-open the hook uses.

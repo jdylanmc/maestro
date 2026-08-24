@@ -252,3 +252,24 @@ test("no variable-length Text is made incompressible", () => {
     )
   }
 })
+
+test("the sidebar renders the plugin-health badge on the Session row", () => {
+  // Verified live: `cmux sidebar validate` reported OK on a sidebar that
+  // rendered nothing at all, so the shape is asserted here and the badge was
+  // separately confirmed present in the rendered accessibility tree while a
+  // deliberately broken parser was installed.
+  assert.match(sidebar, /func stalledFor\(_ d: String, _ id: String\) -> String/)
+  assert.match(
+    sidebar,
+    /let stalled = stalledFor\(d, t\.id\)\s+if stalled != "" \{/,
+    "each call gets its own let: a let-bound ternary containing a call renders nothing",
+  )
+  assert.match(sidebar, /Image\(systemName: "exclamationmark\.triangle\.fill"\)/)
+  assert.match(sidebar, /\.help\("Maestro is not receiving hooks[^"]*"\)/)
+})
+
+test("the owner row is still read positionally", () => {
+  // The health field is appended AFTER the surface id. That is only safe while
+  // every reader takes field 2 by index rather than taking the rest of the row.
+  assert.match(sidebar, /part\(\$0, 0\) == "@" && part\(\$0, 2\) == id/)
+})

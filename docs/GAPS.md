@@ -285,3 +285,15 @@ Measured, each after costing real debugging time:
 **Evidence:** observed live. A workspace on branch `users/dylanmccurry/review-console-ad-dau` clipped the whole pane, including the "Maestro" header. Three `Text` views carried both truncation and `.fixedSize()`: the workspace branch, the surface branch, and the surface directory basename. Removing `.fixedSize()` from those three restored the pane; the long branch now renders 225px wide inside a 403px sidebar and truncates. Reproduced in the other direction too - adding `.fixedSize()` to the new model and activity fields caused the identical whole-pane shift.
 **Shipped:** `.fixedSize()` is kept only on genuinely fixed-width content - icons, dots, the `⌘n` hint, the finished count - and never on a `Text` whose content varies. Variable metadata is instead bounded at the source: the wire caps model at 18 characters and activity at 14.
 **Closes with:** nothing upstream; this is a standing authoring rule for this file.
+
+### G-29 - A component cannot report its own absence
+
+**Wanted:** Maestro to say when Maestro has stopped hearing from Copilot.
+**Blocked by:** the thing that would notice is the thing that stopped. A `postToolUse` hook that is no longer arriving cannot file a report about not arriving, and every publisher that IS still working publishes a plausible, healthy-looking picture.
+**Evidence:** issue #63 - two days blind. Then measured again while building the fix, three times over:
+- A detector keyed on "time since any hook wrote state" sat at **zero** through four deliberately broken tool calls, because `sessionStart`, `agentStop` and `notification` kept stamping it. This is not a subtle miss; it is the majority of hooks.
+- Once the watcher did publish `@ o <surface> 10`, the next surviving hook republished the owner row without the field and **erased it within a second**, repeatedly.
+- Comparing the runtime's own `completedTools` against the log does not work either: a resumed Session keeps its log and resets its counters. Measured deltas across four live Sessions were **+31, +457, +1143 and -326**.
+**Shipped:** derivation belongs to the out-of-process watcher, which is the only part of Maestro still running when hooks are not. Health is a per-hook timestamp (`lastToolAt`), carried forward untouched by every hook except `postToolUse` - whose own execution is the proof of life that clears it - and floored at the watcher's start time so an upgrade cannot badge history it never observed.
+**Residual, stated plainly:** if the watcher itself never starts, nothing detects anything. `watcherEnabled` defaults on and `sessionStart` starts it, but a `sessionStart` that fails to parse takes the detector down with the thing it detects.
+**Closes with:** a runtime that reports hook delivery failures to the plugin that registered them, which would let the reporter be something other than the reported-on.

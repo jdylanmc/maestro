@@ -155,6 +155,23 @@ export interface RuntimeState {
   lastPrompt: string | undefined
   toolInvocations: number
   completedTools: number
+  /**
+   * When a `postToolUse` hook LAST LANDED, as distinct from when any hook did.
+   *
+   * `updatedAt` cannot answer that. Every hook stamps it, and during the
+   * two-day outage of issue #63 the hooks that were still parsing -
+   * `sessionStart`, `agentStop`, `userPromptSubmitted` - kept stamping it
+   * while `postToolUse` threw on every single call. A detector reading
+   * `updatedAt` therefore sees a perfectly healthy Session; measured, it never
+   * fired once against a deliberately broken parser.
+   *
+   * A per-hook timestamp is what isolates one pipeline. Counting only the
+   * completions AFTER it also makes the check immune to history: a resumed
+   * Session keeps its log but resets its counters, which is why comparing
+   * `completedTools` against the log does not work - measured deltas across
+   * four live Sessions were +31, +457, +1143 and -326.
+   */
+  lastToolAt: number | undefined
   lastToolName: string | undefined
   lastToolSummary: string | undefined
   lastResultType: ToolResultType | undefined

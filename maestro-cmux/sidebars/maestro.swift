@@ -150,6 +150,22 @@ func ownsSurface(_ d: String, _ id: String) -> Bool {
     return rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }.count > 0
 }
 
+/** The issue #63 health signal: how many tool completions landed after the
+ *  hook runtime last wrote state for `id`, as published in optional field 3 of
+ *  the owner row. "" means healthy, or an older plugin that does not publish it.
+ *
+ *  Returned as a STRING rather than an Int on purpose. The view needs only
+ *  presence, and `Int(...)` unwrapping is one more interpreter construct this
+ *  sidebar would be trusting untested - the exact habit that produced a tree
+ *  which rendered nothing while `cmux sidebar validate` reported OK. */
+func stalledFor(_ d: String, _ id: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }
+    if hits.count == 0 {
+        return ""
+    }
+    return part(hits[0], 3)
+}
+
 /** The index of `id`'s owner row, or -1. */
 func ownerIndex(_ rows: [String], _ id: String) -> Int {
     for i in 0..<rows.count {
@@ -743,6 +759,26 @@ VStack(alignment: .leading, spacing: 0) {
                                     .font(.caption)
                                     .foregroundColor(t.focused && w.selected ? .primary : .secondary)
                                     .lineLimit(1).truncationMode(.tail)
+                                // Maestro reporting on Maestro. The tree above
+                                // is only ever as true as the last hook that
+                                // landed, and a dead publisher looks exactly
+                                // like an idle one - which is how this plugin
+                                // published nothing for two days and nothing
+                                // said so (#63). This badge is the difference
+                                // between the two, and it is deliberately
+                                // small and unlit: it reports on the OBSERVER,
+                                // not on the work, and must never outshout an
+                                // agent actually asking for something.
+                                if let d = w.description {
+                                    let stalled = stalledFor(d, t.id)
+                                    if stalled != "" {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.orange)
+                                            .fixedSize()
+                                            .help("Maestro is not receiving hooks - this tree may be stale")
+                                    }
+                                }
                                 Spacer(minLength: 4)
                                 if let dir = t.directory {
                                     Text(baseName(dir))

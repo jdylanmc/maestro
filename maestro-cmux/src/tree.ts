@@ -579,11 +579,96 @@ export const ATTENTION_MARK = "!"
  * rather than the sidebar inferring it from a title suffix.
  *
  *     @ o 06DF8701-7CFD-428E-99D2-85F43C0EEDD2¦0 > probe-agent
+ *
+ * An optional field 3 carries the count of tool completions that landed after
+ * the hook runtime last wrote state - the issue #63 health signal. It is
+ * POSITIONAL and appended last, which is safe here in a way it is not on a
+ * subagent row: a surface ID cannot contain a space, so field 2 is recoverable
+ * without knowing the field count, and every existing reader takes field 2 by
+ * index. The field is omitted entirely when the count is zero.
  */
 export const OWNER_MARK = "@"
 
-export function encodeOwner(surfaceID: string): string {
-  return `${OWNER_MARK} o ${surfaceID.replace(/[\n\r¦ ]/g, "")}`
+export function encodeOwner(surfaceID: string, stalled = 0): string {
+  const id = surfaceID.replace(/[\n\r¦ ]/g, "")
+  // Field 3 is omitted when healthy so a healthy workspace encodes exactly as
+  // it did before, and an older sidebar sees no change at all.
+  return stalled > 0 ? `${OWNER_MARK} o ${id} ${stalled}` : `${OWNER_MARK} o ${id}`
+}
+
+/**
+ * How many tool completions after the last hook-written state make a Session
+ * demonstrably un-published.
+ *
+ * One is noise: a completion can land between the tool finishing and its
+ * `postToolUse` hook writing state, and the two are separate processes. Three
+ * consecutive is not a race - it is a hook that is no longer arriving.
+ */
+export const STALLED_COMPLETIONS = 3
+
+/**
+ * Count ROOT tool completions the event log recorded after `sinceMs`.
+ *
+ * This is the health signal for issue #63, and its shape is forced by what
+ * actually went wrong. Copilot CLI changed two hook payload shapes; every
+ * affected hook threw, was caught, and exited 0 - the fail-open contract
+ * working exactly as designed - and Maestro published nothing for two days
+ * while the sidebar kept rendering the last plausible tree.
+ *
+ * Three cheaper detectors were tried against a deliberately broken parser and
+ * measured to fail:
+ *
+ *  - A heartbeat cannot work, because a plugin with nothing to say and a
+ *    plugin that has gone deaf are byte-identical on the wire.
+ *  - A log-mtime threshold cannot work: one long `bash` call appends nothing
+ *    for minutes.
+ *  - `updatedAt` cannot work, and this is the one that had to be measured to
+ *    be believed. EVERY hook stamps it, and the outage's own report says the
+ *    hooks that still parsed "kept publishing occasionally". Built against
+ *    `updatedAt`, this detector sat at zero through four broken tool calls.
+ *
+ * What works is a PER-HOOK timestamp. `lastToolAt` moves only when a
+ * `postToolUse` hook lands, so completions accumulating past it isolate that
+ * one pipeline. Counting only what is newer also makes the check immune to
+ * history, which comparing `completedTools` against the log is not: a resumed
+ * Session keeps its log and resets its counters.
+ *
+ * Only ROOT completions count. A subagent's tool calls appear in the parent's
+ * log - measured, 11,983 completions of which 1,809 were root - and if Copilot
+ * does not fire `postToolUse` for them, counting them would badge every long
+ * subagent run as a fault. Ignoring them can only make this slower to notice,
+ * never wrong.
+ *
+ * A shutdown resets the count. A dead Session runs no more hooks by
+ * definition, and a badge that never clears is one the operator learns to
+ * ignore.
+ */
+export function countStalledCompletions(logPath: string, sinceMs: number): number {
+  try {
+    let count = 0
+    for (const line of readLines(logPath)) {
+      if (!line) continue
+      let e: { type?: string; timestamp?: string; agentId?: string | null }
+      try {
+        e = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (e.type === SHUTDOWN) {
+        count = 0
+        continue
+      }
+      if (e.type !== "tool.execution_complete") continue
+      if (e.agentId) continue
+      const ts = Date.parse(e.timestamp ?? "")
+      if (Number.isFinite(ts) && ts > sinceMs) count++
+    }
+    return count
+  } catch {
+    // Unreadable log is ignorance, not ill health. Reporting a fault we cannot
+    // demonstrate is the same lie in the other direction.
+    return 0
+  }
 }
 
 /**
@@ -616,7 +701,10 @@ export function splitOwnedBlocks(published: string): OwnedBlock[] {
   for (const row of published.split(ROW_SEP)) {
     if (!row) continue
     if (row.startsWith(`${OWNER_MARK} o `)) {
-      blocks.push({ owner: row.slice(4).trim(), rows: [row] })
+      // First token only: the owner row may carry a health field after the
+      // surface ID, and the block is keyed on identity alone.
+      const owner = row.slice(4).trim().split(" ")[0] ?? ""
+      blocks.push({ owner, rows: [row] })
     } else {
       const current = blocks[blocks.length - 1]
       if (current) current.rows.push(row)
@@ -629,6 +717,34 @@ export function splitOwnedBlocks(published: string): OwnedBlock[] {
 export function ownedRows(published: string, surfaceID: string): string {
   const block = splitOwnedBlocks(published).find((b) => b.owner === surfaceID)
   return block ? block.rows.join(ROW_SEP) : ""
+}
+
+/**
+ * The health field a Session's owner row already carries, or 0.
+ *
+ * Only the watcher can DERIVE this - the scan is too expensive for a hook and,
+ * more to the point, a `postToolUse` hook that has stopped arriving cannot
+ * report its own absence. But every hook that still works republishes the owner
+ * row, and a publisher that recomputes health as zero because it did not look
+ * erases the watcher's finding within a second.
+ *
+ * That is not hypothetical: measured against a deliberately broken parser, the
+ * watcher published `@ o <surface> 10` and the next `agentStop` hook wiped it,
+ * over and over, so the badge never survived long enough to be seen. It is also
+ * the precise dynamic the outage described - the hooks that still parsed "kept
+ * publishing occasionally", which is what kept the tree looking alive.
+ *
+ * So a hook CARRIES the field forward instead of recomputing it. The one
+ * exception is a `postToolUse` hook, which is itself proof that the pipeline
+ * works and therefore clears it. That makes recovery self-healing without
+ * asking a hook to measure anything.
+ */
+export function healthOf(published: string, surfaceID: string): number {
+  const block = splitOwnedBlocks(published).find((b) => b.owner === surfaceID)
+  if (!block) return 0
+  const field = (block.rows[0] ?? "").split(" ")[3]
+  const value = Number.parseInt(field ?? "", 10)
+  return Number.isFinite(value) && value > 0 ? value : 0
 }
 
 /**
@@ -817,6 +933,7 @@ export function summarize(
   sessionId?: string,
   transcriptPath?: string,
   now: number = Date.now(),
+  stalled = 0,
 ): TreeSummary | null {
   try {
     const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
@@ -838,7 +955,7 @@ export function summarize(
         running: 0,
         failed: 0,
         attention: undefined,
-        encoded: surfaceID ? encodeOwner(surfaceID) : "",
+        encoded: surfaceID ? encodeOwner(surfaceID, stalled) : "",
         nextExpiryAt: undefined,
         resolved: log !== undefined,
       }
@@ -857,7 +974,7 @@ export function summarize(
       }
     }
     const rows = [
-      ...(surfaceID ? [encodeOwner(surfaceID)] : []),
+      ...(surfaceID ? [encodeOwner(surfaceID, stalled)] : []),
       ...(effective ? [encodeAttention(effective)] : []),
       ...(subs.size > 0 ? [encodeTree(subs, now, dismissed)] : []),
       // An aged-out or fully dismissed tree encodes to "". Joining that in

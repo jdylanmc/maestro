@@ -1,7 +1,54 @@
-import { appendFileSync } from "node:fs"
+import { appendFileSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { HookLogger, LogLevel } from "./types.js"
+
+/**
+ * The ceiling on the diagnostic log, and how much of it a trim keeps.
+ *
+ * Measured: this file reached 17 MB while Copilot's changed hook payloads were
+ * rejected 18,864 times over two days (issue #63). It is append-only, written
+ * from a hook that must never fail, and read by nobody until something has
+ * already gone wrong - so it grows without bound precisely when it is being
+ * written fastest.
+ *
+ * The TAIL is what a trim keeps, not the head. The first occurrence of a fault
+ * is the more interesting record historically, but the tail is what says
+ * whether the fault is still happening, and that is the question an operator
+ * asks first.
+ */
+const MAX_LOG_BYTES = 1024 * 1024
+const KEEP_LOG_BYTES = 256 * 1024
+
+function logPath(): string {
+  return join(process.env.TMPDIR ?? tmpdir(), "maestro-cmux.log")
+}
+
+/**
+ * Trim the diagnostic log back to its tail once it exceeds the ceiling.
+ *
+ * Rewrite in place rather than rotating to a sibling file: a rotation leaves a
+ * second unbounded artefact behind, and this file exists only for the minutes
+ * after someone notices a fault.
+ *
+ * Silent on every failure, like everything else on the hook path.
+ */
+function trimIfOversized(path: string): void {
+  try {
+    if (statSync(path).size <= MAX_LOG_BYTES) return
+    const text = readFileSync(path, "utf8")
+    const tail = text.slice(-KEEP_LOG_BYTES)
+    const start = tail.indexOf("\n")
+    writeFileSync(
+      path,
+      `${new Date().toISOString()} log trimmed to last ${KEEP_LOG_BYTES} bytes\n${
+        start === -1 ? tail : tail.slice(start + 1)
+      }`,
+    )
+  } catch {
+    // Deliberately empty. A logger that can fail can deny a tool call.
+  }
+}
 
 /**
  * Write a diagnostic line to a file, never to stdout or stderr.
@@ -20,10 +67,9 @@ import type { HookLogger, LogLevel } from "./types.js"
  */
 export function writeDiagnostic(line: string): void {
   try {
-    appendFileSync(
-      join(process.env.TMPDIR ?? tmpdir(), "maestro-cmux.log"),
-      `${new Date().toISOString()} ${line}\n`,
-    )
+    const path = logPath()
+    trimIfOversized(path)
+    appendFileSync(path, `${new Date().toISOString()} ${line}\n`)
   } catch {
     // Deliberately empty. There is nowhere safe left to report this.
   }

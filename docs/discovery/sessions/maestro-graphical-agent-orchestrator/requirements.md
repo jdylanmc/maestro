@@ -134,6 +134,15 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
   disabling cmux's native Copilot integration.
 - Keep coding-agent integration optional and local configuration outside the
   repository.
+- Publish plugin health, not only session state. A Maestro that has stopped
+  hearing from Copilot must be distinguishable in the UI from one with nothing
+  to say, because for two days it was not (#63). Only the out-of-process
+  watcher may derive it - a hook cannot report the absence of hooks - and every
+  other publisher carries the field forward rather than recomputing it. A
+  `postToolUse` hook clears it, because its own execution is the proof.
+- Bound the diagnostic log. It is append-only, written from a path that must
+  never fail, and grows fastest exactly when something is wrong; it reached
+  17 MB.
 
 ## Current constraints and exclusions
 
@@ -163,6 +172,9 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
 - Decide what a still-blocked badge should do for a Session that **dies while
   blocked**. It never resumes, so nothing clears it. Accepted unknown; manual
   dismissal is the current exit.
+- Decide what detects a watcher that never starts. The #63 health signal is
+  derived by the watcher, so a `sessionStart` hook that fails to parse takes
+  the detector down together with the thing it detects.
 - Replace status-line scraping for context percentage if Copilot ever publishes
   the figure as an event. The parse depends on the status line being in the
   visible viewport and on a tier string that already varies (`1M`, `1.1M`).

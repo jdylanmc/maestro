@@ -90,6 +90,10 @@ async function main(): Promise<void> {
   // One `workspace list` per tick at most, shared by every target in it.
   const deps = {
     now: () => Date.now(),
+    // This watcher cannot attest to hooks that were meant to fire before it
+    // existed. See WatchDeps.startedAt - without this floor an upgrade badges
+    // every long-running Session at once.
+    startedAt: Date.now(),
     readDescription: (workspaceID: string) => readDescription(config.cmuxBin, workspaceID),
     setDescription: async (workspaceID: string, description: string) => {
       await run(config.cmuxBin, [
