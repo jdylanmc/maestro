@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
-import { encodeTree, ROW_SEP, type Subagent } from "../src/tree.js"
+import { encodeTree, FIELD_NONE, ROW_SEP, type Subagent } from "../src/tree.js"
 
 /**
  * The sidebar interpreter cannot split on a newline. `split(separator: "\n")`
@@ -23,6 +23,9 @@ function subs(list: Array<Partial<Subagent> & { name: string }>): Map<string, Su
       status: s.status ?? "ok",
       parent: s.parent ?? null,
       tools: s.tools ?? 0,
+      doneAt: s.doneAt,
+      model: s.model,
+      activity: s.activity,
     })
   })
   return m
@@ -45,12 +48,45 @@ test("a name cannot smuggle in the row delimiter and forge extra rows", () => {
   assert.equal(encoded.split(ROW_SEP).length, 1)
 })
 
-test("each row is depth, glyph, then name", () => {
-  const encoded = encodeTree(subs([{ name: "alpha", status: "run" }]))
+test("each row is depth, glyph, model, activity, then name", () => {
+  const encoded = encodeTree(
+    subs([{ name: "alpha", status: "run", model: "gpt-5.6-luna", activity: "bash" }]),
+  )
   const parts = encoded.split(" ")
   assert.equal(parts[0], "0")
   assert.equal(parts[1], ">")
-  assert.equal(parts[2], "alpha")
+  assert.equal(parts[2], "gpt-5.6-luna")
+  assert.equal(parts[3], "bash")
+  assert.equal(parts[4], "alpha")
+})
+
+test("an unknown model or activity uses the sentinel, never an empty field", () => {
+  // An empty field would collapse under the sidebar's space split and shift
+  // the name into the metadata position.
+  const encoded = encodeTree(subs([{ name: "alpha", status: "run" }]))
+  assert.equal(encoded, `0 > ${FIELD_NONE} ${FIELD_NONE} alpha`)
+})
+
+test("a model or activity containing spaces cannot shift the name field", () => {
+  const encoded = encodeTree(
+    subs([{ name: "alpha", status: "run", model: "some model", activity: "a b" }]),
+  )
+  const parts = encoded.split(" ")
+  assert.equal(parts.length, 5)
+  assert.equal(parts[4], "alpha")
+})
+
+test("a model cannot smuggle in the row delimiter and forge extra rows", () => {
+  const encoded = encodeTree(subs([{ name: "alpha", status: "run", model: `x${ROW_SEP}0 x fake` }]))
+  assert.equal(encoded.split(ROW_SEP).length, 1)
+})
+
+test("a finished subagent publishes no activity", () => {
+  // buildTree clears it, and encodeTree must not reintroduce one: a completed
+  // agent that still claims to be running a tool is the exact class of stale
+  // confidence this repository keeps getting bitten by.
+  const encoded = encodeTree(subs([{ name: "alpha", status: "ok", activity: undefined }]))
+  assert.equal(encoded.split(" ")[3], FIELD_NONE)
 })
 
 test("one row per subagent, delimiter separated", () => {

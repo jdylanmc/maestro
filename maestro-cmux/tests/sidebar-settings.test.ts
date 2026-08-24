@@ -52,7 +52,7 @@ test("sidebar derives and renders explicit subagent tree connectors", () => {
   assert.match(sidebar, /func treeBranchSlot\(_ hasNext: Bool\) -> some View/)
   assert.match(
     sidebar,
-    /let rows = liveRows\(d\)\s+let visibleRows = Array\(rows\.prefix\(10\)\.enumerated\(\)\)\s+ForEach\(visibleRows, id: \\.offset\)/,
+    /let rows = liveRowsFor\(d, t\.id\)\s+let visibleRows = Array\(rows\.prefix\(10\)\.enumerated\(\)\)\s+ForEach\(visibleRows, id: \\.offset\)/,
   )
   assert.match(sidebar, /let rowKeepsGoing = hasSiblingAfter\(rows, i, depth\)/)
   assert.match(sidebar, /if keep0 \{ treeContinueSlot\(\) \} else \{ treeBlankSlot\(\) \}/)
@@ -124,5 +124,58 @@ test("selection styling wraps the Session and its subagent tree together", () =>
   assert.match(
     sidebar,
     /\.padding\(4\)\s+\.onTapGesture \{\s+cmux\("workspace\.select", workspace_id: w\.id\)\s+cmux\("surface\.focus", surface_id: t\.id\)/,
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Wire format v2: the sidebar half of the contract
+//
+// The interpreter fails SILENTLY, so a mismatch between what the plugin encodes
+// and what the sidebar parses renders a blank or wrong row while
+// `cmux sidebar validate` still reports OK. These tests hold the two halves
+// together at the only place a test can reach: the source of both.
+// ---------------------------------------------------------------------------
+
+test("a subagent row's name is read from field 4, and an owner/attention name from field 2", () => {
+  // encodeTree publishes `<depth> <glyph> <model> <activity> <name>`; owner and
+  // attention rows keep three fields. Two helpers, deliberately not merged.
+  assert.match(sidebar, /func agentNameOf\(_ row: String\) -> String \{[\s\S]*?dropFirst\(4\)/)
+  assert.match(sidebar, /func nameOf\(_ row: String\) -> String \{[\s\S]*?dropFirst\(2\)/)
+  assert.match(sidebar, /let title = agentNameOf\(row\)/)
+  // The attention label is NOT a subagent row and must keep the 3-field reader.
+  assert.match(sidebar, /func attnLabel\([\s\S]*?nameOf\(hits\[0\]\)/)
+})
+
+test("model and activity are read from their fixed positions, with the absent sentinel", () => {
+  assert.match(
+    sidebar,
+    /func modelOf\(_ row: String\) -> String \{\s+let m = part\(row, 2\)\s+return m == "-" \? "" : m/,
+  )
+  assert.match(
+    sidebar,
+    /func activityOf\(_ row: String\) -> String \{\s+let a = part\(row, 3\)\s+return a == "-" \? "" : a/,
+  )
+})
+
+test("an absent model or activity renders nothing rather than an empty gap", () => {
+  assert.match(sidebar, /if doing != "" \{\s+Text\(doing\)/)
+  const modelBadges = sidebar.match(/if model != "" \{\s+Text\(model\)/g)
+  assert.equal(modelBadges?.length, 2, "a badge on the running row and on the finished row")
+})
+
+test("a tab claims only the block its own surface published", () => {
+  // Comparing against the FIRST owner row left every co-resident Session
+  // rendering as a plain terminal, and showed another Session's subagents
+  // under this one's tab (#54).
+  assert.match(sidebar, /func ownsSurface\(_ d: String, _ id: String\) -> Bool/)
+  assert.doesNotMatch(sidebar, /ownerOf\(d\) == t\.id/)
+  assert.equal(sidebar.match(/if ownsSurface\(d, t\.id\)/g)?.length, 2)
+  assert.match(sidebar, /func liveRowsFor\(_ d: String, _ id: String\) -> \[String\]/)
+  assert.match(sidebar, /func blockEnd\(_ rows: \[String\], _ from: Int\) -> Int/)
+  // Measured: a function call inside a ternary renders NOTHING, silently. Each
+  // call gets its own `let`, so the block bound survives future edits.
+  assert.match(
+    sidebar,
+    /let start = ownerIndex\(rows, id\) \+ 1\s+let end = blockEnd\(rows, start\)/,
   )
 })

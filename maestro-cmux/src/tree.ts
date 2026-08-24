@@ -47,6 +47,27 @@ export interface Subagent {
   /** Epoch ms the subagent finished, when it has. Used to retire a finished
    *  row from the sidebar after RETAIN_MS rather than the instant it lands. */
   doneAt: number | undefined
+  /**
+   * The model the subagent was started with, from `subagent.started.data.model`
+   * (#41). Absent on a placeholder row, because the spawning tool call does not
+   * name a model - only the started event does.
+   *
+   * There is deliberately NO context-window percentage beside it: no event in
+   * the log carries window occupancy, and a number synthesised from hardcoded
+   * window sizes would be an estimate wearing a gauge's clothing.
+   */
+  model: string | undefined
+  /**
+   * What the subagent is doing right now (#60): the tool name of its most
+   * recent `tool.execution_start` that has no matching `tool.execution_complete`.
+   *
+   * The tool NAME only. Its arguments are never read here - that is the same
+   * boundary `detectAttention` holds for `fullCommandText`, and the reason the
+   * Copilot status line itself cannot simply be forwarded: it is rendered in
+   * the CLI's terminal and is not recorded in the event log at all, so the
+   * open tool call is the honest source for "what is happening now".
+   */
+  activity: string | undefined
 }
 
 /**
@@ -310,6 +331,7 @@ export function buildTree(logPath: string): Map<string, Subagent> {
   const owner = new Map<string, string | null>()
   const spawns = new Map<string, { name: string; kind: string }>()
   const claimed = new Set<string>()
+  const openTools = new Map<string, { agent: string; tool: string }>()
   try {
     for (const line of readLines(logPath)) {
       if (!line) continue
@@ -326,17 +348,26 @@ export function buildTree(logPath: string): Map<string, Subagent> {
       const d = e.data ?? {}
       if (e.type === "tool.execution_start") {
         const tc = d.toolCallId as string | undefined
+        const tn = d.toolName as string | undefined
         if (tc && !owner.has(tc)) owner.set(tc, e.agentId ?? null)
-        if (tc && SPAWN_TOOLS.has((d.toolName as string) ?? "") && !spawns.has(tc)) {
-          // The parent names its own delegation. `task` carries `name` plus
-          // `agent_type`; `execution_subagent` carries only `description`.
+        // Open tool calls, per agent, in start order. The most recent one still
+        // open at the end of the log is that agent's current activity (#60).
+        if (tc && tn && e.agentId) openTools.set(tc, { agent: e.agentId, tool: tn })
+        if (tc && SPAWN_TOOLS.has(tn ?? "") && !spawns.has(tc)) {
+          // The parent names its own delegation with an IDENTIFIER field.
+          // `task` carries `name` plus `agent_type`; `execution_subagent`
+          // carries only `description`, which is free-text prose the privacy
+          // boundary does not publish (#52), so it falls back to the tool name.
           const args = (d.arguments ?? {}) as Record<string, unknown>
-          const kind = (args.agent_type as string) || (d.toolName as string) || ""
+          const kind = (args.agent_type as string) || tn || ""
           spawns.set(tc, {
-            name: (args.name as string) || (args.description as string) || kind || "subagent",
+            name: (args.name as string) || kind || "subagent",
             kind,
           })
         }
+      } else if (e.type === "tool.execution_complete") {
+        const tc = d.toolCallId as string | undefined
+        if (tc) openTools.delete(tc)
       } else if (e.type === "subagent.started") {
         const tc = d.toolCallId as string | undefined
         if (tc) claimed.add(tc)
@@ -349,6 +380,8 @@ export function buildTree(logPath: string): Map<string, Subagent> {
           parent: null,
           tools: 0,
           doneAt: undefined,
+          model: typeof d.model === "string" && d.model ? d.model : undefined,
+          activity: undefined,
           // toolCallId is resolved to a parent below.
           ...({ tc: d.toolCallId } as object),
         } as Subagent)
@@ -375,6 +408,15 @@ export function buildTree(logPath: string): Map<string, Subagent> {
     const tc = (s as unknown as { tc?: string }).tc
     s.parent = tc && owner.has(tc) ? (owner.get(tc) ?? null) : null
   }
+  // Current activity, last writer wins: `openTools` preserves insertion order,
+  // so the final surviving entry for an agent is its most recently started
+  // tool call that never completed. A FINISHED subagent has no activity, however
+  // the log left its tool calls - a completion is the stronger signal.
+  for (const { agent, tool } of openTools.values()) {
+    const s = subs.get(agent)
+    if (s) s.activity = tool
+  }
+  for (const s of subs.values()) if (s.status !== "run") s.activity = undefined
   // Unclaimed spawns only. A claimed one is already in `subs` as the real
   // subagent, so emitting it here too is exactly the double-count to avoid.
   for (const [tc, spawn] of spawns) {
@@ -386,6 +428,10 @@ export function buildTree(logPath: string): Map<string, Subagent> {
       parent: owner.get(tc) ?? null,
       tools: 0,
       doneAt: undefined,
+      // A placeholder is a spawn that has not reported itself yet: nothing has
+      // named its model, and it has run no tools of its own.
+      model: undefined,
+      activity: undefined,
     })
   }
   return subs
@@ -446,8 +492,39 @@ export function flatten(subs: Map<string, Subagent>): Array<[number, Subagent]> 
  * Verified against qucooln/cmux-conductor-sidebar, which likewise never splits
  * a multi-line string - it keeps its state on one line and reads it with
  * `hasPrefix` and `contains`.
+ *
+ * ROW FORMAT v2. A subagent row now carries five fields:
+ *
+ *     <depth> <glyph> <model> <activity> <name>
+ *     0 > gpt-5.6-luna bash folk-lyricist
+ *
+ * The two new fields sit BEFORE the name, and that position is forced rather
+ * than chosen. The name is the only field that may contain spaces, so the
+ * sidebar recovers it by dropping a fixed number of leading fields and
+ * rejoining the rest - it is greedy-last. Anything appended after it would be
+ * swallowed by the name. Both new fields are therefore sanitised to a single
+ * space-free token, or the `-` sentinel when unknown.
+ *
+ * Owner rows (`@ o <surface>`) and attention rows (`! <kind> <label>`) keep
+ * their three-field shape; only subagent rows changed. The sidebar reads the
+ * name of each with a different helper for exactly that reason.
+ *
+ * A plugin and a sidebar from different builds will disagree about field count
+ * for as long as the skew lasts. That degrades a label; it cannot crash the
+ * interpreter, which skips what it cannot parse. `install.sh` installs both
+ * halves together.
  */
 const GLYPH: Record<SubagentStatus, string> = { run: ">", ok: "v", fail: "x" }
+
+/**
+ * The sentinel for an absent fixed-position field.
+ *
+ * Fields 2 and 3 carry the model and the current activity. Both are frequently
+ * unknown - a placeholder row has neither - and an EMPTY field cannot be used
+ * because the sidebar recovers fields by splitting on spaces, which collapses
+ * a run of them. A single character keeps every row the same shape.
+ */
+export const FIELD_NONE = "-"
 
 /** Row separator. Any character a subagent name cannot contain would do; this
  *  one is visually quiet if a stock sidebar renders the description raw. */
@@ -610,6 +687,13 @@ export function encodeTree(
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, n)
+  // A fixed-position field must never contain a space or it would shift every
+  // field after it. Whitespace is stripped outright rather than collapsed.
+  const token = (v: string | undefined, n: number) => {
+    if (!v) return FIELD_NONE
+    const cleaned = v.replace(/[\s¦]/g, "").slice(0, n)
+    return cleaned.length > 0 ? cleaned : FIELD_NONE
+  }
   return (
     flatten(subs)
       .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < RETAIN_MS)
@@ -617,7 +701,10 @@ export function encodeTree(
       // a running agent is never hidden, however emphatically it is clicked.
       .filter(([, s]) => s.status !== "ok" || !dismissed.has(s.name))
       .slice(0, 60)
-      .map(([depth, s]) => `${Math.min(depth, 6)} ${GLYPH[s.status]} ${clean(s.name, 44)}`)
+      .map(
+        ([depth, s]) =>
+          `${Math.min(depth, 6)} ${GLYPH[s.status]} ${token(s.model, 24)} ${token(s.activity, 20)} ${clean(s.name, 44)}`,
+      )
       .join(ROW_SEP)
   )
 }

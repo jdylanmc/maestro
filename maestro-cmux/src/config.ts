@@ -12,6 +12,7 @@ interface MaestroFileConfig {
   notifyOnSessionEnd: boolean | undefined
   notifyOnErrors: boolean | undefined
   watcherEnabled: boolean | undefined
+  publishRawText: boolean | undefined
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -78,6 +79,7 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
         notifyOnSessionEnd: undefined,
         notifyOnErrors: undefined,
         watcherEnabled: undefined,
+        publishRawText: undefined,
       }
     }
     throw error
@@ -100,6 +102,7 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     notifyOnSessionEnd: optionalBoolean(source, "notifyOnSessionEnd", path),
     notifyOnErrors: optionalBoolean(source, "notifyOnErrors", path),
     watcherEnabled: optionalBoolean(source, "watcherEnabled", path),
+    publishRawText: optionalBoolean(source, "publishRawText", path),
   }
 }
 
@@ -121,6 +124,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PluginConfig {
     ),
     notifyOnErrors: parseBoolean(env.COPILOT_CMUX_NOTIFY_ERRORS, file.notifyOnErrors ?? true),
     logFileEdits: parseBoolean(env.COPILOT_CMUX_LOG_FILE_EDITS, true),
+    // Defaults to FALSE. See PluginConfig.publishRawText - the shipped
+    // configuration must not be able to publish prompt or argument text.
+    publishRawText: parseBoolean(env.COPILOT_CMUX_PUBLISH_RAW_TEXT, file.publishRawText ?? false),
     debug: parseBoolean(env.COPILOT_CMUX_DEBUG, false),
     watcherEnabled: parseBoolean(env.MAESTRO_WATCHER, file.watcherEnabled ?? true),
     watcherIntervalMs: parseInterval(env.MAESTRO_WATCHER_INTERVAL_MS, 2_000),

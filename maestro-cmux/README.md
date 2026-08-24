@@ -106,7 +106,8 @@ presentation preferences:
   "keepDoneStatus": true,
   "notifyOnSessionEnd": true,
   "notifyOnErrors": true,
-  "watcherEnabled": true
+  "watcherEnabled": true,
+  "publishRawText": false
 }
 ```
 
@@ -133,6 +134,7 @@ Environment variables override the file-backed values:
 | `COPILOT_CMUX_NOTIFY_SESSION_END` | `true` | Notify on successful completion. |
 | `COPILOT_CMUX_NOTIFY_ERRORS` | `true` | Notify on error. |
 | `COPILOT_CMUX_LOG_FILE_EDITS` | `true` | Log file edit and create events. |
+| `COPILOT_CMUX_PUBLISH_RAW_TEXT` | `false` | Publish prompt, argument, and result text. See Privacy. |
 | `COPILOT_CMUX_DEBUG` | `false` | Verbose diagnostics on stderr. |
 
 ## Scope
@@ -202,26 +204,54 @@ Set `MAESTRO_WATCHER=0` or `"watcherEnabled": false` to turn it off.
 
 ## Known limitations
 
-These are measured, not suspected, and each has an open issue.
+These are measured, not suspected. The four limitations this section used to
+list have all closed - the event log is read to EOF rather than as an 8 MiB
+tail, a delegation renders from `tool.execution_start` instead of waiting for
+the deferred `subagent.started` burst, a finished subagent is retired after 15
+seconds instead of freezing on screen, and Session resolution fails closed on
+an ambiguous working directory rather than guessing by newest write.
+
+What remains:
 
 | Limitation | Effect |
 | --- | --- |
-| Subagent lifecycle events are written in a deferred burst near completion | A subagent is invisible for most of its runtime |
-| The tree is published into the workspace description, which persists | A finished subagent can stay on screen as running |
-| The event log is read as a bounded 8 MiB tail | Subagents are silently dropped on long sessions |
-| Sessions resolve by working directory and newest write | Two sessions in one directory can cross-attribute |
+| The event log carries no failure signal for a subagent | A subagent that failed is indistinguishable from one that succeeded (measured: 133 `subagent.started`, 132 `subagent.completed`, zero failures) |
+| No event carries context-window occupancy | A subagent row shows its model but no context percentage, and none can be synthesised honestly (#41) |
+| Dismissal is matched by display name | Two finished subagents with the same name dismiss together |
+| The sidebar interpreter fails silently | An unsupported construct renders nothing while `cmux sidebar validate` reports `OK`; changes are verified against the rendered accessibility tree (see `docs/GAPS.md`) |
 
-The common failure shape is worth stating plainly: **each renders a plausible
-tree rather than an empty one.** A tree that shows nothing is obviously broken
-and gets fixed. A tree that is quietly incomplete, or four hours stale, gets
-trusted. Treat the tree as indicative until these close.
+The common failure shape is worth stating plainly: **the dangerous ones render a
+plausible tree rather than an empty one.** A tree that shows nothing is obviously
+broken and gets fixed. A tree that is quietly incomplete gets trusted.
+
+## Privacy
+
+By default Maestro publishes only identifiers the runtime names itself - tool
+names, subagent names, models, counts, statuses - and never free text a person
+or a model wrote. Prompt text, tool-argument text such as `description` or
+`command`, tool-result text, and file paths are not published in any form,
+including summarised. Redaction happens where the hook payload is parsed, so
+prompt text never reaches the runtime state file either.
+
+Set `publishRawText` to `true`, or `COPILOT_CMUX_PUBLISH_RAW_TEXT=1`, to restore
+the older and chattier labels. It is off in the shipped configuration.
+
+The one deliberate exception is an error message, which is published in full up
+to 96 characters: it is a runtime-authored diagnostic, and an unreadable error
+is worse than a slightly leaky one.
 
 ## Development
 
 ```sh
 npm run build
-npm test        # 86 tests: 68 upstream, 12 fail-open, 6 tree wire format
+npm test        # 223 tests
 npm run check   # lint + test
 ```
 
 Rebuild and reinstall after changes so Copilot refreshes its cached copy.
+A **running session keeps the plugin it loaded**, so a rebuild does not affect
+it - restart the session to exercise a change. The attention watcher is a
+separate long-lived process and likewise keeps its old code in memory: stop the
+pid named in `$TMPDIR/maestro-cmux/watcher.pid` and restart
+`dist/watcher-main.js` after changing anything under `src/runtime/watcher.ts`
+or `src/tree.ts`.

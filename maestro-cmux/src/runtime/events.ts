@@ -112,10 +112,23 @@ function parseToolResult(value: unknown): ToolResult | undefined {
   }
 }
 
+/**
+ * A short label for a tool call.
+ *
+ * `publishRawText` is the privacy boundary (#52), and it defaults to FALSE on
+ * purpose: this summary is published to cmux as a status pill and a sidebar
+ * log line, and both the `description` argument and a file path are text the
+ * operator never agreed to put on a screen that may be screenshotted. With the
+ * default the tool NAME is the whole label, which is the identifier the runtime
+ * chose itself. The richer label is available behind an explicit opt-in.
+ */
 export function describeToolCall(
   toolName: string,
   parsedToolArgs?: Record<string, unknown>,
+  publishRawText: boolean = false,
 ): string {
+  if (!publishRawText) return toolName
+
   const description =
     typeof parsedToolArgs?.description === "string"
       ? summarizeText(parsedToolArgs.description, 48)
@@ -163,7 +176,11 @@ export function parseSessionIdentity(rawInput: string): SessionIdentity {
   }
 }
 
-export function parseHookInput(hookName: HookName, rawInput: string): CopilotHookEvent {
+export function parseHookInput(
+  hookName: HookName,
+  rawInput: string,
+  publishRawText: boolean = false,
+): CopilotHookEvent {
   const context = `${hookName} input`
 
   let raw: unknown
@@ -218,7 +235,7 @@ export function parseHookInput(hookName: HookName, rawInput: string): CopilotHoo
         cwd: expectString(parsed, "cwd", context),
         toolName,
         parsedToolArgs,
-        summary: describeToolCall(toolName, parsedToolArgs),
+        summary: describeToolCall(toolName, parsedToolArgs, publishRawText),
         resultType: toolResult?.resultType ?? "success",
         resultText: toolResult?.textResultForLlm,
       }

@@ -113,6 +113,50 @@ export function treeDescriptionForEvent(
   if (eventType === "session.end") return ""
   return tree?.encoded
 }
+
+/**
+ * The sidebar log line for a submitted prompt.
+ *
+ * The prompt TEXT is the operator's, and the cmux sidebar and its logs are a
+ * different trust surface from the Copilot transcript - prompts routinely carry
+ * pasted secrets and customer detail (#52). The default records that a prompt
+ * happened, which is the part the operator asked to see.
+ */
+export function promptLogMessage(
+  projectLabel: string,
+  prompt: string,
+  publishRawText: boolean,
+): string {
+  if (!publishRawText) return `${projectLabel}: prompt submitted`
+  return `${projectLabel}: prompt - ${summarizeText(prompt, 88)}`
+}
+
+/**
+ * The sidebar log line for a successful file edit.
+ *
+ * A file NAME is argument-derived. With the default boundary the running count
+ * is published instead, which is the only part the tool line does not already
+ * carry.
+ */
+export function fileEditLogMessage(
+  projectLabel: string,
+  toolName: string,
+  path: string | undefined,
+  filesEdited: number,
+  publishRawText: boolean,
+): string {
+  if (!publishRawText) {
+    return `${projectLabel}: ${toolName} - ${filesEdited} file${filesEdited === 1 ? "" : "s"} edited`
+  }
+  return `${projectLabel}: ${toolName} ${path ? basename(path) : toolName}`
+}
+
+/** The trailing detail on a finished-tool log line. Tool RESULT text is
+ *  transcript content and is not published by default (#52). */
+export function toolResultSuffix(resultText: string | undefined, publishRawText: boolean): string {
+  if (!publishRawText || !resultText) return ""
+  return ` - ${summarizeText(resultText, 72)}`
+}
 async function renderState(
   cmux: CmuxClient,
   config: PluginConfig,
@@ -176,7 +220,11 @@ async function emitEventEffects(
 
     case "user.prompt": {
       if (config.logPrompts) {
-        await logEvent(cmux, "info", `${projectLabel}: prompt - ${summarizeText(event.prompt, 88)}`)
+        await logEvent(
+          cmux,
+          "info",
+          promptLogMessage(projectLabel, event.prompt, config.publishRawText),
+        )
       }
       break
     }
@@ -195,15 +243,21 @@ async function emitEventEffects(
             : event.resultType === "denied"
               ? "denied"
               : "finished"
-        const suffix = event.resultText ? ` - ${summarizeText(event.resultText, 72)}` : ""
+        const suffix = toolResultSuffix(event.resultText, config.publishRawText)
         await logEvent(cmux, level, `${projectLabel}: ${verb} ${event.summary}${suffix}`)
       }
       if (config.logFileEdits && isFileEditTool(event.toolName) && event.resultType === "success") {
-        const filePath =
-          typeof event.parsedToolArgs?.path === "string"
-            ? basename(event.parsedToolArgs.path)
-            : event.toolName
-        await logEvent(cmux, "info", `${projectLabel}: ${event.toolName} ${filePath}`)
+        await logEvent(
+          cmux,
+          "info",
+          fileEditLogMessage(
+            projectLabel,
+            event.toolName,
+            typeof event.parsedToolArgs?.path === "string" ? event.parsedToolArgs.path : undefined,
+            nextState.filesEdited,
+            config.publishRawText,
+          ),
+        )
       }
       break
     }
@@ -288,7 +342,7 @@ export async function processHook(
 
   await logger.log("debug", "processHook starting", { hookName })
 
-  const event = parseHookInput(hookName, rawInput)
+  const event = parseHookInput(hookName, rawInput, config.publishRawText)
   const identity = parseSessionIdentity(rawInput)
   const environment = detectCmuxEnvironment(env)
 
@@ -334,7 +388,12 @@ export async function processHook(
 
     const previousState =
       currentState ?? createRuntimeState(event.cwd, environment.workspaceID, event.timestamp)
-    const nextState = reduceRuntimeState(previousState, event, environment.workspaceID)
+    const nextState = reduceRuntimeState(
+      previousState,
+      event,
+      environment.workspaceID,
+      config.publishRawText,
+    )
 
     await logger.log("debug", "state reduced", {
       previousPhase: previousState.phase,

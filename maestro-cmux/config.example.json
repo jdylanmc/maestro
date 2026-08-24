@@ -3,5 +3,6 @@
   "keepDoneStatus": true,
   "notifyOnSessionEnd": true,
   "notifyOnErrors": true,
-  "watcherEnabled": true
+  "watcherEnabled": true,
+  "publishRawText": false
 }

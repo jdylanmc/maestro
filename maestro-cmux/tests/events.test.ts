@@ -75,8 +75,21 @@ test("parseHookInput — postToolUse: extracts resultType and resultText", () =>
   if (event.type === "tool.post") {
     assert.equal(event.resultType, "success")
     assert.equal(event.resultText, "file contents here")
-    assert.equal(event.summary, "read_file index.ts")
+    // The default boundary publishes the tool NAME only (#52); the basename
+    // is available behind the explicit opt-in below.
+    assert.equal(event.summary, "read_file")
   }
+})
+
+test("parseHookInput — postToolUse: opting in restores the argument-derived summary", () => {
+  const raw = JSON.stringify({
+    timestamp: 1700000004,
+    cwd: "/tmp",
+    toolName: "read_file",
+    toolArgs: JSON.stringify({ path: "/src/index.ts" }),
+  })
+  const event = parseHookInput("postToolUse", raw, true)
+  assert.equal(event.type === "tool.post" && event.summary, "read_file index.ts")
 })
 
 test("parseHookInput — errorOccurred: extracts error fields", () => {
@@ -115,18 +128,38 @@ test("parseHookInput — malformed JSON throws with hook name and preview", () =
 // describeToolCall
 // ---------------------------------------------------------------------------
 
+test("describeToolCall — the DEFAULT publishes the tool name and nothing else", () => {
+  // The privacy boundary (#52). This is the negative control for the two tests
+  // below: against the pre-change code both of those passed and this one did
+  // not exist, because the description and the path were published by default.
+  assert.equal(describeToolCall("bash", { description: "Install deps" }), "bash")
+  assert.equal(
+    describeToolCall("read_file", { path: "/home/user/project/src/index.ts" }),
+    "read_file",
+  )
+  assert.equal(
+    describeToolCall("bash", { description: "deploy prod", command: "aws --token hunter2" }),
+    "bash",
+  )
+})
+
 test("describeToolCall — with description arg returns toolName: description", () => {
-  assert.equal(describeToolCall("bash", { description: "Install deps" }), "bash: Install deps")
+  assert.equal(
+    describeToolCall("bash", { description: "Install deps" }, true),
+    "bash: Install deps",
+  )
 })
 
 test("describeToolCall — with path arg returns toolName basename", () => {
   assert.equal(
-    describeToolCall("read_file", { path: "/home/user/project/src/index.ts" }),
+    describeToolCall("read_file", { path: "/home/user/project/src/index.ts" }, true),
     "read_file index.ts",
   )
 })
 
 test("describeToolCall — with neither description nor path returns toolName", () => {
+  assert.equal(describeToolCall("some_tool", undefined, true), "some_tool")
+  assert.equal(describeToolCall("other_tool", {}, true), "other_tool")
   assert.equal(describeToolCall("some_tool"), "some_tool")
   assert.equal(describeToolCall("other_tool", {}), "other_tool")
 })

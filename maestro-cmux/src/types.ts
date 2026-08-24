@@ -58,6 +58,16 @@ export interface PluginConfig {
   notifyOnSessionEnd: boolean
   notifyOnErrors: boolean
   logFileEdits: boolean
+  /**
+   * Publish text derived from prompts, tool arguments, and tool results.
+   *
+   * OFF by default, and that default is the privacy boundary (#52): the
+   * shipped configuration publishes only identifiers the runtime names itself
+   * - tool names, agent names, counts, phases - and never free-text the
+   * operator or a model wrote. Turning this on restores the older, chattier
+   * labels and is a deliberate opt-in.
+   */
+  publishRawText: boolean
   debug: boolean
   /**
    * The watcher recomputes attention on a timer, because a blocked Session

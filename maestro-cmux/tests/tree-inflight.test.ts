@@ -50,10 +50,13 @@ test("a delegation renders as running from tool.execution_start alone", (t) => {
   assert.equal(row?.kind, "explore")
   assert.equal(row?.status, "run")
   assert.equal(row?.parent, null)
-  assert.equal(encodeTree(tree), "0 > source-mapper")
+  assert.equal(encodeTree(tree), "0 > - - source-mapper")
 })
 
-test("execution_subagent spawns render too, named by their description", (t) => {
+test("execution_subagent spawns render, but never named by their description", (t) => {
+  // `description` is free-text prose, which the privacy boundary does not
+  // publish (#52). `task` carries an identifier field and keeps its label;
+  // `execution_subagent` has none, so it falls back to the tool name.
   const tree = buildTree(
     log(t, [
       event("tool.execution_start", null, {
@@ -65,7 +68,84 @@ test("execution_subagent spawns render too, named by their description", (t) => 
   )
 
   assert.equal(tree.size, 1)
-  assert.equal([...tree.values()][0]?.name, "Run the test suite")
+  assert.equal([...tree.values()][0]?.name, "execution_subagent")
+  assert.equal(encodeTree(tree).includes("Run the test suite"), false)
+})
+
+test("a subagent carries the model it was started with", (t) => {
+  const tree = buildTree(
+    log(t, [
+      event("tool.execution_start", null, {
+        toolCallId: "call_spawn",
+        toolName: "task",
+        arguments: { agent_type: "explore", name: "source-mapper" },
+      }),
+      event("subagent.started", "agent-1", {
+        toolCallId: "call_spawn",
+        agentDisplayName: "source-mapper",
+        agentName: "explore",
+        model: "gpt-5.6-luna",
+      }),
+    ]),
+  )
+
+  assert.equal(tree.get("agent-1")?.model, "gpt-5.6-luna")
+  assert.equal(encodeTree(tree), "0 > gpt-5.6-luna - source-mapper")
+})
+
+test("a subagent's activity is its open tool call, and clears when it completes", (t) => {
+  const spawn = [
+    event("tool.execution_start", null, {
+      toolCallId: "call_spawn",
+      toolName: "task",
+      arguments: { agent_type: "explore", name: "source-mapper" },
+    }),
+    event("subagent.started", "agent-1", {
+      toolCallId: "call_spawn",
+      agentDisplayName: "source-mapper",
+      agentName: "explore",
+    }),
+  ]
+  const open = buildTree(
+    log(t, [
+      ...spawn,
+      event("tool.execution_start", "agent-1", { toolCallId: "c1", toolName: "grep" }),
+      event("tool.execution_complete", "agent-1", { toolCallId: "c1" }),
+      event("tool.execution_start", "agent-1", { toolCallId: "c2", toolName: "bash" }),
+    ]),
+  )
+  assert.equal(open.get("agent-1")?.activity, "bash", "the most recent OPEN call wins")
+
+  const settled = buildTree(
+    log(t, [
+      ...spawn,
+      event("tool.execution_start", "agent-1", { toolCallId: "c2", toolName: "bash" }),
+      event("tool.execution_complete", "agent-1", { toolCallId: "c2" }),
+    ]),
+  )
+  assert.equal(settled.get("agent-1")?.activity, undefined, "a closed call is not activity")
+})
+
+test("a finished subagent reports no activity, whatever its log left open", (t) => {
+  const tree = buildTree(
+    log(t, [
+      event("tool.execution_start", null, {
+        toolCallId: "call_spawn",
+        toolName: "task",
+        arguments: { agent_type: "explore", name: "source-mapper" },
+      }),
+      event("subagent.started", "agent-1", {
+        toolCallId: "call_spawn",
+        agentDisplayName: "source-mapper",
+        agentName: "explore",
+      }),
+      event("tool.execution_start", "agent-1", { toolCallId: "c1", toolName: "bash" }),
+      event("subagent.completed", "agent-1", { totalToolCalls: 1 }),
+    ]),
+  )
+
+  assert.equal(tree.get("agent-1")?.status, "ok")
+  assert.equal(tree.get("agent-1")?.activity, undefined)
 })
 
 test("the real subagent replaces its placeholder rather than doubling it", (t) => {
@@ -87,7 +167,7 @@ test("the real subagent replaces its placeholder rather than doubling it", (t) =
   assert.equal(tree.size, 1)
   assert.equal(tree.get("agent-1")?.name, "Explore Agent")
   assert.equal(tree.get("agent-1")?.status, "run")
-  assert.equal(encodeTree(tree), "0 > Explore Agent")
+  assert.equal(encodeTree(tree), "0 > - - Explore Agent")
 })
 
 test("a finished subagent is not resurrected as an in-flight placeholder", (t) => {
@@ -176,7 +256,10 @@ test("a background delegation renders while only its tool call has completed", (
 
   assert.equal(tree.size, 4)
   assert.equal([...tree.values()].filter((s) => s.status === "run").length, 4)
-  assert.equal(encodeTree(tree), "0 > worker-31¦0 > worker-33¦0 > worker-36¦0 > worker-50")
+  assert.equal(
+    encodeTree(tree),
+    "0 > - - worker-31¦0 > - - worker-33¦0 > - - worker-36¦0 > - - worker-50",
+  )
 })
 
 /**
@@ -204,8 +287,8 @@ test("the placeholder label survives reconciliation unchanged", (t) => {
     ]),
   )
 
-  assert.equal(encodeTree(before), "0 > worker-31")
-  assert.equal(encodeTree(after), "0 > worker-31")
+  assert.equal(encodeTree(before), "0 > - - worker-31")
+  assert.equal(encodeTree(after), "0 > - - worker-31")
   assert.equal(after.size, 1)
 })
 
@@ -267,7 +350,7 @@ test("an in-flight delegation nests under the subagent that spawned it", (t) => 
   )
 
   assert.equal(tree.size, 2)
-  assert.equal(encodeTree(tree), "0 > nested-delegator¦1 > adr-reader")
+  assert.equal(encodeTree(tree), "0 > - task nested-delegator¦1 > - - adr-reader")
 })
 
 test("an ordinary tool call is not mistaken for a delegation", (t) => {

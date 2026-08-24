@@ -252,6 +252,16 @@ Measured, each after costing real debugging time:
 ### G-22 - A Session renders as a plain terminal until its first publish
 
 **Wanted:** immediate identification of a Copilot surface.
-**Blocked by:** identity is established only when Maestro first publishes an owner row, which can take about a minute.
-**Evidence:** issue #54.
-**Closes with:** G-17, which would remove the need to publish identity at all.
+**Blocked by:** identity is established only when Maestro first publishes an owner row.
+**Evidence:** issue #54, then **measured**. The plugin is not the delay. An empty tree already summarises to `@ o <surface>`, `sessionStart` is a registered hook, and the whole `sessionStart` hook - Node start-up, `cmux workspace list --json`, and `set-description` included - runs in **398-520 ms** over five runs. The individual cmux legs are ~44 ms to read the description and ~54 ms to write it. Confirmed live: a Session with zero subagents was publishing `@ o CE7DA427-...` at the moment of measurement.
+**Found instead:** the sidebar was comparing `t.id` against only the FIRST owner row in the description. Since #49 the description carries one block per Session, so every Session after the first never matched and rendered as a plain terminal **permanently**, not for a minute - and the first Session rendered every other Session's subagents under its own tab.
+**Shipped:** `ownsSurface` matches any owner row, and `liveRowsFor` returns only the rows inside that surface's own block.
+**Closes with:** G-17 for the residual sub-second window, which would remove the need to publish identity at all.
+
+### G-23 - A function call inside a ternary renders nothing in the sidebar interpreter
+
+**Wanted:** `let end = s < 0 ? 0 : blockEnd(rows, s)` - a guard and a lookup in one expression.
+**Blocked by:** the interpreter skips it silently. The whole subagent tree disappeared and `cmux sidebar validate` still reported `OK`.
+**Evidence:** bisected against the rendered accessibility tree while holding a fixed workspace description. Replacing the ternary with two plain `let` bindings, changing nothing else, restored all rows. The same shape is already documented for arithmetic in a bare modifier argument, so the rule generalises: **the interpreter evaluates simple bindings, not compound expressions containing calls.**
+**Shipped:** every call in `liveRowsFor` gets its own `let`, and a test asserts that shape so it survives future edits.
+**Closes with:** a compiled sidebar, or an interpreter that reports what it skipped.

@@ -67,6 +67,7 @@ export function reduceRuntimeState(
   currentState: RuntimeState,
   event: CopilotHookEvent,
   workspaceID?: string,
+  publishRawText: boolean = false,
 ): RuntimeState {
   switch (event.type) {
     case "session.start": {
@@ -78,7 +79,10 @@ export function reduceRuntimeState(
         startedAt: event.timestamp,
         source: event.source,
         phase: event.initialPrompt ? "thinking" : "idle",
-        lastPrompt: event.initialPrompt,
+        // The PRESENCE of an initial prompt decides the phase; the TEXT is
+        // only retained behind the opt-in. Without it the progress label falls
+        // back to "thinking", which is what the default must publish (#52).
+        lastPrompt: publishRawText ? event.initialPrompt : undefined,
         toolInvocations: 0,
         completedTools: 0,
         lastToolName: undefined,
@@ -104,7 +108,7 @@ export function reduceRuntimeState(
         updatedAt: event.timestamp,
         startedAt: currentState.startedAt ?? event.timestamp,
         phase: "thinking",
-        lastPrompt: event.prompt,
+        lastPrompt: publishRawText ? event.prompt : undefined,
         lastSessionEndReason: undefined,
         lastError: undefined,
         attention: undefined,

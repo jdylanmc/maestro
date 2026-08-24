@@ -1,13 +1,24 @@
 // Maestro - what your agents are actually doing.
 //
 // The subagent tree arrives through the workspace description as ONE line,
-// rows separated by a literal delimiter, each row three space-separated parts:
+// rows separated by a literal delimiter. A SUBAGENT row is five
+// space-separated parts:
 //
-//     0 > folk-lyricist¦1 v research-scan¦0 x lint-fixer
-//     ^ ^ ^
-//     | | name
+//     0 > gpt-5.6-luna bash folk-lyricist¦1 v - - research-scan
+//     ^ ^ ^            ^    ^
+//     | | |            |    name (greedy: everything after field 3)
+//     | | |            current activity, or "-"
+//     | | model, or "-"
 //     | status: > running, v done, x failed
 //     depth
+//
+// The two metadata fields sit BEFORE the name because the name is the only
+// field allowed to contain spaces, so it has to be last and greedy. Both
+// metadata fields are guaranteed space-free; "-" means unknown.
+//
+// OWNER rows ("@ o <surface-id>") and ATTENTION rows ("! <kind> <label>") keep
+// the older three-field shape. `nameOf` reads those; `agentNameOf` reads a
+// subagent row. Do not merge the two.
 //
 // NEVER REINTRODUCE NEWLINES. The description carries them faithfully - 23
 // lines and 432 characters measured, stored intact - but this interpreter has
@@ -38,9 +49,43 @@ func part(_ row: String, _ i: Int) -> String {
     return p.count > i ? p[i] : ""
 }
 
+/** The name on an OWNER or ATTENTION row - three fields, name last. */
 func nameOf(_ row: String) -> String {
     return row.split(separator: " ").map { String($0) }.dropFirst(2)
         .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
+}
+
+/** The name on a SUBAGENT row - five fields, name last and greedy.
+ *
+ *  See encodeTree in src/tree.ts: fields 2 and 3 are the model and the current
+ *  activity, both space-free, both "-" when unknown. */
+func agentNameOf(_ row: String) -> String {
+    return row.split(separator: " ").map { String($0) }.dropFirst(4)
+        .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
+}
+
+/** The model a subagent is running, or "" when the plugin did not publish one.
+ *  Placeholder rows never carry one: the spawning tool call does not name a
+ *  model, only the subagent.started event does. */
+func modelOf(_ row: String) -> String {
+    let m = part(row, 2)
+    return m == "-" ? "" : m
+}
+
+/** The tool a subagent currently has open, or "" when it has none.
+ *
+ *  This is the tool NAME only. Its arguments are never published - see the
+ *  privacy boundary in requirements.md. */
+func activityOf(_ row: String) -> String {
+    let a = part(row, 3)
+    return a == "-" ? "" : a
+}
+
+/** A model name short enough to sit on a row without crowding the name.
+ *  Vendor prefixes carry no information once the family is visible. */
+func shortModel(_ m: String) -> String {
+    let parts = m.split(separator: "/").map { String($0) }
+    return parts.count > 0 ? parts[parts.count - 1] : m
 }
 
 func rowsOf(_ d: String) -> [String] {
@@ -56,16 +101,77 @@ func rowsOf(_ d: String) -> [String] {
  *
  *  Attention rows (depth token "!") are NOT subagents and are excluded; they
  *  are rendered on the workspace row instead. Without this they would draw as
- *  tree rows with a "p" glyph. */
+ *  tree rows with a "p" glyph.
+ *
+ *  This is the WORKSPACE-wide set. A tab renders `liveRowsFor` instead, which
+ *  is scoped to the Session that published the rows. */
 func liveRows(_ d: String) -> [String] {
     return rowsOf(d).filter { part($0, 0) != "!" && part($0, 0) != "@" }
 }
 
-/** The surface id that owns this workspace's subagent tree, or "" when the
- *  plugin did not publish one. See encodeOwner in src/tree.ts. */
+/** The surface id that owns this workspace's FIRST subagent block, or "" when
+ *  the plugin did not publish one. Used only for a workspace-level "focus the
+ *  agent" action, where any owning surface is a reasonable target. To ask
+ *  whether a specific surface owns a block, use `ownsSurface`. */
 func ownerOf(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "@" }
     return hits.count > 0 ? part(hits[0], 2) : ""
+}
+
+/** Whether `id` published a block in this description.
+ *
+ *  The description carries ONE block per publishing Session, each opened by its
+ *  own owner row (see mergeOwnedRows in src/tree.ts). Comparing against only
+ *  the first owner row - which is what this did until #54 was measured - left
+ *  every Session after the first rendering as a plain terminal forever, because
+ *  its own owner row was never the one examined. */
+func ownsSurface(_ d: String, _ id: String) -> Bool {
+    return rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }.count > 0
+}
+
+/** The index of `id`'s owner row, or -1. */
+func ownerIndex(_ rows: [String], _ id: String) -> Int {
+    for i in 0..<rows.count {
+        if part(rows[i], 0) == "@" && part(rows[i], 2) == id {
+            return i
+        }
+    }
+    return -1
+}
+
+/** The index one past the last row of the block starting at `from`.
+ *
+ *  `from` is the first row AFTER an owner row, not the owner row itself, so
+ *  this can be called with the same value used to drop the prefix. */
+func blockEnd(_ rows: [String], _ from: Int) -> Int {
+    for i in from..<rows.count {
+        if part(rows[i], 0) == "@" {
+            return i
+        }
+    }
+    return rows.count
+}
+
+/** Subagent rows belonging to ONE surface's block.
+ *
+ *  `liveRows` returns every row in the workspace, which is right for
+ *  workspace-level signals like "is anything running" and wrong for a tab: a
+ *  co-resident Session's subagents would render under this Session's tab.
+ *
+ *  A surface with no block of its own yields NO rows, because `ownerIndex`
+ *  returns -1, `start` becomes 0, and the first row is then an owner row that
+ *  bounds the slice to nothing.
+ *
+ *  Measured interpreter constraint, bisected against the rendered
+ *  accessibility tree: a function call inside a TERNARY renders nothing at all.
+ *  `let end = s < 0 ? 0 : blockEnd(rows, s)` silently produced an empty tree
+ *  while `cmux sidebar validate` reported OK. Each call gets its own `let`. */
+func liveRowsFor(_ d: String, _ id: String) -> [String] {
+    let rows = rowsOf(d)
+    let start = ownerIndex(rows, id) + 1
+    let end = blockEnd(rows, start)
+    return Array(rows.prefix(end).dropFirst(start))
+        .filter { part($0, 0) != "!" && part($0, 0) != "@" }
 }
 
 /** The description with one row removed, for click-to-dismiss.
@@ -458,11 +564,12 @@ VStack(alignment: .leading, spacing: 0) {
                                 // was rejected as heuristic identity, the same
                                 // mistake as #33.
                                 //
-                                // Known limit: the workspace description carries ONE
-                                // owner, so with two Copilot Sessions in a single
-                                // workspace only the most recent publisher is marked.
+                                // Every Session in the workspace publishes its
+                                // own owner row, so this asks whether THIS
+                                // surface owns a block rather than whether it
+                                // happens to be the first one listed (#54).
                                 if let d = w.description {
-                                    if ownerOf(d) == t.id {
+                                    if ownsSurface(d, t.id) {
                                         if anyRunning(d) {
                                             ZStack {
                                                 Capsule().fill(.accentColor).frame(width: 4, height: 15)
@@ -607,7 +714,7 @@ VStack(alignment: .leading, spacing: 0) {
                             // inside this tab only when the plugin published
                             // this surface as the owner.
                             if let d = w.description {
-                                if ownerOf(d) == t.id {
+                                if ownsSurface(d, t.id) {
                                     // Only a FINISHED agent is dismissible, and
                                     // only it carries the dismissing tap. The
                                     // backend refuses to hide running or failed
@@ -617,7 +724,7 @@ VStack(alignment: .leading, spacing: 0) {
                                     // sidebar lying about state it does not own.
                                     // Live rows take the same tap as their tab:
                                     // focus the surface that is doing the work.
-                                    let rows = liveRows(d)
+                                    let rows = liveRowsFor(d, t.id)
                                     let visibleRows = Array(rows.prefix(10).enumerated())
                                     ForEach(visibleRows, id: \.offset) { i, row in
                                         let depth = depthOf(row)
@@ -629,7 +736,9 @@ VStack(alignment: .leading, spacing: 0) {
                                         let keep5 = hasSiblingAfter(rows, i, 5)
                                         let rowKeepsGoing = hasSiblingAfter(rows, i, depth)
                                         let status = part(row, 1)
-                                        let title = nameOf(row)
+                                        let title = agentNameOf(row)
+                                        let model = shortModel(modelOf(row))
+                                        let doing = activityOf(row)
                                         if status == "v" {
                                             HStack(spacing: 6) {
                                                 Spacer().frame(width: 30)
@@ -661,6 +770,17 @@ VStack(alignment: .leading, spacing: 0) {
                                                     .foregroundColor(.secondary)
                                                     .lineLimit(1).truncationMode(.tail)
                                                 Spacer(minLength: 0)
+                                                // A finished row keeps its model
+                                                // badge: which model did that
+                                                // work is the question asked
+                                                // after the fact, not during.
+                                                if model != "" {
+                                                    Text(model)
+                                                        .font(.system(size: 9))
+                                                        .foregroundColor(.secondary)
+                                                        .opacity(0.6)
+                                                        .lineLimit(1).truncationMode(.tail)
+                                                }
                                             }
                                             .padding(4)
                                             .help("Click to dismiss")
@@ -707,7 +827,25 @@ VStack(alignment: .leading, spacing: 0) {
                                                     .font(.system(size: 12))
                                                     .foregroundColor(.primary)
                                                     .lineLimit(1).truncationMode(.tail)
+                                                // What it is doing right now -
+                                                // the open tool call's NAME.
+                                                // Absent activity renders
+                                                // nothing at all, so a row with
+                                                // none looks exactly as before.
+                                                if doing != "" {
+                                                    Text(doing)
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(.secondary)
+                                                        .lineLimit(1).truncationMode(.tail)
+                                                }
                                                 Spacer(minLength: 0)
+                                                if model != "" {
+                                                    Text(model)
+                                                        .font(.system(size: 9))
+                                                        .foregroundColor(.secondary)
+                                                        .opacity(0.75)
+                                                        .lineLimit(1).truncationMode(.tail)
+                                                }
                                             }
                                             .padding(4)
                                             .help(title)

@@ -44,16 +44,42 @@ observability plugin and [`CONTEXT.md`](../../../../CONTEXT.md) retired `Fleet`.
 - Read the Session's context percentage, model, and effort from the runtime's
   own status line via `cmux read-screen`. Never synthesise a percentage from
   hardcoded context-window sizes.
-- **Unimplemented privacy requirement:** do not publish secrets, prompts, tool
-  arguments, transcript content, or machine-specific paths. The current runtime
-  violates this boundary: it derives a tool summary from the argument
-  `description`, or from the basename of the argument `path`, and publishes that
-  summary in cmux status/progress and logs, all enabled by default. It also
-  publishes a summarized prompt in thinking progress and logs by default, and
-  may append summarized tool-result text to a log entry. A direct `path`
-  argument is reduced to its basename, but arbitrary `description` and result
-  text receive no path or secret scrubbing. Full command text and transcript
-  content are not published by these paths.
+- **Per-subagent model and activity (#41, #60).** A subagent row carries the
+  `model` from its `subagent.started` event and, while running, the tool name of
+  its most recent `tool.execution_start` with no matching
+  `tool.execution_complete`. Copilot's own status line is rendered in its
+  terminal and is NOT recorded in the event log, so the open tool call is the
+  only honest source for "what is it doing now". A finished subagent reports no
+  activity whatever its log left open. There is still no context percentage:
+  no event carries window occupancy.
+- **Wire row format v2.** A subagent row is `<depth> <glyph> <model> <activity>
+  <name>`; owner and attention rows keep their three-field shape. New fields go
+  BEFORE the name because the name is the only field permitted to contain
+  spaces and is therefore greedy-last. Absent fields use a `-` sentinel, never
+  an empty field, which would collapse under the sidebar's space split.
+- **Privacy boundary, DECIDED (#52):** publish only identifiers the runtime
+  names itself, never free text a person or a model wrote. Concretely:
+  - **Published:** tool names, subagent display names, the spawning call's
+    `name` and `agent_type` identifier fields, the subagent's `model`, the tool
+    name of its currently open call, counts, statuses, phases, the notification
+    hook's own `title`, and the project directory's basename.
+  - **Never published by default:** operator prompt text in any form including a
+    summary, tool-argument text such as `description`, `query`, or `command`,
+    tool-result text, full command lines, and absolute paths.
+  - The line is drawn between **identifier fields and free-text fields**, not
+    between "arguments" and "not arguments". Reading #52's first option
+    literally - publish nothing derived from arguments - would empty the tree,
+    because a subagent's display name IS `task`'s `name` argument. A short label
+    the caller chose as a name is not the disclosure risk; arbitrary prose is.
+  - Enforced by `publishRawText`, default **false**, settable through
+    `~/.config/maestro/config.json` or `COPILOT_CMUX_PUBLISH_RAW_TEXT`. Turning
+    it on restores the older labels and is a deliberate opt-in.
+  - Redaction happens at PARSE time, not at render time, so prompt text never
+    reaches the runtime state file either.
+  - **Explicitly out of scope:** error messages are still published. They are
+    runtime-authored diagnostics rather than one of the named categories, and
+    an unreadable error is worse than a slightly leaky one. Revisit if a
+    measured error message is found to carry a secret.
 
 ### cmux presentation
 
