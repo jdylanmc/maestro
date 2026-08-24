@@ -180,13 +180,14 @@ Measured, each after costing real debugging time:
 **Shipped:** a watcher process re-derives attention on a timer and publishes for the blocked Session. It is gated on the log's mtime so an idle Session costs one `stat` per tick, publishes only its own block, holds a single-instance lock, and exits once every Session has gone quiet. Verified live: a staged Session that fired no hook at all had its badge raised within one tick, and cleared within one tick of the prompt being answered.
 **Closes with:** shipped for the observable cases. A hook that fires when a Session BLOCKS would remove the need to poll at all - the watcher reconstructs, on a clock, a state the runtime already knows.
 
-### G-25 - The interpreter cannot scope rows to one publisher
+### G-25 - The interpreter cannot scope rows to one publisher — SOLVED
 
 **Wanted:** each Copilot Session's subagent rows rendered under its own tab.
-**Blocked by:** extracting one publisher's contiguous rows needs an index span, and every construct tried to build it renders NOTHING - silently. `Array(0..<rows.count).filter { ... }.map { rows[$0] }` fails, and so does `var out: [String] = []` with `out.append(rows[j])` in a `for` loop. Single-expression filters over the whole description work, which is why the unscoped version renders.
-**Evidence:** verified against the live accessibility tree, and confirmed by reverting - the old unscoped code renders rows, the scoped code renders none, on the same description. `cmux sidebar validate` reported OK throughout.
-**Shipped:** the publish side is block-aware (see mergeOwnedRows), and `isOwner` correctly marks EVERY Session's tab - proven live with a second owner block. Only row scoping is missing, so co-resident Sessions currently pool their rows under the first tab instead of losing them.
-**Closes with:** a compiled sidebar reading a real payload, or per-surface channels. See issue #49.
+**Was blocked by:** extracting one publisher's contiguous rows needs an index span, and every construct previously tried to build one rendered NOTHING, silently. `Array(0..<rows.count).filter { ... }.map { rows[$0] }` failed, and so did `var out: [String] = []` with `out.append(rows[j])` in a `for` loop.
+**Resolved:** the blocker was the *index-array* approach, not scoping itself. **Slicing works.** `Array(rows.prefix(end).dropFirst(start)).filter { ... }` renders correctly, with the two bounds found by multi-statement `-> Int` functions - which were already known to work, and are what `hasSiblingAfter` uses. So none of the three suspects on issue #58 was the real cause; the answer is to slice a range out of the array rather than to build a range of indices.
+**Two constraints found on the way, both now separate gaps:** the bounds must be plain `let` bindings, not a ternary containing the call (G-26), and `liveRowsFor` must avoid an early `return []`.
+**Shipped:** `ownsSurface` matches any owner row and `liveRowsFor` returns only the rows inside that surface's block. Verified live on a workspace holding two owner blocks. This also closes the remaining half of #49 and is what actually fixed the symptom reported as #54.
+**Residual:** none. This no longer needs a compiled sidebar.
 
 ---
 
@@ -258,7 +259,7 @@ Measured, each after costing real debugging time:
 **Shipped:** `ownsSurface` matches any owner row, and `liveRowsFor` returns only the rows inside that surface's own block.
 **Closes with:** G-17 for the residual sub-second window, which would remove the need to publish identity at all.
 
-### G-23 - A ternary containing a function call is unreliable in the sidebar interpreter
+### G-26 - A ternary containing a function call is unreliable in the sidebar interpreter
 
 **Wanted:** `let end = s < 0 ? 0 : blockEnd(rows, s)` - a guard and a lookup in one expression.
 **Blocked by:** the interpreter skips it silently. The whole subagent tree disappeared and `cmux sidebar validate` still reported `OK`.
@@ -268,7 +269,7 @@ Measured, each after costing real debugging time:
 **Shipped:** plain bindings in `liveRowsFor` and in the permission badge, with tests asserting that shape so it is not silently undone.
 **Closes with:** a compiled sidebar, or an interpreter that reports what it skipped.
 
-### G-24 - Edge-specific padding adds inset instead of restricting it
+### G-27 - Edge-specific padding adds inset instead of restricting it
 
 **Wanted:** to reclaim the left gutter on workspace rows while keeping their vertical rhythm - the ordinary SwiftUI `.padding(.vertical, 4)`.
 **Blocked by:** on these nested containers the interpreter treats an edge-specific padding as *more* padding, not narrower padding.
@@ -277,7 +278,7 @@ Measured, each after costing real debugging time:
 **Residual:** the remaining ~28px is the cmux sidebar frame's own inset - the "Maestro" header sits at x=28 too - and is not reachable from a custom sidebar.
 **Closes with:** upstream control over the sidebar content inset, or a compiled sidebar.
 
-### G-25 - A `.fixedSize()` Text makes its whole row incompressible
+### G-28 - A `.fixedSize()` Text makes its whole row incompressible
 
 **Wanted:** short metadata - a git branch, a directory name, a model - to sit at its natural width beside a truncating title.
 **Blocked by:** `.fixedSize()` overrides `.lineLimit(1).truncationMode(.tail)` entirely. The row then refuses to shrink, the list sizes to the widest row, and the sidebar scrolls horizontally - shifting **every** row off its left edge, not just the offending one.
