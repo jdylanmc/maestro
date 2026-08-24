@@ -289,8 +289,6 @@ test("the workspace row menu uses only verified workspace actions", () => {
     "mark_read",
     "mark_unread",
     "clear_name",
-    "set_color",
-    "clear_color",
     "close_others",
     "close_above",
     "close_below",
@@ -338,6 +336,20 @@ test("dismissal is offered only where the plugin will honour it", () => {
   assert.match(sidebar, /func withoutFinished\(_ d: String, _ id: String\) -> String/)
   assert.match(sidebar, /func hasFinished\(_ d: String, _ id: String\) -> Bool/)
   assert.match(sidebar, /if hasFinished\(d, t\.id\) \{/)
+})
+
+test("no Menu is nested inside a contextMenu", () => {
+  // Measured by bisection against the rendered accessibility tree: a
+  // `Menu(...)` inside a `.contextMenu` makes the ENTIRE context menu fail to
+  // open - right-clicking produced no AXMenu at all, while `cmux sidebar
+  // validate` reported OK. Removing it and changing nothing else restored all
+  // 16 items. The authoring guide lists both constructs as supported
+  // individually. See G-31.
+  const menus = sidebar.split(".contextMenu {")
+  for (const block of menus.slice(1)) {
+    const body = block.slice(0, block.indexOf("\n                        }"))
+    assert.ok(!/\bMenu\(/.test(body), "a nested Menu silently kills the whole context menu")
+  }
 })
 
 test("the sidebar claims no action cmux does not expose", () => {

@@ -707,18 +707,19 @@ VStack(alignment: .leading, spacing: 0) {
                         if w.title != "" {
                             Button("Reset Name") { cmux("workspace.action", action: "clear_name", workspace_id: w.id) }
                         }
-                        // Colour is only offered where it can be UNDONE from
-                        // the same menu; a set-only control in a sidebar with
-                        // no other surface for it would be a trap.
-                        Menu("Color") {
-                            Button("Red") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "red") }
-                            Button("Orange") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "orange") }
-                            Button("Green") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "green") }
-                            Button("Blue") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "blue") }
-                            Button("Purple") { cmux("workspace.action", action: "set_color", workspace_id: w.id, color: "purple") }
-                            Divider()
-                            Button("Clear Color") { cmux("workspace.action", action: "clear_color", workspace_id: w.id) }
-                        }
+                        // No colour submenu. `workspace.action set-color` works
+                        // - measured, "orange" resolves to #A04000 - but a
+                        // `Menu(...)` nested inside a `.contextMenu` makes the
+                        // ENTIRE context menu fail to open. Measured by
+                        // bisection against the rendered accessibility tree:
+                        // with the submenu present, right-clicking a workspace
+                        // row produced no AXMenu at all; removing it and
+                        // changing nothing else restored all 16 items. The
+                        // authoring guide lists both constructs as supported
+                        // individually. See G-31.
+                        //
+                        // Flattening six colour items into an already long menu
+                        // was the alternative and was judged not worth it.
                         Divider()
                         // Remote verbs appear only on a remote workspace.
                         // Measured: `workspace.remote.reconnect` on a local

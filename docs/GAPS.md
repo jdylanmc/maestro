@@ -311,3 +311,12 @@ Measured, each after costing real debugging time:
 **Also measured, and useful:** action names are accepted in either spelling. `cmux docs api` documents `move-top` and `mark-read`; this sidebar has always sent `move_top` and `mark_read`; the socket normalises both. The pre-existing menu was never inert.
 **Shipped:** menus built only from verbs confirmed against the socket, with the ones that do not apply HIDDEN rather than inert - `reload`/`duplicate` gated on a surface having no directory, because both return `invalid_state: only available for browser tabs`, and the remote verbs gated on the optional `remote` binding, because `workspace.remote.reconnect` returns `invalid_state: Remote workspace is not configured` on a local one. Tests assert each verb string so a typo cannot ship silently.
 **Closes with:** a sidebar action channel that can return a result, or any prompt primitive at all. Even a plain confirm would make rename reachable.
+
+### G-31 - A `Menu` nested inside a `.contextMenu` silently kills the whole menu
+
+**Wanted:** a colour submenu on the workspace row, so six colour actions cost one item instead of six.
+**Blocked by:** the interpreter renders NOTHING for the containing context menu. Not the submenu - the entire menu.
+**Evidence:** bisected against the rendered accessibility tree. With `Menu("Color") { ... }` present, right-clicking a workspace row produced no `AXMenu` node at all and `cmux sidebar validate` reported `OK`. Removing that one block and changing nothing else produced an `AXMenu` with all 16 items, including the `if let rem = w.remote` and `if w.title != ""` gates that were inside the same builder.
+**Worth stating precisely:** the authoring guide lists BOTH constructs as supported - `Menu("Title") { <items> }` under Content, and `.contextMenu` with arbitrary nested views under Modifiers. Each works alone. The combination does not, and `if`/`if let` inside a `.contextMenu` is fine, so this is specific to `Menu`.
+**Shipped:** no nested `Menu` anywhere. Colour is dropped rather than flattened into six more items on an already long menu. A test walks every `.contextMenu` body and fails on a nested `Menu`, because this failure is invisible in review, invisible to validation, and invisible until someone right-clicks.
+**Closes with:** interpreter support for the combination, or any diagnostic at all for a construct it skips - see G-26, which is the same disease.
