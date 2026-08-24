@@ -362,6 +362,14 @@ list. Every window the ticket asked for is still available.
 Retention is enforced in the plugin, not the sidebar, which has no clock to
 compare timestamps against and no state with which to remember a dismissal.
 
+**The setting is live.** Hooks reload the config on every invocation, and the
+watcher re-reads it every tick, so editing `config.json` takes effect within a
+tick or two with nothing to restart. A change also invalidates the watcher's
+memos — without that it would appear not to work, because the watcher skips
+recomputing a Session whose log has not changed, and a tree computed under
+`never` scheduled no expiry to wake for. Measured: three stale rows survived
+every subsequent tick until the invalidation was added.
+
 ## What each agent is, not just what it is doing
 
 Every row says which **model** is driving it. Subagent rows have carried one

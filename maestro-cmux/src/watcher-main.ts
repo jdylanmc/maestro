@@ -86,6 +86,8 @@ async function main(): Promise<void> {
     })
   }
 
+  let idleMs = config.watcherIdleMs
+  let intervalMs = config.watcherIntervalMs
   const memos = new Map<string, WatchMemo>()
   // One `workspace list` per tick at most, shared by every target in it.
   const deps = {
@@ -94,6 +96,12 @@ async function main(): Promise<void> {
     // existed. See WatchDeps.startedAt - without this floor an upgrade badges
     // every long-running Session at once.
     startedAt: Date.now(),
+    // Re-read every tick rather than captured at start-up. A hook reloads the
+    // config on every invocation, so an operator who edits
+    // ~/.config/maestro/config.json sees the change immediately there - but the
+    // watcher is the publisher for a Session that is sitting idle, which is
+    // exactly when a retention change is most visible. Captured once, the
+    // setting would appear not to work until the watcher happened to restart.
     retainFinishedMs: config.retainFinishedMs,
     readDescription: (workspaceID: string) => readDescription(config.cmuxBin, workspaceID),
     setDescription: async (workspaceID: string, description: string) => {
@@ -110,8 +118,27 @@ async function main(): Promise<void> {
   }
 
   for (;;) {
+    // A malformed config must not take the watcher down with it: this process
+    // is the only thing still publishing while a Session is blocked. Keep the
+    // last good values and carry on.
+    try {
+      const current = loadConfig()
+      // A retention change has to invalidate the memos, or it does not appear
+      // to work. `needsRecompute` gates on the log's mtime, so an IDLE Session
+      // is not recomputed at all - and a memo written under `never` scheduled
+      // no expiry to wake for, so shortening the window would leave its rows on
+      // screen indefinitely. Measured: after switching back from `never`, three
+      // stale skill rows survived every subsequent tick.
+      if (current.retainFinishedMs !== deps.retainFinishedMs) memos.clear()
+      deps.retainFinishedMs = current.retainFinishedMs
+      idleMs = current.watcherIdleMs
+      intervalMs = current.watcherIntervalMs
+    } catch {
+      /* keep the previous configuration */
+    }
+
     const targets = await readWatchTargets()
-    if (!shouldKeepRunning(targets, Date.now(), config.watcherIdleMs)) break
+    if (!shouldKeepRunning(targets, Date.now(), idleMs)) break
 
     // Drop memos for Sessions that no longer have a state file, so the map
     // cannot grow without bound over a long-lived watcher.
@@ -119,7 +146,7 @@ async function main(): Promise<void> {
     for (const key of memos.keys()) if (!known.has(key)) memos.delete(key)
 
     await watchTick(targets, memos, deps)
-    await new Promise((resolve) => setTimeout(resolve, config.watcherIntervalMs))
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
 
   release()

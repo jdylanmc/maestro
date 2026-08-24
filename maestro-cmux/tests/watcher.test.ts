@@ -519,3 +519,48 @@ test("a genuinely dead pipeline still badges after the observer starts", async (
 
   assert.equal(writes[0], `@ o ${SURFACE} 3 - -`)
 })
+
+// --- live configuration (#56) ------------------------------------------------
+
+test("a changed retention window applies on the next tick", async (t: TestContext) => {
+  // The setting is only useful if it is picked up without restarting anything.
+  // Hooks reload config on every invocation; the watcher is the publisher for a
+  // Session that is sitting idle, which is exactly when a retention change is
+  // most visible.
+  const done = new Date(Date.now() - 60_000).toISOString()
+  const transcriptPath = log(t, [
+    event(
+      "tool.execution_start",
+      { toolCallId: "c1", toolName: "task" },
+      "2026-08-23T18:00:00.000Z",
+    ),
+    event(
+      "subagent.started",
+      { toolCallId: "c1", agentDisplayName: "auditor", agentName: "explore" },
+      "2026-08-23T18:00:01.000Z",
+      "sub-1",
+    ),
+    event("subagent.completed", { totalToolCalls: 2 }, done, "sub-1"),
+  ])
+
+  const writes: string[] = []
+  const deps = {
+    now: () => Date.now(),
+    startedAt: 0,
+    retainFinishedMs: Number.POSITIVE_INFINITY,
+    readDescription: async () => "",
+    setDescription: async (_w: string, description: string) => {
+      writes.push(description)
+    },
+  }
+
+  await watchTick([target({ transcriptPath })], new Map(), deps)
+  assert.match(writes[0] ?? "", /auditor/, "never must retain work finished a minute ago")
+
+  // A fresh memo map stands in for the invalidation watcher-main performs when
+  // the value changes: without it the mtime gate would skip an idle Session and
+  // the change would appear not to work at all.
+  deps.retainFinishedMs = 15_000
+  await watchTick([target({ transcriptPath })], new Map(), deps)
+  assert.doesNotMatch(writes[1] ?? "", /auditor/, "15s must retire it on the next tick")
+})
