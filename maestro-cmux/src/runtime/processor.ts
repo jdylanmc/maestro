@@ -7,10 +7,12 @@ import { loadConfig } from "../config.js"
 import { createLogger } from "../logger.js"
 import { summarizeText } from "../text.js"
 import {
+  ATTENTION_MARK,
   buildTree,
   detectDismissed,
   findSessionDir,
   healthOf,
+  OWNER_MARK,
   mergeOwnedRows,
   ownedRows,
   pruneOwnedBlocks,
@@ -137,7 +139,24 @@ export function treeDescriptionForEvent(
  */
 export function wouldEraseWithIgnorance(tree: TreeSummary | null, publishedBlock: string): boolean {
   if (!tree || tree.resolved) return false
-  return publishedBlock.split(ROW_SEP).some((row) => /^[0-9] /.test(row))
+  return publishedBlock.split(ROW_SEP).some((row) => {
+    // A subagent row - the original case.
+    if (/^[0-9] /.test(row)) return true
+    // An attention row. Erasing this is the worst of the three: it drops a
+    // "needs you" badge while the Session is still blocked.
+    if (row.startsWith(`${ATTENTION_MARK} `)) return true
+    // An owner row that carries FACTS. A bare `@ o <id>` and a full
+    // `@ o <id> - - claude-opus-5 bash` are the same row to a reader that only
+    // takes field 2, so replacing the second with the first silently drops the
+    // model, the worktree, the health signal and the current tool call.
+    //
+    // Measured live: a working Session's row alternated every few seconds
+    // between the full form and the bare one, so the sidebar showed it idle
+    // half the time. The original guard did not catch it because that Session's
+    // subagents had already aged out, leaving nothing matching `^[0-9] `.
+    if (row.startsWith(`${OWNER_MARK} `) && row.split(" ").length > 3) return true
+    return false
+  })
 }
 
 /**

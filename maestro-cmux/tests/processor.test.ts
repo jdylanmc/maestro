@@ -76,11 +76,37 @@ test("a failed computation is not treated as ignorance to guard against", () => 
   assert.equal(wouldEraseWithIgnorance(null, "@ o SURFACE¦0 > gpt-5.5 - smaug-155"), false)
 })
 
-test("an attention row alone is not a row worth protecting", () => {
-  // Only subagent rows carry work that ignorance could destroy. An owner row
-  // and an attention row are both re-derivable on the next publish.
+test("an attention row IS worth protecting", () => {
+  // This test previously asserted the opposite, on the reasoning that an owner
+  // row and an attention row are "both re-derivable on the next publish".
+  // Measured live, that premise is false: attention is derived FROM THE LOG, so
+  // a publisher that could not read the log cannot re-derive it either. It just
+  // erases it, and the next unresolved publisher does the same.
+  //
+  // Observed on a working Session for 30 seconds: its published row alternated
+  // every few seconds between the full form with a permission badge and a bare
+  // owner row with neither, so the sidebar showed it idle half the time. The
+  // Session's own stored state said `working` throughout.
   assert.equal(
     wouldEraseWithIgnorance(summary({ resolved: false }), "@ o SURFACE¦! p shell Approve bash"),
-    false,
+    true,
   )
+})
+
+test("an owner row that carries facts is worth protecting", () => {
+  // A bare `@ o <id>` and a full `@ o <id> - - claude-opus-5 bash` are the same
+  // row to a reader that takes field 2 by index, so replacing the second with
+  // the first silently drops the model, worktree, health signal and current
+  // tool call - which is exactly what "looks idle while working" was.
+  assert.equal(
+    wouldEraseWithIgnorance(summary({ resolved: false }), "@ o SURFACE - - claude-opus-5 bash"),
+    true,
+  )
+})
+
+test("a bare owner row alone still has nothing to lose", () => {
+  // The rule stays "only a publisher that read a log may clear rows", not
+  // "an unresolved publisher may never write". A Session with no tree yet must
+  // still be able to identify itself as a Copilot surface (#54).
+  assert.equal(wouldEraseWithIgnorance(summary({ resolved: false }), "@ o SURFACE"), false)
 })
