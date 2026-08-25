@@ -4,6 +4,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 const sidebar = readFileSync(join(import.meta.dirname, "..", "sidebars", "maestro.swift"), "utf8")
+const treeSource = readFileSync(join(import.meta.dirname, "..", "src", "tree.ts"), "utf8")
 
 test("sidebar renders one settings gear in a top toolbar", () => {
   assert.match(sidebar, /VStack\(alignment: \.leading, spacing: 0\)/)
@@ -25,7 +26,10 @@ test("sidebar renders one settings gear in a top toolbar", () => {
 })
 
 test("sidebar uses a stateful workspace stage icon", () => {
-  assert.match(sidebar, /if let d = w\.description \{\s+if anyRunningInWorkspace\(d\) \{\s+ZStack \{/)
+  assert.match(
+    sidebar,
+    /if let d = w\.description \{\s+if anyRunningInWorkspace\(d\) \{\s+ZStack \{/,
+  )
   assert.match(
     sidebar,
     /RoundedRectangle\(cornerRadius: 3\)\.fill\(w\.selected \? \.accentColor : \.green\)/,
@@ -47,7 +51,11 @@ test("sidebar derives and renders explicit subagent tree connectors", () => {
     sidebar,
     /func hasSiblingAfter\(_ rows: \[String\], _ i: Int, _ depth: Int\) -> Bool/,
   )
-  assert.match(sidebar, /for j in \(i \+ 1\)\.\.<rows\.count/)
+  // Loop-free: an early return from inside a `for` never fires here, so this
+  // function used to always answer false and every connector drew a final
+  // elbow. The sibling question is answered as a string question instead.
+  assert.match(sidebar, /let joined = "\|" \+ marks\.reduce\(""\)/)
+  assert.match(sidebar, /return window\.contains\("="\)/)
   assert.match(sidebar, /func treeContinueSlot\(\) -> some View/)
   assert.match(sidebar, /func treeBranchSlot\(_ hasNext: Bool\) -> some View/)
   assert.match(
@@ -95,7 +103,10 @@ test("sidebar uses dots for subagent row status while preserving behavior", () =
 // same signal at zero animation cost and reuses the running-subagent colour,
 // so one colour means one thing across the whole sidebar. Idle stays unlit.
 test("working mascot eyes glow green instead of blinking", () => {
-  assert.match(sidebar, /func eyesOpenFor\(_ d: String, _ id: String\) -> Bool \{\s+return workingFor\(d, id\)\s+\}/)
+  assert.match(
+    sidebar,
+    /func eyesOpenFor\(_ d: String, _ id: String\) -> Bool \{\s+return workingFor\(d, id\)\s+\}/,
+  )
   assert.doesNotMatch(sidebar, /eyesOpen\(d, clock\.epoch\)/)
 
   const open = sidebar.match(/Capsule\(\)\.fill\(\.green\)\.frame\(width: 2, height: 4\)/g)
@@ -176,12 +187,12 @@ test("a tab claims only the block its own surface published", () => {
   // which shows ports only where they are NOT a Copilot runtime's own.
   assert.equal(sidebar.match(/if ownsSurface\(d, t\.id\)/g)?.length, 3)
   assert.match(sidebar, /func liveRowsFor\(_ d: String, _ id: String\) -> \[String\]/)
-  assert.match(sidebar, /func blockEnd\(_ rows: \[String\], _ from: Int\) -> Int/)
+  assert.match(sidebar, /func blockChunk\(_ d: String, _ id: String\) -> \[String\]/)
   // Measured: a function call inside a ternary renders NOTHING, silently. Each
   // call gets its own `let`, so the block bound survives future edits.
   assert.match(
     sidebar,
-    /let start = ownerIndex\(rows, id\) \+ 1\s+let end = blockEnd\(rows, start\)/,
+    /return blockChunk\(d, id\)\.filter \{ part\(\$0, 0\) != "!" && part\(\$0, 0\) != "@" \}/,
   )
 })
 
@@ -202,7 +213,7 @@ test("the workspace row keeps a small UNIFORM padding, never an edge-specific on
 
 test("the permission badge shows WHY approval is being asked", () => {
   // The runtime publishes a closed vocabulary in field 2 of the attention row.
-  assert.match(sidebar, /func attnDetailInWorkspace\(_ d: String\) -> String/)
+  assert.match(sidebar, /func urgentDetailInWorkspace\(_ d: String\) -> String/)
   assert.match(sidebar, /func permGlyph\(_ k: String\) -> String/)
   for (const kind of ["shell", "write", "read", "url", "mcp", "factory"]) {
     assert.match(sidebar, new RegExp(`if k == "${kind}"`), `${kind} has no glyph`)
@@ -211,7 +222,7 @@ test("the permission badge shows WHY approval is being asked", () => {
   assert.match(sidebar, /return "hand\.raised\.fill"/)
   // Two lets, never Image(systemName: permGlyph(attnDetailInWorkspace(d))): a nested call
   // as a modifier argument is skipped in silence by this interpreter.
-  assert.match(sidebar, /let pk = attnDetailInWorkspace\(d\)\s+let pg = permGlyph\(pk\)/)
+  assert.match(sidebar, /let pk = urgentDetailInWorkspace\(d\)\s+let pg = permGlyph\(pk\)/)
   assert.match(sidebar, /Image\(systemName: pg\)/)
   const code = sidebar
     .split("\n")
@@ -522,4 +533,45 @@ test("a Session is working when it has its own tool call in flight", () => {
   // was judged working only by the ABSENCE of an attention row, so a
   // co-resident Session's attention made it look idle mid-tool.
   assert.match(sidebar, /func workingFor[\s\S]{0,320}sessionActivityOf\(d, id\) != ""/)
+})
+
+test("no helper relies on an early return from inside a for loop", () => {
+  // Measured by rendering the values: an early `return` from inside a `for`
+  // loop NEVER fires in this interpreter. Every call site silently returned its
+  // fallback - `ownerIndex` reported -1 on every row including single-Session
+  // workspaces, and `blockEnd` reported rows.count. `liveRowsFor` was therefore
+  // never scoping anything, so the #54 fix had never actually worked.
+  //
+  // `cmux sidebar validate` reports OK on all of it, and no unit test can catch
+  // it because this file is never executed by one. So the construct is banned
+  // outright and the ban is enforced lexically.
+  const code = sidebar
+    .split("\n")
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join("\n")
+  const loops = code.match(/\n\s*for\s+\w+\s+in\s+/g) ?? []
+  assert.deepEqual(loops, [], "for loops are unreliable here - use filter/prefix/dropFirst")
+})
+
+test("block scoping is built only from constructs proven to work", () => {
+  assert.match(sidebar, /func blockChunk\(_ d: String, _ id: String\) -> \[String\]/)
+  assert.match(sidebar, /d\.split\(separator: "@"\)/)
+  assert.match(sidebar, /\$0\.hasPrefix\(" o " \+ id\)/)
+  // Every surface-scoped reader goes through the one primitive.
+  for (const name of [
+    "liveRowsFor",
+    "attnKindFor",
+    "attnDetailFor",
+    "attnLabelFor",
+    "attnRowFor",
+  ]) {
+    const body = sidebar.slice(sidebar.indexOf(`func ${name}(`))
+    assert.ok(body.slice(0, 400).includes("blockChunk("), `${name} must scope through blockChunk`)
+  }
+})
+
+test("a published name cannot split its own Session's block", () => {
+  // `@` is the marker the sidebar splits on, so a subagent named `deploy@prod`
+  // would cut its Session's block in half. Stripped at the source.
+  assert.match(treeSource, /replace\(\/\[\\n\\r¦@\]\/g, " "\)/)
 })

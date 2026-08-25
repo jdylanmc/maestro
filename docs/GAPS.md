@@ -346,3 +346,19 @@ Measured, each after costing real debugging time:
 **Also measured, and worse:** `var` MUTATION silently produces nothing. A helper building a string with `var out = ""` and `for p in ports { out = out + "\(p)" }` returned the empty string for every input, while a `ForEach` over the same array rendered every element. This is specific to reassignment: `.reduce` builds strings correctly and is used by `nameOf` and `agentNameOf` today. Negation (`!b`) and `.count` also work. Treat every binding as immutable.
 **Shipped:** ports rendered with `ForEach(Array(t.ports.prefix(3)))`, and the feature narrowed by what the measurement showed: on a COPILOT row `t.ports` is the agent runtime's own ephemeral listeners - 60559, 58371, 54083, and nine on one Session - so ports are shown on plain shell rows only, where a port means the dev server the operator started. Verified by starting a real server on 8765 in a temporary surface and reading `:8765` back out of the accessibility tree.
 **Closes with:** validation that resolves binding names, and any diagnostic for a construct the interpreter evaluates to nothing - the same disease as G-26 and G-31.
+
+### G-34 - An early `return` from inside a `for` loop never fires
+
+**The most expensive silent failure found so far, because it made a shipped fix a no-op for months without anyone noticing.**
+
+**Wanted:** to scope a Session's rows to its own block, which is the whole premise of rendering more than one Session in a workspace.
+**Blocked by:** in this interpreter, a `for` loop containing an early `return` always falls through to the function's final `return`. The loop body appears to run; the return simply does not take.
+**Evidence:** measured by rendering the values into the sidebar and reading them back out of the accessibility tree. Every row reported `oi=-1` from `ownerIndex` and `be=<rows.count>` from `blockEnd` - their fallbacks - **including in single-Session workspaces where the answer was trivially 0**. A variant using nested `if`s instead of `&&` reported `-1` too, so the compound condition was not the cause.
+**What it silently broke:**
+- `ownerIndex` and `blockEnd` never worked, so **`liveRowsFor` never scoped anything**. The #54 fix - "a tab claims only the block its own surface published" - has never actually worked. It looked correct only because one Session per workspace is the common case.
+- `hasSiblingAfter` always answered `false`, so every tree connector drew the final elbow and never a tee. Visible in every screenshot ever taken of this sidebar, and never questioned.
+- A test asserted `for j in (i + 1)..<rows.count`, pinning the broken construct in place as though it were the intent.
+**Also measured:** `prefix(while:)` is unsupported - it renders as nothing at all, so an interpolated result is simply empty.
+**Shipped:** loops are banned outright and the ban is enforced lexically by a test, because neither `cmux sidebar validate` nor any unit test can catch this - the file is never executed by one. Block scoping is rebuilt on `blockChunk`, which splits the raw description on the owner marker and selects the chunk by PREFIX rather than by position, using only `split`, `filter`, `hasPrefix` and `dropFirst`. `hasSiblingAfter` maps following rows to one character each and answers a string question instead of an index one. The plugin now strips `@` from published names so a subagent cannot split its own Session's chunk.
+**Closes with:** a compiled sidebar (#65), where a `for` loop is a `for` loop.
+**Standing lesson:** three helpers returned a plausible fallback rather than an error, so every caller kept working and every reviewer kept reading intent instead of behaviour. When a helper cannot be executed by a test, render its VALUE and read it back - do not read its source and assume.

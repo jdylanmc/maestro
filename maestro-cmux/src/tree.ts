@@ -1163,9 +1163,13 @@ export function encodeTree(
   retainMs: number = RETAIN_MS,
   maxDepth: number = MAX_WIRE_DEPTH,
 ): string {
+  // `@` is stripped as well as the row separator. The sidebar scopes a Session's
+  // block by splitting the description on the owner marker `@`, so a subagent
+  // named `deploy@prod` would cut its own Session's block in half. Removing the
+  // character at the source is cheaper than escaping it at every reader.
   const clean = (v: string, n: number) =>
     v
-      .replace(/[\n\r¦]/g, " ")
+      .replace(/[\n\r¦@]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, n)

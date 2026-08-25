@@ -33,6 +33,16 @@
 // COLORS are semantic, never literal, so the pane follows the appearance and
 // accent instead of assuming the theme is still Nord.
 //
+// NO `for` LOOPS. An early `return` from inside a `for` loop NEVER FIRES here -
+// the function falls through to its final return instead. Measured by rendering
+// the values: `ownerIndex` reported -1 and `blockEnd` reported rows.count on
+// EVERY row, including single-Session workspaces where the answer was 0. That
+// silently made `liveRowsFor` scope nothing at all, and made every tree
+// connector draw a final elbow. `prefix(while:)` is unsupported too, and renders
+// as nothing. Use `filter`, `prefix(n)`, `dropFirst(n)`, `reduce`, `contains`
+// and `split` - all proven - and answer positional questions as STRING
+// questions. See G-34. A test bans `for` outright.
+
 // SCOPE. A workspace may host MORE THAN ONE Session, and each publishes its own
 // block into the same description. Two naming families keep that straight:
 //
@@ -235,27 +245,31 @@ func sessionActivityOf(_ d: String, _ id: String) -> String {
     return raw == "-" ? "" : raw
 }
 
-/** The index of `id`'s owner row, or -1. */
-func ownerIndex(_ rows: [String], _ id: String) -> Int {
-    for i in 0..<rows.count {
-        if part(rows[i], 0) == "@" && part(rows[i], 2) == id {
-            return i
-        }
-    }
-    return -1
-}
-
-/** The index one past the last row of the block starting at `from`.
+/** ONE Session's rows, scoped without a loop and without an index.
  *
- *  `from` is the first row AFTER an owner row, not the owner row itself, so
- *  this can be called with the same value used to drop the prefix. */
-func blockEnd(_ rows: [String], _ from: Int) -> Int {
-    for i in from..<rows.count {
-        if part(rows[i], 0) == "@" {
-            return i
-        }
+ *  This replaces `ownerIndex` + `blockEnd`, which BOTH always returned their
+ *  fallback: an early `return` from inside a `for` loop never fires in this
+ *  interpreter. Measured by rendering their values - every row reported
+ *  `oi=-1` and `be=<rows.count>`, in single-Session workspaces too. So
+ *  `liveRowsFor` was never scoping anything, and the issue #54 fix has never
+ *  actually worked; it only looked right because one Session per workspace is
+ *  the common case.
+ *
+ *  Splitting the raw description on the owner marker gives one chunk per
+ *  Session, and the right chunk is selected by PREFIX rather than by position.
+ *  Built only from constructs proven to work here: `split`, `filter`,
+ *  `hasPrefix`, `dropFirst`. Verified against the rendered accessibility tree
+ *  with two Sessions in one workspace.
+ *
+ *  The plugin strips `@` from published names so a subagent cannot split its
+ *  own Session's chunk in half. */
+func blockChunk(_ d: String, _ id: String) -> [String] {
+    let chunks = d.split(separator: "@").map { String($0) }
+    let mine = chunks.filter { $0.hasPrefix(" o " + id) }
+    if mine.count == 0 {
+        return []
     }
-    return rows.count
+    return Array(mine[0].split(separator: "¦").map { String($0) }.dropFirst())
 }
 
 /** Subagent rows belonging to ONE surface's block.
@@ -273,11 +287,7 @@ func blockEnd(_ rows: [String], _ from: Int) -> Int {
  *  `let end = s < 0 ? 0 : blockEnd(rows, s)` silently produced an empty tree
  *  while `cmux sidebar validate` reported OK. Each call gets its own `let`. */
 func liveRowsFor(_ d: String, _ id: String) -> [String] {
-    let rows = rowsOf(d)
-    let start = ownerIndex(rows, id) + 1
-    let end = blockEnd(rows, start)
-    return Array(rows.prefix(end).dropFirst(start))
-        .filter { part($0, 0) != "!" && part($0, 0) != "@" }
+    return blockChunk(d, id).filter { part($0, 0) != "!" && part($0, 0) != "@" }
 }
 
 /** The description with one row removed, for click-to-dismiss.
@@ -364,12 +374,47 @@ func anyRunningInWorkspace(_ d: String) -> Bool {
  *  `...InWorkspace(d)` ones are correct only on the WORKSPACE row, where
  *  aggregating across Sessions is the intent. */
 
+/** The surface whose block carries an attention row, or "" if none does.
+ *
+ *  The workspace row's tap used `ownerOf(d)` - the FIRST owner published - so
+ *  in a workspace with two Sessions it focused whichever happened to be listed
+ *  first rather than the one actually asking. Same class of bug as the mascot
+ *  signals: workspace-wide where surface-scoped was meant. */
+func blockedSurface(_ d: String) -> String {
+    let owners = rowsOf(d).filter { part($0, 0) == "@" }
+    let blocked = owners.filter { attnKindFor(d, part($0, 2)) != "" }
+    return blocked.count > 0 ? part(blocked[0], 2) : ""
+}
+
+/** The attention detail (sub-kind) published by THIS surface. */
+func attnDetailFor(_ d: String, _ id: String) -> String {
+    let hits = blockChunk(d, id).filter { part($0, 0) == "!" }
+    if hits.count == 0 {
+        return ""
+    }
+    let raw = part(hits[0], 2)
+    return raw == "-" ? "" : raw
+}
+
+/** The attention label published by THIS surface. */
+func attnLabelFor(_ d: String, _ id: String) -> String {
+    let hits = blockChunk(d, id).filter { part($0, 0) == "!" }
+    if hits.count == 0 {
+        return ""
+    }
+    return hits[0].split(separator: " ").map { String($0) }.dropFirst(3)
+        .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
+}
+
+/** The raw attention row published by THIS surface, so a tap removes exactly it. */
+func attnRowFor(_ d: String, _ id: String) -> String {
+    let hits = blockChunk(d, id).filter { part($0, 0) == "!" }
+    return hits.count > 0 ? hits[0] : ""
+}
+
 /** Attention published by THIS surface. */
 func attnKindFor(_ d: String, _ id: String) -> String {
-    let rows = rowsOf(d)
-    let start = ownerIndex(rows, id) + 1
-    let end = blockEnd(rows, start)
-    let hits = Array(rows.prefix(end).dropFirst(start)).filter { part($0, 0) == "!" }
+    let hits = blockChunk(d, id).filter { part($0, 0) == "!" }
     return hits.count > 0 ? part(hits[0], 1) : ""
 }
 
@@ -420,19 +465,21 @@ func depthOf(_ row: String) -> Int {
  *  a shallower row appears tells us whether to draw a tee/continuing vertical
  *  or the final elbow/blank ancestor space. */
 func hasSiblingAfter(_ rows: [String], _ i: Int, _ depth: Int) -> Bool {
-    if i + 1 >= rows.count {
-        return false
+    // Loop-free, because an early `return` inside a `for` never fires here -
+    // this function used to always answer `false`, which is why every connector
+    // drew the final elbow and never a tee.
+    //
+    // Each following row becomes one character: "<" shallower (the branch has
+    // closed), "=" a sibling, ">" deeper (a descendant, keep looking). The
+    // answer is then "is there an = before the first <", which is a string
+    // question rather than an index one. The leading "|" keeps the first split
+    // component non-empty when the very next row closes the branch.
+    let marks = Array(rows.dropFirst(i + 1)).map {
+        depthOf($0) < depth ? "<" : (depthOf($0) == depth ? "=" : ">")
     }
-    for j in (i + 1)..<rows.count {
-        let d = depthOf(rows[j])
-        if d < depth {
-            return false
-        }
-        if d == depth {
-            return true
-        }
-    }
-    return false
+    let joined = "|" + marks.reduce("") { $0 + $1 }
+    let window = joined.split(separator: "<").map { String($0) }[0]
+    return window.contains("=")
 }
 
 func treeBlankSlot() -> some View {
@@ -535,6 +582,40 @@ func treeIndent(_ row: String) -> Int {
 
 /** The attention kind a workspace is publishing: "p" permission, "q" question,
  *  "t" finished turn, "" none. See encodeAttention in src/tree.ts. */
+/** The most URGENT attention anywhere in the workspace, not the first one.
+ *
+ *  `attnKindInWorkspace` answers "what is the first attention row", which is
+ *  the wrong question for a workspace badge: a Session that merely finished
+ *  ("t") would hide a co-resident Session that is BLOCKED. Blocking states win,
+ *  because only they cost the operator time by being missed. */
+func urgentKindInWorkspace(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    let blocking = hits.filter { part($0, 1) == "p" || part($0, 1) == "q" }
+    return blocking.count > 0 ? part(blocking[0], 1) : ""
+}
+
+/** The detail of the most urgent attention in the workspace. */
+func urgentDetailInWorkspace(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    let blocking = hits.filter { part($0, 1) == "p" || part($0, 1) == "q" }
+    if blocking.count == 0 {
+        return ""
+    }
+    let raw = part(blocking[0], 2)
+    return raw == "-" ? "" : raw
+}
+
+/** The label of the most urgent attention in the workspace. */
+func urgentLabelInWorkspace(_ d: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "!" }
+    let blocking = hits.filter { part($0, 1) == "p" || part($0, 1) == "q" }
+    if blocking.count == 0 {
+        return ""
+    }
+    return blocking[0].split(separator: " ").map { String($0) }.dropFirst(3)
+        .reduce("") { $0 == "" ? $1 : $0 + " " + $1 }
+}
+
 func attnKindInWorkspace(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
     return hits.count > 0 ? part(hits[0], 1) : ""
@@ -704,60 +785,46 @@ VStack(alignment: .leading, spacing: 0) {
                             // Yellow, not red. A raised hand is a request, not
                             // a failure - red reads as "something broke" for
                             // what is a routine approval.
-                            if attnKindInWorkspace(d) == "p" {
-                                // Two `let`s rather than
-                                // `Image(systemName: permGlyph(attnDetailInWorkspace(d)))`:
-                                // a nested call as a modifier argument is one of
-                                // the constructs this interpreter skips in
-                                // silence. See the header.
-                                let pk = attnDetailInWorkspace(d)
+                            // The FULL badge now lives on the Session row
+                            // (#68) - a workspace is a container, not the thing
+                            // waiting on you, and it may hold more than one
+                            // Session.
+                            //
+                            // What stays here is a compact marker, so a blocked
+                            // Session is never invisible: with the collapse
+                            // behaviour agreed in #67 the Session rows may not
+                            // be drawn at all, and the rule there was "do not
+                            // auto-expand for attention, but do not hide that it
+                            // needs attention".
+                            //
+                            // The tap focuses the surface that is ACTUALLY
+                            // blocked. It used `ownerOf(d)`, the first owner
+                            // published, which in a two-Session workspace
+                            // focused whichever happened to be listed first.
+                            if urgentKindInWorkspace(d) == "p" {
+                                let pk = urgentDetailInWorkspace(d)
                                 let pg = permGlyph(pk)
-                                HStack(spacing: 3) {
-                                    Image(systemName: pg).font(.system(size: 13))
-                                    Text("ASK").font(.system(size: 13)).bold()
-                                }
-                                .foregroundColor(.yellow)
-                                .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
-                                .fixedSize()
-                                .help(attnLabelInWorkspace(d))
-                                .onTapGesture {
-                                    cmux("workspace.select", workspace_id: w.id)
-                                    cmux("surface.focus", surface_id: ownerOf(d))
-                                    cmux("workspace.action",
-                                         workspace_id: w.id,
-                                         action: "set-description",
-                                         description: without(d, attnRowInWorkspace(d)))
-                                }
-                            }
-                            if attnKindInWorkspace(d) == "q" {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "questionmark.bubble.fill").font(.system(size: 13))
-                                    Text("ASK").font(.system(size: 13)).bold()
-                                }
-                                .foregroundColor(.yellow)
-                                .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
-                                .fixedSize()
-                                .help(attnLabelInWorkspace(d))
-                                .onTapGesture {
-                                    cmux("workspace.select", workspace_id: w.id)
-                                    cmux("surface.focus", surface_id: ownerOf(d))
-                                    cmux("workspace.action",
-                                         workspace_id: w.id,
-                                         action: "set-description",
-                                         description: without(d, attnRowInWorkspace(d)))
-                                }
-                            }
-                            if attnKindInWorkspace(d) == "t" {
-                                Image(systemName: "checkmark.circle.fill")
+                                Image(systemName: pg)
                                     .font(.system(size: 11))
-                                    .foregroundColor(.green)
+                                    .foregroundColor(.yellow)
+                                    .shadow(color: "#FFCC00", radius: 4, x: 0, y: 0)
                                     .fixedSize()
-                                    .help("Finished - your turn")
+                                    .help(urgentLabelInWorkspace(d))
                                     .onTapGesture {
-                                        cmux("workspace.action",
-                                             workspace_id: w.id,
-                                             action: "set-description",
-                                             description: without(d, attnRowInWorkspace(d)))
+                                        cmux("workspace.select", workspace_id: w.id)
+                                        cmux("surface.focus", surface_id: blockedSurface(d))
+                                    }
+                            }
+                            if urgentKindInWorkspace(d) == "q" {
+                                Image(systemName: "questionmark.bubble.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.yellow)
+                                    .shadow(color: "#FFCC00", radius: 4, x: 0, y: 0)
+                                    .fixedSize()
+                                    .help(urgentLabelInWorkspace(d))
+                                    .onTapGesture {
+                                        cmux("workspace.select", workspace_id: w.id)
+                                        cmux("surface.focus", surface_id: blockedSurface(d))
                                     }
                             }
                             if countOf(d, ">") > 0 {
@@ -1018,6 +1085,71 @@ VStack(alignment: .leading, spacing: 0) {
                                     .font(.caption)
                                     .foregroundColor(t.focused && w.selected ? .primary : .secondary)
                                     .lineLimit(1).truncationMode(.tail)
+                                // ASK sits with the agent that is asking (#68).
+                                //
+                                // A workspace is a container, not the thing
+                                // waiting on you, and it may hold more than one
+                                // Session - so a badge on the workspace row
+                                // cannot say WHICH of them is blocked. Attention
+                                // is already published inside the owning
+                                // Session's block, so this needed no wire change.
+                                //
+                                // How close it can get is bounded by the data:
+                                // measured across 40 session logs, 188
+                                // `permission.requested` events and not one
+                                // carries an `agentId`. So a prompt belongs to
+                                // the Session, never to the individual subagent
+                                // that triggered it. See #66.
+                                if let d = w.description {
+                                    let ak = attnKindFor(d, t.id)
+                                    if ak == "p" {
+                                        // Two `let`s, never a nested call as a
+                                        // modifier argument - see the header.
+                                        let pk = attnDetailFor(d, t.id)
+                                        let pg = permGlyph(pk)
+                                        HStack(spacing: 3) {
+                                            Image(systemName: pg).font(.system(size: 11))
+                                            Text("ASK").font(.system(size: 11)).bold()
+                                        }
+                                        .foregroundColor(.yellow)
+                                        .shadow(color: "#FFCC00", radius: 4, x: 0, y: 0)
+                                        .fixedSize()
+                                        .help(attnLabelFor(d, t.id))
+                                        .onTapGesture {
+                                            cmux("workspace.select", workspace_id: w.id)
+                                            cmux("surface.focus", surface_id: t.id)
+                                            cmux("workspace.action",
+                                                 workspace_id: w.id,
+                                                 action: "set-description",
+                                                 description: without(d, attnRowFor(d, t.id)))
+                                        }
+                                    }
+                                    if ak == "q" {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "questionmark.bubble.fill").font(.system(size: 11))
+                                            Text("ASK").font(.system(size: 11)).bold()
+                                        }
+                                        .foregroundColor(.yellow)
+                                        .shadow(color: "#FFCC00", radius: 4, x: 0, y: 0)
+                                        .fixedSize()
+                                        .help(attnLabelFor(d, t.id))
+                                        .onTapGesture {
+                                            cmux("workspace.select", workspace_id: w.id)
+                                            cmux("surface.focus", surface_id: t.id)
+                                            cmux("workspace.action",
+                                                 workspace_id: w.id,
+                                                 action: "set-description",
+                                                 description: without(d, attnRowFor(d, t.id)))
+                                        }
+                                    }
+                                    if ak == "t" {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.green)
+                                            .fixedSize()
+                                            .help("Finished - your turn")
+                                    }
+                                }
                                 // Maestro reporting on Maestro. The tree above
                                 // is only ever as true as the last hook that
                                 // landed, and a dead publisher looks exactly
