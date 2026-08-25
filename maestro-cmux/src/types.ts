@@ -92,6 +92,34 @@ export interface PluginConfig {
    * compare timestamps against and no state with which to remember a dismissal.
    */
   retainFinishedMs: number
+  /**
+   * The deepest subagent generation to publish (#43).
+   *
+   * Rows deeper than this are OMITTED, along with their descendants - not
+   * clamped onto the last visible depth, which would draw a grandchild as a
+   * sibling of its own parent and misstate the shape of the tree.
+   *
+   * A separate concern from the wire's own depth ceiling of 6, which is a
+   * rendering limit on the indent slots the sidebar draws. This is an operator
+   * preference about how much of a deep tree is worth seeing.
+   */
+  maxDepth: number
+  /**
+   * Whether the end of a turn raises attention (#43).
+   *
+   * `permission` and `question` are unaffected and cannot be turned off here:
+   * they BLOCK the Session, so missing one costs real time, whereas "your turn"
+   * is a courtesy an operator watching the window does not need.
+   */
+  attentionOnTurn: boolean
+  /**
+   * Whether raised attention also marks the cmux workspace unread (#43).
+   *
+   * This is cmux's own affordance rather than Maestro's, so it shows up in the
+   * stock UI too - which is exactly why some operators will want it and others
+   * will find it noisy.
+   */
+  markUnreadOnAttention: boolean
   debug: boolean
   /**
    * The watcher recomputes attention on a timer, because a blocked Session

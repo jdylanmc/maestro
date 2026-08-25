@@ -128,6 +128,18 @@ export const RETENTION_CHOICES: Record<string, number> = {
 }
 
 /**
+ * The deepest generation the wire can express, and the default for `maxDepth`.
+ *
+ * The sidebar draws indent slots one per generation, and it has exactly six of
+ * them - `if depth > 0` through `if depth > 5` - because the interpreter has no
+ * loop that can emit a variable number of views. So six is a hard rendering
+ * ceiling, not a preference: a seventh generation has nowhere to be drawn.
+ *
+ * `maxDepth` is the operator's own limit and is bounded by this one.
+ */
+export const MAX_WIRE_DEPTH = 6
+
+/**
  * Attention, DERIVED from the event log rather than stored.
  *
  * The predicate is the runtime's own: a `permission.requested` with no
@@ -1149,6 +1161,7 @@ export function encodeTree(
   now: number = Date.now(),
   dismissed: ReadonlySet<string> = new Set(),
   retainMs: number = RETAIN_MS,
+  maxDepth: number = MAX_WIRE_DEPTH,
 ): string {
   const clean = (v: string, n: number) =>
     v
@@ -1173,6 +1186,12 @@ export function encodeTree(
   }
   return (
     flatten(subs)
+      // Deeper than the operator asked to see. Filtering the FLATTENED rows is
+      // enough to take descendants with it: every descendant of a dropped row
+      // has a strictly greater depth, so it fails the same test. Rows are
+      // omitted rather than clamped onto the last visible depth, which would
+      // draw a grandchild as a sibling of its own parent.
+      .filter(([depth]) => depth < maxDepth)
       .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < retainMs)
       // A dismissed agent stays dismissed. Only FINISHED work can be dismissed -
       // a running agent is never hidden, however emphatically it is clicked.
@@ -1180,7 +1199,7 @@ export function encodeTree(
       .slice(0, 60)
       .map(
         ([depth, s]) =>
-          `${Math.min(depth, 6)} ${s.skill ? SKILL_GLYPH[s.skill] : GLYPH[s.status]} ${token(s.model, 18)} ${token(s.activity, 14)} ${clean(s.name, 44)}`,
+          `${Math.min(depth, MAX_WIRE_DEPTH)} ${s.skill ? SKILL_GLYPH[s.skill] : GLYPH[s.status]} ${token(s.model, 18)} ${token(s.activity, 14)} ${clean(s.name, 44)}`,
       )
       .join(ROW_SEP)
   )
@@ -1256,6 +1275,7 @@ export function summarize(
   now: number = Date.now(),
   stalled = 0,
   retainMs: number = RETAIN_MS,
+  maxDepth: number = MAX_WIRE_DEPTH,
 ): TreeSummary | null {
   try {
     const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
@@ -1318,7 +1338,7 @@ export function summarize(
     const rows = [
       ...(surfaceID ? [encodeOwner(surfaceID, stalled, facts)] : []),
       ...(effective ? [encodeAttention(effective)] : []),
-      ...(subs.size > 0 ? [encodeTree(subs, now, dismissed, retainMs)] : []),
+      ...(subs.size > 0 ? [encodeTree(subs, now, dismissed, retainMs, maxDepth)] : []),
       // An aged-out or fully dismissed tree encodes to "". Joining that in
       // would publish a trailing separator and an empty row.
     ].filter((row) => row.length > 0)

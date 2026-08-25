@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 import { loadConfig } from "../src/config.js"
-import { RETAIN_MS, RETENTION_CHOICES } from "../src/tree.js"
+import { MAX_WIRE_DEPTH, RETAIN_MS, RETENTION_CHOICES } from "../src/tree.js"
 
 test("loadConfig parses booleans and transport overrides", () => {
   const config = loadConfig({
@@ -191,6 +191,9 @@ test("the shipped example lists every file-settable key", () => {
     "watcherIdleMs",
     "publishRawText",
     "retainFinished",
+    "maxDepth",
+    "attentionOnTurn",
+    "markUnreadOnAttention",
     "logPrompts",
     "logToolCalls",
     "logSessionLifecycle",
@@ -276,4 +279,78 @@ test("the environment overrides the retention window and falls back quietly", ()
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// --- #43 candidates that turned out NOT to need sidebar persistence ----------
+//
+// The ticket splits settings into "plugin settings are easy" and "sidebar
+// settings are hard", the latter blocked on a persistence channel that does not
+// exist. That split is not quite the right one. A setting that changes WHAT THE
+// PLUGIN PUBLISHES needs no sidebar state at all: the sidebar renders whatever
+// arrives, so the plugin can simply publish less. Three of the ticket's own
+// candidates fall on that side.
+
+function withConfigFile(contents: unknown, run: (path: string) => void): void {
+  const directory = mkdtempSync(join(tmpdir(), "maestro-config-"))
+  const path = join(directory, "config.json")
+  writeFileSync(path, JSON.stringify(contents))
+  try {
+    run(path)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+test("the three new settings default to today's behaviour", () => {
+  // An operator who never opens the file must see no change at all.
+  const config = loadConfig({
+    MAESTRO_CONFIG_PATH: join(tmpdir(), "maestro-config-does-not-exist.json"),
+  })
+  assert.equal(config.maxDepth, MAX_WIRE_DEPTH)
+  assert.equal(config.attentionOnTurn, true)
+  assert.equal(config.markUnreadOnAttention, true)
+})
+
+test("the three new settings are file-settable and environment-overridable", () => {
+  withConfigFile({ maxDepth: 2, attentionOnTurn: false, markUnreadOnAttention: false }, (path) => {
+    const fromFile = loadConfig({ MAESTRO_CONFIG_PATH: path })
+    assert.equal(fromFile.maxDepth, 2)
+    assert.equal(fromFile.attentionOnTurn, false)
+    assert.equal(fromFile.markUnreadOnAttention, false)
+
+    const overridden = loadConfig({
+      MAESTRO_CONFIG_PATH: path,
+      MAESTRO_MAX_DEPTH: "4",
+      MAESTRO_ATTENTION_ON_TURN: "true",
+      MAESTRO_MARK_UNREAD: "yes",
+    })
+    assert.equal(overridden.maxDepth, 4)
+    assert.equal(overridden.attentionOnTurn, true)
+    assert.equal(overridden.markUnreadOnAttention, true)
+  })
+})
+
+test("an out-of-range depth in the FILE is rejected loudly", () => {
+  // Same rule as the intervals and the retention window: a config file is a
+  // deliberate statement, so a value that was quietly ignored would leave the
+  // operator believing a setting had taken effect.
+  for (const bad of [0, -1, 7, 2.5, "3"]) {
+    withConfigFile({ maxDepth: bad }, (path) => {
+      assert.throws(
+        () => loadConfig({ MAESTRO_CONFIG_PATH: path }),
+        /maxDepth/,
+        `maxDepth ${JSON.stringify(bad)} must be rejected`,
+      )
+    })
+  }
+})
+
+test("an out-of-range depth in the ENVIRONMENT falls back silently", () => {
+  // An ambient variable may be set by something the operator did not write, so
+  // this path fails open - the same asymmetry the intervals already use.
+  const config = loadConfig({
+    MAESTRO_CONFIG_PATH: join(tmpdir(), "maestro-config-does-not-exist.json"),
+    MAESTRO_MAX_DEPTH: "99",
+  })
+  assert.equal(config.maxDepth, MAX_WIRE_DEPTH)
 })

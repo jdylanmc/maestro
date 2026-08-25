@@ -184,6 +184,9 @@ presentation preferences:
   "watcherIdleMs": 1800000,
   "publishRawText": false,
   "retainFinished": "15s",
+  "maxDepth": 6,
+  "attentionOnTurn": true,
+  "markUnreadOnAttention": true,
   "logPrompts": true,
   "logToolCalls": true,
   "logSessionLifecycle": true,
@@ -198,6 +201,25 @@ against the list so it cannot drift. Three settings are deliberately absent:
 bad value in a file read by every hook would silence the plugin everywhere with
 the file itself as the only way back. They stay environment-only, where a
 mistake is scoped to one session.
+
+### What the plugin publishes is itself configurable
+
+Three of these change what reaches the sidebar rather than how the sidebar draws
+it, which is why they need no sidebar-side persistence:
+
+- **`maxDepth`** omits generations deeper than the value, *and their
+  descendants*. Rows are omitted rather than clamped onto the last visible
+  depth, because clamping would draw a grandchild as a sibling of its own
+  parent. Note the consequence: a hidden row is not counted in the workspace
+  row's running or finished badges either, exactly as a row hidden by
+  `retainFinished` is not.
+- **`attentionOnTurn`** controls only the "your turn" badge. Permission and
+  question prompts cannot be turned off here — they *block* the Session, so
+  missing one costs real time, whereas "your turn" is a courtesy. The turn
+  still ends either way; only the badge is suppressed.
+- **`markUnreadOnAttention`** controls whether attention also reaches *outside*
+  Maestro, into cmux's own unread affordance. If you watch the sidebar
+  directly, this is redundant.
 
 A malformed interval in the file is **reported**, not ignored — unlike the
 environment path, which falls back silently. An ambient variable may be set by
@@ -230,6 +252,9 @@ Environment variables override the file-backed values:
 | `COPILOT_CMUX_LOG_FILE_EDITS` | `true` | Log file edit and create events. |
 | `COPILOT_CMUX_PUBLISH_RAW_TEXT` | `false` | Publish prompt, argument, and result text. See Privacy. |
 | `MAESTRO_RETAIN_FINISHED` | `15s` | How long a finished subagent stays on screen: `5s`, `15s`, `1m`, `5m`, `15m`, `1h`, `never`. |
+| `MAESTRO_MAX_DEPTH` | `6` | Deepest subagent generation to publish, `1`-`6`. Deeper rows are omitted along with their descendants. |
+| `MAESTRO_ATTENTION_ON_TURN` | `true` | Raise attention when a turn ends. Permission and question prompts are unaffected. |
+| `MAESTRO_MARK_UNREAD` | `true` | Also mark the cmux workspace unread when attention is raised. |
 | `COPILOT_CMUX_DEBUG` | `false` | Verbose diagnostics on stderr. |
 
 ## Quieting push notifications

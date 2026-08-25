@@ -103,6 +103,7 @@ async function main(): Promise<void> {
     // exactly when a retention change is most visible. Captured once, the
     // setting would appear not to work until the watcher happened to restart.
     retainFinishedMs: config.retainFinishedMs,
+    maxDepth: config.maxDepth,
     readDescription: (workspaceID: string) => readDescription(config.cmuxBin, workspaceID),
     setDescription: async (workspaceID: string, description: string) => {
       await run(config.cmuxBin, [
@@ -129,8 +130,16 @@ async function main(): Promise<void> {
       // no expiry to wake for, so shortening the window would leave its rows on
       // screen indefinitely. Measured: after switching back from `never`, three
       // stale skill rows survived every subsequent tick.
-      if (current.retainFinishedMs !== deps.retainFinishedMs) memos.clear()
+      // Depth is memo-invalidating for the same reason: an idle Session is not
+      // recomputed at all, so a narrowed tree would keep its deep rows.
+      if (
+        current.retainFinishedMs !== deps.retainFinishedMs ||
+        current.maxDepth !== deps.maxDepth
+      ) {
+        memos.clear()
+      }
       deps.retainFinishedMs = current.retainFinishedMs
+      deps.maxDepth = current.maxDepth
       idleMs = current.watcherIdleMs
       intervalMs = current.watcherIntervalMs
     } catch {

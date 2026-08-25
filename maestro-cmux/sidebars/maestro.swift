@@ -469,6 +469,22 @@ func skillHelp(_ g: String) -> String {
     return "Skill"
 }
 
+/** Tooltip for a subagent row.
+ *
+ *  A red cross is not self-explanatory - the first question asked on seeing one
+ *  was "not sure what the red X's are for". The glyph carries the state; the
+ *  tooltip has to carry the meaning, and say WHERE it came from, because a
+ *  failure Maestro cannot see looks identical to a success (see G-10). */
+func rowHelp(_ status: String, _ title: String) -> String {
+    if status == "x" {
+        return title + " - FAILED. The subagent reported subagent.failed."
+    }
+    if status == ">" {
+        return title + " - running"
+    }
+    return title
+}
+
 func runningDot() -> some View {
     return ZStack {
         Circle().fill(.green).frame(width: 6, height: 6)
@@ -1380,7 +1396,7 @@ VStack(alignment: .leading, spacing: 0) {
                                                 }
                                             }
                                             .padding(4)
-                                            .help(title)
+                                            .help(rowHelp(status, title))
                                             .onTapGesture {
                                                 cmux("workspace.select", workspace_id: w.id)
                                                 cmux("surface.focus", surface_id: t.id)

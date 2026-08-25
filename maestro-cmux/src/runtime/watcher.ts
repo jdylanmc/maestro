@@ -142,6 +142,9 @@ export interface WatchDeps {
   /** How long a finished subagent is retained (#56). The watcher reads config
    *  once at start-up, so this arrives as a dep rather than being re-read here. */
   retainFinishedMs?: number
+  /** The deepest generation to publish (#43). Re-read every tick, like
+   *  retention, because the watcher is the publisher for an idle Session. */
+  maxDepth?: number
   /**
    * When THIS watcher started, and the floor under every health judgement.
    *
@@ -207,6 +210,7 @@ export async function watchTick(
       now,
       stalled,
       deps.retainFinishedMs,
+      deps.maxDepth,
     )
     // `summarize` returns null only when it could not compute at all. Leaving
     // the description alone is right then - the same fail-open the hook uses.

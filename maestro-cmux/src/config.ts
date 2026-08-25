@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { RETAIN_MS, RETENTION_CHOICES } from "./tree.js"
+import { MAX_WIRE_DEPTH, RETAIN_MS, RETENTION_CHOICES } from "./tree.js"
 import type { PluginConfig, TransportMode } from "./types.js"
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"])
@@ -30,6 +30,9 @@ interface MaestroFileConfig {
   watcherEnabled: boolean | undefined
   publishRawText: boolean | undefined
   retainFinished: string | undefined
+  maxDepth: number | undefined
+  attentionOnTurn: boolean | undefined
+  markUnreadOnAttention: boolean | undefined
   logPrompts: boolean | undefined
   logToolCalls: boolean | undefined
   logSessionLifecycle: boolean | undefined
@@ -148,6 +151,33 @@ function parseRetention(value: string | undefined, fallback: number): number {
   return choice === undefined ? fallback : choice
 }
 
+/**
+ * The deepest subagent generation to publish.
+ *
+ * Rejected loudly for the same reason the intervals are, and bounded at both
+ * ends: `0` would publish an empty tree, which looks exactly like a broken
+ * plugin, and anything past the wire's own ceiling of 6 cannot be drawn
+ * distinctly anyway.
+ */
+function optionalDepth(source: Record<string, unknown>, path: string): number | undefined {
+  const value = source.maxDepth
+  if (value === undefined) return undefined
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > MAX_WIRE_DEPTH) {
+    throw new Error(
+      `Invalid Maestro config at ${path}: "maxDepth" must be a whole number from 1 to ${MAX_WIRE_DEPTH}`,
+    )
+  }
+  return value as number
+}
+
+/** The environment override for depth. Falls back rather than throwing. */
+function parseDepth(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value.trim(), 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_WIRE_DEPTH) return fallback
+  return parsed
+}
+
 const EMPTY_FILE_CONFIG: MaestroFileConfig = {
   progressEnabled: undefined,
   keepDoneStatus: undefined,
@@ -156,6 +186,9 @@ const EMPTY_FILE_CONFIG: MaestroFileConfig = {
   watcherEnabled: undefined,
   publishRawText: undefined,
   retainFinished: undefined,
+  maxDepth: undefined,
+  attentionOnTurn: undefined,
+  markUnreadOnAttention: undefined,
   logPrompts: undefined,
   logToolCalls: undefined,
   logSessionLifecycle: undefined,
@@ -196,6 +229,9 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     watcherEnabled: optionalBoolean(source, "watcherEnabled", path),
     publishRawText: optionalBoolean(source, "publishRawText", path),
     retainFinished: optionalRetention(source, path),
+    maxDepth: optionalDepth(source, path),
+    attentionOnTurn: optionalBoolean(source, "attentionOnTurn", path),
+    markUnreadOnAttention: optionalBoolean(source, "markUnreadOnAttention", path),
     logPrompts: optionalBoolean(source, "logPrompts", path),
     logToolCalls: optionalBoolean(source, "logToolCalls", path),
     logSessionLifecycle: optionalBoolean(source, "logSessionLifecycle", path),
@@ -238,6 +274,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PluginConfig {
       file.retainFinished === undefined
         ? RETAIN_MS
         : (RETENTION_CHOICES[file.retainFinished] ?? RETAIN_MS),
+    ),
+    maxDepth: parseDepth(env.MAESTRO_MAX_DEPTH, file.maxDepth ?? MAX_WIRE_DEPTH),
+    attentionOnTurn: parseBoolean(env.MAESTRO_ATTENTION_ON_TURN, file.attentionOnTurn ?? true),
+    markUnreadOnAttention: parseBoolean(
+      env.MAESTRO_MARK_UNREAD,
+      file.markUnreadOnAttention ?? true,
     ),
     debug: parseBoolean(env.COPILOT_CMUX_DEBUG, file.debug ?? false),
     watcherEnabled: parseBoolean(env.MAESTRO_WATCHER, file.watcherEnabled ?? true),

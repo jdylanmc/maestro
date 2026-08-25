@@ -76,7 +76,9 @@ test("sidebar uses dots for subagent row status while preserving behavior", () =
   )
   assert.match(
     sidebar,
-    /\.help\(title\)[\s\S]*cmux\("workspace\.select", workspace_id: w\.id\)[\s\S]*cmux\("surface\.focus", surface_id: t\.id\)/,
+    // `rowHelp` rather than the bare title: a red cross needs the tooltip to
+    // say what it means, since the glyph alone was not self-explanatory.
+    /\.help\(rowHelp\(status, title\)\)[\s\S]*cmux\("workspace\.select", workspace_id: w\.id\)[\s\S]*cmux\("surface\.focus", surface_id: t\.id\)/,
   )
   assert.match(
     sidebar,

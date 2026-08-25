@@ -69,6 +69,7 @@ export function reduceRuntimeState(
   event: CopilotHookEvent,
   workspaceID?: string,
   publishRawText: boolean = false,
+  attentionOnTurn: boolean = true,
 ): RuntimeState {
   switch (event.type) {
     case "session.start": {
@@ -211,12 +212,22 @@ export function reduceRuntimeState(
         workspaceID,
         updatedAt: event.timestamp,
         phase: "idle",
-        attention: {
-          kind: "turn",
-          label: "Your turn",
-          detail: undefined,
-          since: event.timestamp,
-        },
+        // "Your turn" is a courtesy, and optional (#43). An operator watching
+        // the window already knows the turn ended. `permission` and `question`
+        // are NOT optional and are unaffected: they block the Session, so
+        // missing one costs real time.
+        //
+        // The turn still ends - only the badge is suppressed - so `phase` is
+        // set either way and nothing downstream can mistake this for a Session
+        // still working.
+        attention: attentionOnTurn
+          ? {
+              kind: "turn",
+              label: "Your turn",
+              detail: undefined,
+              since: event.timestamp,
+            }
+          : undefined,
       }
     }
   }

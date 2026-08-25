@@ -419,6 +419,7 @@ export async function processHook(
       event,
       environment.workspaceID,
       config.publishRawText,
+      config.attentionOnTurn,
     )
 
     await logger.log("debug", "state reduced", {
@@ -447,7 +448,11 @@ export async function processHook(
   // is focused - which is exactly the moment the operator has in fact seen it.
   // `set-color` was rejected: it would silently overwrite a colour the operator
   // chose, and there is no way to restore one we did not record.
-  if (attention && attention.kind !== "turn") {
+  //
+  // Optional (#43), because it reaches OUTSIDE Maestro's own surface. An
+  // operator who watches the sidebar directly gets nothing from it and may
+  // read it as noise.
+  if (config.markUnreadOnAttention && attention && attention.kind !== "turn") {
     await new Promise<void>((resolve) => {
       execFile(
         config.cmuxBin,
@@ -538,6 +543,7 @@ export async function processHook(
               ? 0
               : healthOf(published ?? "", environment.surfaceID),
             config.retainFinishedMs,
+            config.maxDepth,
           )
     const mine = treeDescriptionForEvent(event.type, tree)
     // A publisher that never found a session log must not clear rows a
