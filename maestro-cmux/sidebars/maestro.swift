@@ -33,6 +33,19 @@
 // COLORS are semantic, never literal, so the pane follows the appearance and
 // accent instead of assuming the theme is still Nord.
 //
+// SCOPE. A workspace may host MORE THAN ONE Session, and each publishes its own
+// block into the same description. Two naming families keep that straight:
+//
+//   xxxFor(d, id)          reads ONE Session's block. Use on a SESSION row.
+//   xxxInWorkspace(d)      reads every block. Correct ONLY on the WORKSPACE row.
+//
+// Getting this wrong is invisible until two Sessions share a workspace, and it
+// has now happened twice: once to the tree (#54), and once to the mascot, where
+// a finished Session's `! t Your turn` closed a co-resident Session's eyes while
+// it was 58 seconds into a tool call. `cmux sidebar validate` cannot catch it
+// and neither can a unit test, because this file is never executed by one.
+// A test asserts the rule lexically instead - see sidebar-settings.test.ts.
+
 // Other interpreter behaviours that fail SILENTLY - `cmux sidebar validate`
 // reports OK on a sidebar that renders nothing:
 //   - Optional fields are ABSENT, not null. Filtering the collection on
@@ -328,60 +341,72 @@ func blinkCursor(_ e: Int) -> Bool {
  *  This is the fallback working signal. `latestAt` is a native binding but is
  *  NOT populated for Copilot surfaces on this build - measured empty on every
  *  workspace - so it cannot be relied on. */
-func anyRunning(_ d: String) -> Bool {
+func anyRunningInWorkspace(_ d: String) -> Bool {
     return rowsOf(d).filter { part($0, 1) == ">" }.count > 0
 }
 
-/** Eyes open and glowing while working; shut when idle.
+
+
+/** ---- SURFACE-SCOPED SIGNALS ------------------------------------------------
  *
- *  Previously the eyes blinked on even seconds. A blink recomputed once per
- *  tick reads as a stutter rather than life, because `clock.epoch` is SECONDS
- *  and the sidebar re-evaluates about once a second - the same ~1 fps ceiling
- *  that rules out every other hand-drawn animation here. A steady green glow
- *  carries the same "this one is awake" signal with no motion budget at all,
- *  and matches the running-subagent dot so one colour means one thing.
+ *  A workspace may host MORE THAN ONE Session, and each publishes its own block
+ *  into the same description. Anything drawn on a SESSION row must therefore be
+ *  read from that Session's block, never from the whole description.
  *
- *  Idle stays deliberately motionless AND unlit - stillness is the signal. */
-func eyesOpen(_ d: String) -> Bool {
-    return working(d)
+ *  This was already learned once, for the tree (#54), and fixed with
+ *  `ownsSurface` and `liveRowsFor` - but the mascot's own signals were left
+ *  reading workspace-wide. The result, observed live: one Session finished and
+ *  published `! t Your turn`, and its co-resident Session - mid-tool, 58s into
+ *  a `kusto_query` - drew closed eyes and an idle pose, because `attnKind` had
+ *  found the OTHER Session's attention row.
+ *
+ *  Rule: on a Session row, use the `...For(d, id)` variants. The
+ *  `...InWorkspace(d)` ones are correct only on the WORKSPACE row, where
+ *  aggregating across Sessions is the intent. */
+
+/** Attention published by THIS surface. */
+func attnKindFor(_ d: String, _ id: String) -> String {
+    let rows = rowsOf(d)
+    let start = ownerIndex(rows, id) + 1
+    let end = blockEnd(rows, start)
+    let hits = Array(rows.prefix(end).dropFirst(start)).filter { part($0, 0) == "!" }
+    return hits.count > 0 ? part(hits[0], 1) : ""
 }
 
-/** The Session itself is working, which is NOT the same as having a running
- *  subagent.
+/** A running subagent belonging to THIS surface. */
+func anyRunningFor(_ d: String, _ id: String) -> Bool {
+    return liveRowsFor(d, id).filter { part($0, 1) == ">" }.count > 0
+}
+
+/** Whether THIS Session is working.
  *
- *  Derived from the attention row, because that is the only turn-level signal
- *  published today:
- *
- *    ""  no attention   -> mid-turn, the agent is doing something
- *    "t" Your turn      -> the turn ended, the operator is next
- *    "p" permission     -> blocked on the operator
- *    "q" question       -> blocked on the operator
- *
- *  Blocked is deliberately NOT working: a stalled Session should sit still and
- *  wear its badge rather than look busy. */
-func working(_ d: String) -> Bool {
-    if anyRunning(d) {
+ *  The first test is direct evidence rather than inference: the owner row now
+ *  carries the Session's own in-flight tool call, so a Session grinding through
+ *  a long tool with no subagents at all is visibly working. Absence of an
+ *  attention row remains the fallback for the moment between events. */
+func workingFor(_ d: String, _ id: String) -> Bool {
+    if sessionActivityOf(d, id) != "" {
         return true
     }
-    return attnKind(d) == ""
+    if anyRunningFor(d, id) {
+        return true
+    }
+    return attnKindFor(d, id) == ""
 }
 
-/** The cued dot in the conducting wave, or none at all when idle.
- *
- *  Driven by EPOCH and held for two ticks per phase. `clock.second` wraps at
- *  60 and jerks once a minute, and a one-tick-per-phase sequence shows the
- *  sidebar's ~1s refresh drift as a visible stutter. Two ticks absorbs it.
- *
- *  Takes the raw description rather than a precomputed Bool: a NESTED function
- *  call used as an argument - cued(anyRunning(d), ...) - renders NOTHING. The
- *  head drew and the baton and dots silently vanished, which read as the wrong
- *  icon rather than as a failure. Keep arguments flat: bindings and literals. */
-func cued(_ d: String, _ e: Int, _ i: Int) -> Bool {
-    if anyRunning(d) {
+/** Eyes open and glowing while THIS Session works; shut when it is idle. */
+func eyesOpenFor(_ d: String, _ id: String) -> Bool {
+    return workingFor(d, id)
+}
+
+/** The cued dot in the conducting wave, for THIS surface. */
+func cuedFor(_ d: String, _ id: String, _ e: Int, _ i: Int) -> Bool {
+    if anyRunningFor(d, id) {
         return ((e / 2) + i) % 3 == 0
     }
     return false
 }
+
 
 /** Depth is encoded as a string token; map it to an Int without relying on
  *  optional parsing in view code. Rows are capped at depth 6 upstream. */
@@ -510,13 +535,13 @@ func treeIndent(_ row: String) -> Int {
 
 /** The attention kind a workspace is publishing: "p" permission, "q" question,
  *  "t" finished turn, "" none. See encodeAttention in src/tree.ts. */
-func attnKind(_ d: String) -> String {
+func attnKindInWorkspace(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
     return hits.count > 0 ? part(hits[0], 1) : ""
 }
 
 /** The raw attention row, so a tap can remove exactly it. */
-func attnRow(_ d: String) -> String {
+func attnRowInWorkspace(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
     return hits.count > 0 ? hits[0] : ""
 }
@@ -526,7 +551,7 @@ func attnRow(_ d: String) -> String {
  *
  *  See encodeAttention in src/tree.ts, which publishes a CLOSED vocabulary:
  *  anything unrecognised arrives as the "-" sentinel. */
-func attnDetail(_ d: String) -> String {
+func attnDetailInWorkspace(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
     let raw = hits.count > 0 ? part(hits[0], 2) : ""
     return raw == "-" ? "" : raw
@@ -559,7 +584,7 @@ func permGlyph(_ k: String) -> String {
     return "hand.raised.fill"
 }
 
-func attnLabel(_ d: String) -> String {
+func attnLabelInWorkspace(_ d: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "!" }
     if hits.count == 0 {
         return ""
@@ -629,7 +654,7 @@ VStack(alignment: .leading, spacing: 0) {
 
                 HStack(spacing: 5) {
                         if let d = w.description {
-                            if anyRunning(d) {
+                            if anyRunningInWorkspace(d) {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 3).fill(w.selected ? .accentColor : .green)
                                         .frame(width: 13, height: 10).opacity(0.22)
@@ -679,13 +704,13 @@ VStack(alignment: .leading, spacing: 0) {
                             // Yellow, not red. A raised hand is a request, not
                             // a failure - red reads as "something broke" for
                             // what is a routine approval.
-                            if attnKind(d) == "p" {
+                            if attnKindInWorkspace(d) == "p" {
                                 // Two `let`s rather than
-                                // `Image(systemName: permGlyph(attnDetail(d)))`:
+                                // `Image(systemName: permGlyph(attnDetailInWorkspace(d)))`:
                                 // a nested call as a modifier argument is one of
                                 // the constructs this interpreter skips in
                                 // silence. See the header.
-                                let pk = attnDetail(d)
+                                let pk = attnDetailInWorkspace(d)
                                 let pg = permGlyph(pk)
                                 HStack(spacing: 3) {
                                     Image(systemName: pg).font(.system(size: 13))
@@ -694,17 +719,17 @@ VStack(alignment: .leading, spacing: 0) {
                                 .foregroundColor(.yellow)
                                 .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
                                 .fixedSize()
-                                .help(attnLabel(d))
+                                .help(attnLabelInWorkspace(d))
                                 .onTapGesture {
                                     cmux("workspace.select", workspace_id: w.id)
                                     cmux("surface.focus", surface_id: ownerOf(d))
                                     cmux("workspace.action",
                                          workspace_id: w.id,
                                          action: "set-description",
-                                         description: without(d, attnRow(d)))
+                                         description: without(d, attnRowInWorkspace(d)))
                                 }
                             }
-                            if attnKind(d) == "q" {
+                            if attnKindInWorkspace(d) == "q" {
                                 HStack(spacing: 3) {
                                     Image(systemName: "questionmark.bubble.fill").font(.system(size: 13))
                                     Text("ASK").font(.system(size: 13)).bold()
@@ -712,17 +737,17 @@ VStack(alignment: .leading, spacing: 0) {
                                 .foregroundColor(.yellow)
                                 .shadow(color: "#FFCC00", radius: 5, x: 0, y: 0)
                                 .fixedSize()
-                                .help(attnLabel(d))
+                                .help(attnLabelInWorkspace(d))
                                 .onTapGesture {
                                     cmux("workspace.select", workspace_id: w.id)
                                     cmux("surface.focus", surface_id: ownerOf(d))
                                     cmux("workspace.action",
                                          workspace_id: w.id,
                                          action: "set-description",
-                                         description: without(d, attnRow(d)))
+                                         description: without(d, attnRowInWorkspace(d)))
                                 }
                             }
-                            if attnKind(d) == "t" {
+                            if attnKindInWorkspace(d) == "t" {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 11))
                                     .foregroundColor(.green)
@@ -732,7 +757,7 @@ VStack(alignment: .leading, spacing: 0) {
                                         cmux("workspace.action",
                                              workspace_id: w.id,
                                              action: "set-description",
-                                             description: without(d, attnRow(d)))
+                                             description: without(d, attnRowInWorkspace(d)))
                                     }
                             }
                             if countOf(d, ">") > 0 {
@@ -901,21 +926,21 @@ VStack(alignment: .leading, spacing: 0) {
                                 // happens to be the first one listed (#54).
                                 if let d = w.description {
                                     if ownsSurface(d, t.id) {
-                                        if anyRunning(d) {
+                                        if anyRunningFor(d, t.id) {
                                             ZStack {
                                                 Capsule().fill(.accentColor).frame(width: 4, height: 15)
                                                     .rotationEffect(.degrees(45)).offset(x: -11, y: -6)
-                                                if cued(d, clock.epoch, 0) {
+                                                if cuedFor(d, t.id, clock.epoch, 0) {
                                                     Circle().fill(.accentColor).frame(width: 6, height: 6).offset(x: 10, y: -7)
                                                 } else {
                                                     Circle().fill(.secondary).frame(width: 5, height: 5).offset(x: 10, y: -7).opacity(0.35)
                                                 }
-                                                if cued(d, clock.epoch, 1) {
+                                                if cuedFor(d, t.id, clock.epoch, 1) {
                                                     Circle().fill(.accentColor).frame(width: 6, height: 6).offset(x: 12, y: 1)
                                                 } else {
                                                     Circle().fill(.secondary).frame(width: 5, height: 5).offset(x: 12, y: 1).opacity(0.35)
                                                 }
-                                                if cued(d, clock.epoch, 2) {
+                                                if cuedFor(d, t.id, clock.epoch, 2) {
                                                     Circle().fill(.accentColor).frame(width: 6, height: 6).offset(x: 10, y: 9)
                                                 } else {
                                                     Circle().fill(.secondary).frame(width: 5, height: 5).offset(x: 10, y: 9).opacity(0.35)
@@ -924,7 +949,7 @@ VStack(alignment: .leading, spacing: 0) {
                                                 Rectangle().fill(.primary).frame(width: 2, height: 4).offset(x: -3, y: -9)
                                                 RoundedRectangle(cornerRadius: 5).fill(.primary).frame(width: 17, height: 14).offset(x: -3)
                                                 RoundedRectangle(cornerRadius: 3).fill(.black).frame(width: 11, height: 7).offset(x: -3)
-                                                if eyesOpen(d) {
+                                                if eyesOpenFor(d, t.id) {
                                                     Capsule().fill(.green).frame(width: 2, height: 4).offset(x: -6)
                                                         .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
                                                     Capsule().fill(.green).frame(width: 2, height: 4).offset(x: 0)
@@ -942,7 +967,7 @@ VStack(alignment: .leading, spacing: 0) {
                                                 Rectangle().fill(.primary).frame(width: 2, height: 4).offset(y: -7)
                                                 RoundedRectangle(cornerRadius: 5).fill(.primary).frame(width: 17, height: 14)
                                                 RoundedRectangle(cornerRadius: 3).fill(.black).frame(width: 11, height: 8)
-                                                if eyesOpen(d) {
+                                                if eyesOpenFor(d, t.id) {
                                                     Capsule().fill(.green).frame(width: 2, height: 4).offset(x: -3)
                                                         .shadow(color: "#30D158", radius: 3, x: 0, y: 0)
                                                     Capsule().fill(.green).frame(width: 2, height: 4).offset(x: 3)

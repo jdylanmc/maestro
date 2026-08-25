@@ -25,7 +25,7 @@ test("sidebar renders one settings gear in a top toolbar", () => {
 })
 
 test("sidebar uses a stateful workspace stage icon", () => {
-  assert.match(sidebar, /if let d = w\.description \{\s+if anyRunning\(d\) \{\s+ZStack \{/)
+  assert.match(sidebar, /if let d = w\.description \{\s+if anyRunningInWorkspace\(d\) \{\s+ZStack \{/)
   assert.match(
     sidebar,
     /RoundedRectangle\(cornerRadius: 3\)\.fill\(w\.selected \? \.accentColor : \.green\)/,
@@ -95,7 +95,7 @@ test("sidebar uses dots for subagent row status while preserving behavior", () =
 // same signal at zero animation cost and reuses the running-subagent colour,
 // so one colour means one thing across the whole sidebar. Idle stays unlit.
 test("working mascot eyes glow green instead of blinking", () => {
-  assert.match(sidebar, /func eyesOpen\(_ d: String\) -> Bool \{\s+return working\(d\)\s+\}/)
+  assert.match(sidebar, /func eyesOpenFor\(_ d: String, _ id: String\) -> Bool \{\s+return workingFor\(d, id\)\s+\}/)
   assert.doesNotMatch(sidebar, /eyesOpen\(d, clock\.epoch\)/)
 
   const open = sidebar.match(/Capsule\(\)\.fill\(\.green\)\.frame\(width: 2, height: 4\)/g)
@@ -146,7 +146,7 @@ test("a subagent row's name is read from field 4, and an owner/attention name fr
   assert.match(sidebar, /let title = agentNameOf\(row\)/)
   // An attention row is `! <kind> <detail> <label>` - four leading fields, so
   // its label has its own reader and must NOT use either of the other two.
-  assert.match(sidebar, /func attnLabel\([\s\S]*?dropFirst\(3\)/)
+  assert.match(sidebar, /func attnLabelInWorkspace\([\s\S]*?dropFirst\(3\)/)
 })
 
 test("model and activity are read from their fixed positions, with the absent sentinel", () => {
@@ -202,16 +202,16 @@ test("the workspace row keeps a small UNIFORM padding, never an edge-specific on
 
 test("the permission badge shows WHY approval is being asked", () => {
   // The runtime publishes a closed vocabulary in field 2 of the attention row.
-  assert.match(sidebar, /func attnDetail\(_ d: String\) -> String/)
+  assert.match(sidebar, /func attnDetailInWorkspace\(_ d: String\) -> String/)
   assert.match(sidebar, /func permGlyph\(_ k: String\) -> String/)
   for (const kind of ["shell", "write", "read", "url", "mcp", "factory"]) {
     assert.match(sidebar, new RegExp(`if k == "${kind}"`), `${kind} has no glyph`)
   }
   // An unknown kind keeps the generic raised hand rather than rendering nothing.
   assert.match(sidebar, /return "hand\.raised\.fill"/)
-  // Two lets, never Image(systemName: permGlyph(attnDetail(d))): a nested call
+  // Two lets, never Image(systemName: permGlyph(attnDetailInWorkspace(d))): a nested call
   // as a modifier argument is skipped in silence by this interpreter.
-  assert.match(sidebar, /let pk = attnDetail\(d\)\s+let pg = permGlyph\(pk\)/)
+  assert.match(sidebar, /let pk = attnDetailInWorkspace\(d\)\s+let pg = permGlyph\(pk\)/)
   assert.match(sidebar, /Image\(systemName: pg\)/)
   const code = sidebar
     .split("\n")
@@ -466,4 +466,60 @@ test("a skill row is neither counted as running nor dismissible", () => {
     !/isSkill\(status\)[\s\S]{0,600}Click to dismiss/.test(sidebar),
     "the dismissal tap belongs to the finished branch, not the skill branch",
   )
+})
+
+// --- scope: one workspace may host more than one Session ---------------------
+
+test("no workspace-wide reader is used inside the per-surface loop", () => {
+  // The bug this guards against is invisible until two Sessions share a
+  // workspace, and it has happened twice: once to the tree (#54), and once to
+  // the mascot, where a finished Session's `! t Your turn` closed a co-resident
+  // Session's eyes while it was 58 seconds into a tool call.
+  //
+  // It cannot be caught by `cmux sidebar validate`, and it cannot be caught by
+  // a behavioural test either - this file is never executed by one. So the rule
+  // is enforced lexically: everything drawn per Session must read that
+  // Session's own block.
+  const marker = "ForEach(w.tabs"
+  const start = sidebar.indexOf(marker)
+  assert.ok(start > 0, "the per-surface loop must be findable for this guard to mean anything")
+
+  const perSurface = sidebar.slice(start)
+  const offenders = perSurface
+    .split("\n")
+    .map((line, i) => [i, line] as const)
+    .filter(([, line]) => /\w+InWorkspace\(/.test(line) && !/^\s*(\/\/|\*)/.test(line))
+
+  assert.deepEqual(
+    offenders.map(([, line]) => line.trim()),
+    [],
+    "a Session row must use the xxxFor(d, id) variants, never xxxInWorkspace(d)",
+  )
+})
+
+test("the surface-scoped signal helpers exist and take an id", () => {
+  for (const name of ["attnKindFor", "anyRunningFor", "workingFor", "eyesOpenFor"]) {
+    assert.match(
+      sidebar,
+      new RegExp(`func ${name}\\(_ d: String, _ id: String`),
+      `${name} must be surface-scoped`,
+    )
+  }
+  assert.match(sidebar, /func cuedFor\(_ d: String, _ id: String, _ e: Int, _ i: Int\)/)
+})
+
+test("the workspace-wide variants that had no legitimate caller are gone", () => {
+  // A footgun that does not exist cannot be picked up. `eyesOpen`, `working`
+  // and `cued` were only ever drawn per Session, so the whole-description forms
+  // were deleted outright rather than left available.
+  for (const gone of ["func eyesOpenInWorkspace", "func workingInWorkspace", "func cued("]) {
+    assert.ok(!sidebar.includes(gone), `${gone} must not exist - it can only be misused`)
+  }
+})
+
+test("a Session is working when it has its own tool call in flight", () => {
+  // Direct evidence beats inference. Before this, a Session with no subagents
+  // was judged working only by the ABSENCE of an attention row, so a
+  // co-resident Session's attention made it look idle mid-tool.
+  assert.match(sidebar, /func workingFor[\s\S]{0,320}sessionActivityOf\(d, id\) != ""/)
 })
