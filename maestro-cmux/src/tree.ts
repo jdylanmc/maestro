@@ -407,6 +407,14 @@ export function buildTree(logPath: string): Map<string, Subagent> {
   const claimed = new Set<string>()
   const openTools = new Map<string, { agent: string; tool: string }>()
   const skills = new Map<string, Subagent>()
+  // The last model observed on each agent's OWN events. `subagent.started`
+  // does not always name one - measured across every session log on disk, 526
+  // of 2,895 carry no `model` - which left long-running subagents as the only
+  // rows in the tree with an empty model field. Their later events do carry it:
+  // of those 526, 508 are recoverable this way and 17 are genuinely unknown.
+  // This is observation, not inheritance: the model is read from an event the
+  // subagent itself emitted, never borrowed from its parent or the Session.
+  const agentModels = new Map<string, string>()
   try {
     for (const line of readLines(logPath)) {
       if (!line) continue
@@ -421,6 +429,9 @@ export function buildTree(logPath: string): Map<string, Subagent> {
         continue
       }
       const d = e.data ?? {}
+      if (e.agentId && typeof d.model === "string" && d.model) {
+        agentModels.set(e.agentId, d.model)
+      }
       if (e.type === "tool.execution_start") {
         const tc = d.toolCallId as string | undefined
         const tn = d.toolName as string | undefined
@@ -479,22 +490,39 @@ export function buildTree(logPath: string): Map<string, Subagent> {
           parent,
           tools: 0,
           doneAt: Number.isFinite(ts) ? ts : Date.now(),
-          model: undefined,
+          // The invocation names the model that ran it. Measured across every
+          // session log on disk: 796 of 1,107 `skill.invoked` events carry one,
+          // so most skill rows can say which model they ran under and the rest
+          // fall back to the `-` sentinel rather than being guessed at.
+          model: typeof d.model === "string" && d.model ? d.model : undefined,
           skill: triggerOf(d.trigger),
           activity: undefined,
         })
-      } else if (e.type === "subagent.completed") {
-        // There is NO `subagent.failed`. Measured across 60 recent sessions: 133
-        // `subagent.started`, 132 `subagent.completed`, zero failures. Nor does
-        // the completion payload carry a success flag, so a subagent that fails
-        // is indistinguishable from one that succeeds.
+      } else if (e.type === "subagent.completed" || e.type === "subagent.failed") {
+        // `subagent.failed` IS real. An earlier note here recorded that it did
+        // not exist, on a sample of 60 sessions that happened to contain none.
+        // Re-measured across every session log on disk: 2,898 `subagent.started`,
+        // 2,815 `subagent.completed`, and 27 `subagent.failed` spread over 11
+        // logs. Rare, but not absent - and while it was unhandled a failed
+        // subagent kept the `run` status forever, so the sidebar showed dead
+        // agents as green and counted them in "N active". Reporting work as
+        // running when it has already failed is the worst error this tree can
+        // make, which is why the rare case is worth handling.
+        //
+        // The completion payload still carries no success flag, so a subagent
+        // that fails WITHOUT emitting this event remains indistinguishable
+        // from one that succeeds.
         const aid = e.agentId
         const s = aid ? subs.get(aid) : undefined
         if (s) {
-          s.status = "ok"
+          s.status = e.type === "subagent.failed" ? "fail" : "ok"
           s.tools = (d.totalToolCalls as number) ?? 0
           const ts = Date.parse((e as { timestamp?: string }).timestamp ?? "")
           s.doneAt = Number.isFinite(ts) ? ts : Date.now()
+          // 22 of the 27 failures carry a model the spawn event did not.
+          if (s.model === undefined && typeof d.model === "string" && d.model) {
+            s.model = d.model
+          }
         }
       }
     }
@@ -505,6 +533,16 @@ export function buildTree(logPath: string): Map<string, Subagent> {
   for (const s of subs.values()) {
     const tc = (s as unknown as { tc?: string }).tc
     s.parent = tc && owner.has(tc) ? (owner.get(tc) ?? null) : null
+  }
+  // Recover a model the spawn event did not name, from the agent's own events.
+  // Keyed on the map's own key, which for a real subagent IS its `agentId`;
+  // placeholder and skill rows live in a different key space and so cannot
+  // pick up a model that is not theirs.
+  for (const [id, s] of subs) {
+    if (s.model === undefined) {
+      const observed = agentModels.get(id)
+      if (observed) s.model = observed
+    }
   }
   // Current activity, last writer wins: `openTools` preserves insertion order,
   // so the final surviving entry for an agent is its most recently started

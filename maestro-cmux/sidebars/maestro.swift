@@ -737,17 +737,31 @@ VStack(alignment: .leading, spacing: 0) {
                                 .fixedSize()
                                 .help("Running subagents")
                             }
-                            // No failed count. `subagent.failed` DOES NOT EXIST:
-                            // measured across 60 recent sessions, 133
-                            // `subagent.started` and 132 `subagent.completed`
-                            // were emitted and zero `subagent.failed`. Nor does
-                            // `subagent.completed` carry a success flag - its
-                            // payload is toolCallId, agentName,
-                            // agentDisplayName, model, totalToolCalls,
-                            // totalTokens, durationMs. Subagent failure is not
-                            // observable, so a failure badge can only ever be
-                            // rendered from a hand-written fixture, which is
-                            // exactly how it survived this long.
+                            // A failed count. `subagent.failed` IS real - the
+                            // note that used to sit here said it did not exist,
+                            // on a sample of 60 sessions that happened to
+                            // contain none. Re-measured across every session
+                            // log on disk: 2,898 `subagent.started`, 2,815
+                            // `subagent.completed`, 27 `subagent.failed` over
+                            // 11 logs. Five failures in a single Session were
+                            // then observed live, drawn as running.
+                            //
+                            // It is still true that `subagent.completed`
+                            // carries no success flag, so a subagent that dies
+                            // WITHOUT emitting the event is invisible here.
+                            // This badge counts what the log states, not every
+                            // failure that happens.
+                            if countOf(d, "x") > 0 {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 9))
+                                    Text("\(countOf(d, "x"))")
+                                        .font(.system(size: 12)).bold().monospacedDigit()
+                                }
+                                .foregroundColor(.red)
+                                .fixedSize()
+                                .help("Failed subagents")
+                            }
                             if countOf(d, "v") > 0 {
                                 Text("\(countOf(d, "v"))")
                                     .font(.system(size: 12)).monospacedDigit()

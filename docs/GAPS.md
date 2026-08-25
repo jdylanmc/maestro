@@ -126,13 +126,18 @@ Measured, each after costing real debugging time:
 **Shipped:** the tree is reconstructed by reading the session's own durable event log at `~/.copilot/session-state/<id>/events.jsonl`, joining `subagent.started.data.toolCallId` to the spawning agent's `tool.*` event.
 **Closes with:** subagent lifecycle events on the hook surface, or a supported runtime API.
 
-### G-10 - Subagent failure is not observable
+### G-10 - Subagent failure is only PARTLY observable
+
+**RESOLVED IN PART. The original entry was wrong, and wrong in the most expensive direction.**
 
 **Wanted:** to render a failed subagent distinctly.
-**Blocked by:** no `subagent.failed` event exists, and `subagent.completed` carries no success flag. Its payload is `toolCallId`, `agentName`, `agentDisplayName`, `model`, `totalToolCalls`, `totalTokens`, `durationMs`.
-**Evidence:** measured across 60 recent sessions - 133 `subagent.started`, 132 `subagent.completed`, **zero** `subagent.failed`.
-**Shipped:** the `x` glyph exists in the wire format and sidebar but is effectively unreachable, and was only ever rendered from a hand-written fixture. A failure badge was deliberately removed from the workspace row rather than shown from fixture-only data.
-**Closes with:** a failure event, or a result field on completion.
+**What this entry used to claim:** that no `subagent.failed` event exists, on the evidence of 60 recent sessions containing 133 `subagent.started`, 132 `subagent.completed`, and zero failures. That sample was too small and too lucky.
+**Re-measured across EVERY session log on disk:** 2,898 `subagent.started`, 2,815 `subagent.completed`, and **27 `subagent.failed` across 11 logs**. Its payload is `toolCallId`, `agentName`, `agentDisplayName`, `error`, and usually `model` (22 of 27), sometimes `totalToolCalls` and `durationMs`.
+**Cost of the error:** because the event was unhandled, a failed subagent kept its `run` status forever. The sidebar drew dead agents as green running dots and counted them in "N active". This was found from a screenshot of five subagents shown as running in one Session, all of which had failed - the tree was asserting live work that had already died, which is the worst thing this tree can get wrong.
+**Shipped:** `subagent.failed` sets the `fail` status, so the `x` glyph is reachable from real data for the first time; the failure's `model` is recovered when the spawn event omitted one; a failed count is rendered on the workspace row; and the `error` text is never published. Failed rows do NOT age out on the retention clock - a failure is exactly what must not be quietly hidden.
+**Still open:** `subagent.completed` carries no success flag, so a subagent that dies WITHOUT emitting `subagent.failed` remains indistinguishable from one that succeeded.
+**Standing lesson:** a measurement that reports the ABSENCE of something is only as good as its sample. "Zero observed in 60 sessions" was recorded as "does not exist", and that phrasing is what kept it from being rechecked.
+**Closes with:** a result field on completion, for the failures that emit no event.
 
 ### G-11 - No permission-resolved hook, so stored attention is never cleared
 

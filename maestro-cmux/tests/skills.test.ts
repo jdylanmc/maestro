@@ -27,7 +27,12 @@ function withLog(lines: unknown[], run: (path: string) => void): void {
   }
 }
 
-function skill(name: string, trigger: string | undefined, agentId: string | null = null): unknown {
+function skill(
+  name: string,
+  trigger: string | undefined,
+  agentId: string | null = null,
+  model: string | undefined = undefined,
+): unknown {
   return {
     type: "skill.invoked",
     agentId,
@@ -38,6 +43,7 @@ function skill(name: string, trigger: string | undefined, agentId: string | null
     data: {
       name,
       trigger,
+      model,
       // Everything below is present in the real payload and must never reach
       // the wire. `content` is the FULL skill markdown.
       path: "/Users/someone/git/private-repo/.github/skills/x/SKILL.md",
@@ -159,6 +165,85 @@ test("the same skill invoked twice under different agents yields two rows", () =
     (path) => {
       const rows = encodeTree(buildTree(path)).split(ROW_SEP)
       assert.equal(rows.filter((r) => r.includes("wiki-search")).length, 2)
+    },
+  )
+})
+
+test("a skill row carries the model that ran it", () => {
+  // Measured across every session log on disk: 796 of 1,107 `skill.invoked`
+  // events carry a `model`. Discarding it left skill rows as the only rows in
+  // the tree with no model, which is visible in the sidebar as a ragged gap.
+  withLog([skill("wiki-search", "agent-invoked", null, "gpt-5.6-sol")], (path) => {
+    const encoded = encodeTree(buildTree(path))
+    assert.match(encoded, /gpt-5\.6-sol/)
+  })
+})
+
+test("a skill invocation with no model falls back to the sentinel", () => {
+  // 311 of 1,107 carry none. An absent model is left absent rather than
+  // inherited from the session, which would be invention.
+  withLog([skill("wiki-search", "agent-invoked")], (path) => {
+    const rows = encodeTree(buildTree(path)).split(ROW_SEP)
+    const row = rows.find((r) => r.includes("wiki-search")) ?? ""
+    assert.equal(row.split(" ")[2], "-")
+  })
+})
+
+test("a subagent whose spawn named no model recovers it from its own events", () => {
+  // Measured across every session log on disk: 526 of 2,895 `subagent.started`
+  // events carry no `model`, which left long-running subagents as the only
+  // rows in the tree with an empty model. 508 of those 526 are recoverable
+  // from an event the subagent itself emitted.
+  withLog(
+    [
+      {
+        type: "subagent.started",
+        agentId: "sub-1",
+        timestamp: new Date().toISOString(),
+        data: { toolCallId: "tc-1", agentDisplayName: "pr64-roast" },
+      },
+      {
+        type: "tool.execution_start",
+        agentId: "sub-1",
+        timestamp: new Date().toISOString(),
+        data: { toolCallId: "tc-2", toolName: "bash", model: "gpt-5.6-luna" },
+      },
+    ],
+    (path) => {
+      const rows = encodeTree(buildTree(path)).split(ROW_SEP)
+      const row = rows.find((r) => r.includes("pr64-roast")) ?? ""
+      assert.equal(row.split(" ")[2], "gpt-5.6-luna")
+    },
+  )
+})
+
+test("a model is never borrowed from another agent", () => {
+  // The recovery reads only events the subagent itself emitted. A sibling's
+  // model, or the Session's, would be invention.
+  withLog(
+    [
+      {
+        type: "subagent.started",
+        agentId: "sub-1",
+        timestamp: new Date().toISOString(),
+        data: { toolCallId: "tc-1", agentDisplayName: "quiet-agent" },
+      },
+      {
+        type: "tool.execution_start",
+        agentId: "sub-2",
+        timestamp: new Date().toISOString(),
+        data: { toolCallId: "tc-9", toolName: "bash", model: "claude-opus-5" },
+      },
+      {
+        type: "assistant.message",
+        timestamp: new Date().toISOString(),
+        data: { model: "gpt-5.5" },
+      },
+    ],
+    (path) => {
+      const rows = encodeTree(buildTree(path)).split(ROW_SEP)
+      const row = rows.find((r) => r.includes("quiet-agent")) ?? ""
+      assert.equal(row.split(" ")[2], "-")
     },
   )
 })

@@ -453,7 +453,7 @@ What remains:
 
 | Limitation | Effect |
 | --- | --- |
-| The event log carries no failure signal for a subagent | A subagent that failed is indistinguishable from one that succeeded (measured: 133 `subagent.started`, 132 `subagent.completed`, zero failures) |
+| `subagent.completed` carries no success flag | A subagent that dies without emitting `subagent.failed` is indistinguishable from one that succeeded. The event itself is real but rare (measured across every session log on disk: 2,898 `subagent.started`, 2,815 `subagent.completed`, 27 `subagent.failed` over 11 logs) and is now rendered as a failed row and a failed count |
 | No event carries context-window occupancy | A subagent row shows its model but no context percentage, and none can be synthesised honestly (#41) |
 | Dismissal is matched by display name | Two finished subagents with the same name dismiss together |
 | The sidebar interpreter fails silently | An unsupported construct renders nothing while `cmux sidebar validate` reports `OK`; changes are verified against the rendered accessibility tree (see `docs/GAPS.md`) |
