@@ -148,6 +148,16 @@ Two rules keep it honest rather than noisy:
   state file has no `lastToolAt` yet; measured, a perfectly healthy 44-hour
   Session reported 634. Health is measured from the later of the last landed
   hook and the watcher's own start.
+- **Proof of life is shared across a Session's records.** State files are keyed
+  on `cwd + workspaceID`, not on Session, so an agent that moves between
+  repositories gets a SECOND record — and it starts empty. Measured live: one
+  Session holding one record per directory reported 44 stalled completions
+  while its hooks were arriving perfectly well — the first record had 155
+  completions and a hook landed seconds earlier, the second had none at all. Both badged Sessions on screen were the busiest ones, which is
+  precisely the wrong signal. Health now takes the newest `lastToolAt` across
+  every record sharing a surface — a surface being the unit the badge is
+  published for. Only a real completion is shared, never the `startedAt`
+  fallback: a sibling's start time says nothing about tool flow.
 
 Verified by breaking `parseToolArgs` on a live machine and watching the badge
 appear on three Sessions and then clear, not only by unit test. The diagnostic

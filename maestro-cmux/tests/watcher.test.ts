@@ -6,6 +6,7 @@ import { type TestContext, test } from "node:test"
 import {
   needsRecompute,
   shouldKeepRunning,
+  surfaceHealthFloor,
   toWatchTarget,
   type WatchMemo,
   type WatchTarget,
@@ -136,6 +137,7 @@ function target(overrides: Partial<WatchTarget> = {}): WatchTarget {
     dismissed: [],
     updatedAt: 1000,
     healthSince: 1000,
+    lastToolAt: undefined,
     ...overrides,
   }
 }
@@ -563,4 +565,100 @@ test("a changed retention window applies on the next tick", async (t: TestContex
   deps.retainFinishedMs = 15_000
   await watchTick([target({ transcriptPath })], new Map(), deps)
   assert.doesNotMatch(writes[1] ?? "", /auditor/, "15s must retire it on the next tick")
+})
+
+// --- a Session that works across two directories -----------------------------
+//
+// State files are keyed on `cwd + workspaceID`, not on Session, so an agent
+// that moves between repositories accumulates a SECOND record - and that record
+// starts empty. Measured live: one Session with records for
+// two records - the first with 132 completions and a `lastToolAt` seconds old,
+// the second with none at all - reporting 44 stalled completions while its
+// hooks were arriving perfectly well into the first record. Both badged
+// Sessions on screen were the busiest ones, which is exactly the wrong signal.
+
+test("proof of life is shared between records of the same surface", () => {
+  const floors = surfaceHealthFloor([
+    target({ key: "a", cwd: "/repo/one", lastToolAt: 9_000 }),
+    target({ key: "b", cwd: "/repo/two", lastToolAt: undefined }),
+  ])
+  assert.equal(floors.get(SURFACE), 9_000)
+})
+
+test("only a real tool completion counts as proof, never a start time", () => {
+  // `healthSince` falls back to `startedAt`; that fallback must not travel
+  // between records. A sibling's start time says nothing about tool flow.
+  const floors = surfaceHealthFloor([
+    target({ key: "a", healthSince: 9_000, lastToolAt: undefined }),
+    target({ key: "b", healthSince: 8_000, lastToolAt: undefined }),
+  ])
+  assert.equal(floors.get(SURFACE), undefined)
+})
+
+test("a second record for a moved cwd does not badge a healthy Session", async (t: TestContext) => {
+  const transcriptPath = log(t, [
+    event("tool.execution_complete", { toolCallId: "c1" }, "2026-08-23T18:00:05.000Z"),
+    event("tool.execution_complete", { toolCallId: "c2" }, "2026-08-23T18:00:06.000Z"),
+    event("tool.execution_complete", { toolCallId: "c3" }, "2026-08-23T18:00:07.000Z"),
+    event("tool.execution_complete", { toolCallId: "c4" }, "2026-08-23T18:00:08.000Z"),
+  ])
+  const fresh = Date.parse("2026-08-23T18:00:09.000Z")
+
+  const writes: string[] = []
+  await watchTick(
+    [
+      // The record the hooks are actually writing to.
+      target({ key: "a", cwd: "/repo/one", transcriptPath, healthSince: fresh, lastToolAt: fresh }),
+      // The empty record left by the directory change.
+      target({ key: "b", cwd: "/repo/two", transcriptPath, healthSince: 1000 }),
+    ],
+    new Map(),
+    {
+      now: () => 2000,
+      startedAt: Date.parse("2026-08-23T18:00:04.000Z"),
+      readDescription: async () => "",
+      setDescription: async (_w, description) => {
+        writes.push(description)
+      },
+    },
+  )
+
+  for (const write of writes) {
+    assert.ok(
+      !/@ o [^ ]+ \d/.test(write),
+      `a Session whose hooks are landing must not badge: ${write}`,
+    )
+  }
+})
+
+test("a dead pipeline still badges even with several records", async (t: TestContext) => {
+  // The sibling floor must not become a blanket excuse. With NO record showing
+  // a landed hook, the observer floor still applies and a real stall surfaces.
+  const transcriptPath = log(t, [
+    event("tool.execution_complete", { toolCallId: "c1" }, "2026-08-23T18:00:05.000Z"),
+    event("tool.execution_complete", { toolCallId: "c2" }, "2026-08-23T18:00:06.000Z"),
+    event("tool.execution_complete", { toolCallId: "c3" }, "2026-08-23T18:00:07.000Z"),
+  ])
+
+  const writes: string[] = []
+  await watchTick(
+    [
+      target({ key: "a", cwd: "/repo/one", transcriptPath, healthSince: 1000 }),
+      target({ key: "b", cwd: "/repo/two", transcriptPath, healthSince: 1000 }),
+    ],
+    new Map(),
+    {
+      now: () => 2000,
+      startedAt: Date.parse("2026-08-23T18:00:04.000Z"),
+      readDescription: async () => "",
+      setDescription: async (_w, description) => {
+        writes.push(description)
+      },
+    },
+  )
+
+  assert.ok(
+    writes.some((w) => w.includes(`@ o ${SURFACE} 3`)),
+    "a genuinely dead pipeline must still badge",
+  )
 })

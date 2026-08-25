@@ -53,6 +53,14 @@ export interface WatchTarget {
    * demonstrably anything, and reports healthy.
    */
   healthSince: number | undefined
+  /**
+   * The last time a `tool.post` hook landed for THIS record, or undefined.
+   *
+   * Distinct from `healthSince`, which falls back to `startedAt`. Only a real
+   * tool completion is evidence that the hook pipeline is alive, and only that
+   * evidence may be shared between records - see `surfaceHealthFloor`.
+   */
+  lastToolAt: number | undefined
 }
 
 /**
@@ -72,7 +80,42 @@ export function toWatchTarget(key: string, state: RuntimeState): WatchTarget | n
     dismissed: state.dismissed ?? [],
     updatedAt: state.updatedAt,
     healthSince: state.lastToolAt ?? state.startedAt,
+    lastToolAt: state.lastToolAt,
   }
+}
+
+/**
+ * The freshest proof of a live hook pipeline, per SURFACE.
+ *
+ * State files are keyed on `cwd + workspaceID`, not on Session. So a Session
+ * that works across two directories - which is ordinary for an agent moving
+ * between repositories - accumulates a SECOND record, and that record starts
+ * empty: `completedTools` 0 and no `lastToolAt`. The watcher then floors on its
+ * own start time, counts every root completion in the shared session log since,
+ * and badges a Session whose hooks are arriving perfectly well into the sibling
+ * record.
+ *
+ * Measured live: one Session holding two records - the first with 132
+ * completions and a `lastToolAt` seconds old, the second with none at all -
+ * reporting 44 stalled completions. Both badged Sessions were the busiest ones
+ * on screen, which is precisely the wrong signal - a health check that cries
+ * wolf on active work is worse than none.
+ *
+ * The fix takes the newest `lastToolAt` across every record sharing a surface.
+ * A surface is the unit the badge is PUBLISHED for - one owner row, one badge -
+ * so it is also the right unit to judge. Only `lastToolAt` is shared, never the
+ * `startedAt` fallback: a sibling's start time says nothing about tool flow.
+ */
+export function surfaceHealthFloor(targets: readonly WatchTarget[]): Map<string, number> {
+  const floors = new Map<string, number>()
+  for (const target of targets) {
+    if (target.lastToolAt === undefined) continue
+    const seen = floors.get(target.surfaceID)
+    if (seen === undefined || target.lastToolAt > seen) {
+      floors.set(target.surfaceID, target.lastToolAt)
+    }
+  }
+  return floors
 }
 
 /** What the watcher remembers between ticks, per Session. */
@@ -179,6 +222,9 @@ export async function watchTick(
   deps: WatchDeps,
 ): Promise<string[]> {
   const changed: string[] = []
+  // Computed once per tick, across ALL targets, because a Session's proof of
+  // life may sit in a sibling record written under a different directory.
+  const siblingFloors = surfaceHealthFloor(targets)
 
   for (const target of targets) {
     const logPath = resolveSessionLog(target.cwd, target.sessionId, target.transcriptPath)
@@ -195,7 +241,9 @@ export async function watchTick(
     //
     // A Session with no floor to measure from reports healthy rather than
     // guessing: this signal is only worth having if it is never noise.
-    const floors = [target.healthSince, deps.startedAt].filter((v) => v !== undefined)
+    const floors = [target.healthSince, siblingFloors.get(target.surfaceID), deps.startedAt].filter(
+      (v) => v !== undefined,
+    )
     const since = floors.length > 0 ? Math.max(...floors) : undefined
     const completions = since === undefined ? 0 : countStalledCompletions(logPath, since)
     const stalled = completions >= STALLED_COMPLETIONS ? completions : 0
