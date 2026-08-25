@@ -300,7 +300,10 @@ func without(_ d: String, _ row: String) -> String {
  *  measured to support. The consequence is one extra dismissal of already
  *  finished work, which the plugin will not resurrect. */
 func withoutFinished(_ d: String, _ id: String) -> String {
-    let mine = liveRowsFor(d, id).filter { part($0, 1) == "v" }
+    // Failures count as finished. They are terminal work, and leaving them out
+    // meant an operator with six dead agents on screen had no way to clear
+    // them at all - the row was exempt from dismissal AND from retention.
+    let mine = liveRowsFor(d, id).filter { part($0, 1) == "v" || part($0, 1) == "x" }
     return rowsOf(d).filter { !mine.contains($0) }
         .reduce("") { $0 == "" ? $1 : $0 + "¦" + $1 }
 }
@@ -312,7 +315,7 @@ func withoutFinished(_ d: String, _ id: String) -> String {
  *  feedback when an action does nothing - a wrong verb and a working one look
  *  identical on tap. */
 func hasFinished(_ d: String, _ id: String) -> Bool {
-    return liveRowsFor(d, id).filter { part($0, 1) == "v" }.count > 0
+    return liveRowsFor(d, id).filter { part($0, 1) == "v" || part($0, 1) == "x" }.count > 0
 }
 
 /** Terminal cursor blink, 1 Hz off the monotonic epoch. */
@@ -1375,6 +1378,21 @@ VStack(alignment: .leading, spacing: 0) {
                                                     .font(.system(size: 12))
                                                     .foregroundColor(.primary)
                                                     .lineLimit(1).truncationMode(.tail)
+                                                // Say it in words. A red cross
+                                                // is not self-explanatory - the
+                                                // first two questions asked of
+                                                // this row were "not sure what
+                                                // the red X's are for" and "they
+                                                // aren't going away". A tooltip
+                                                // does not answer either, because
+                                                // it has to be discovered first.
+                                                if status == "x" {
+                                                    Text("failed")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(.red)
+                                                        .opacity(0.85)
+                                                        .lineLimit(1)
+                                                }
                                                 // What it is doing right now -
                                                 // the open tool call's NAME.
                                                 // Absent activity renders
@@ -1402,15 +1420,23 @@ VStack(alignment: .leading, spacing: 0) {
                                                 cmux("surface.focus", surface_id: t.id)
                                             }
                                             .contextMenu {
-                                                // No "Dismiss" on a RUNNING or
-                                                // FAILED row. encodeTree in
-                                                // src/tree.ts republishes both
-                                                // within seconds, so the item
-                                                // would appear to work and then
-                                                // undo itself - the sidebar
-                                                // lying about state it does not
-                                                // own. Only the finished branch
-                                                // above carries dismissal.
+                                                // A FAILED row can be dismissed;
+                                                // a RUNNING one cannot. Failure
+                                                // is terminal, so the plugin
+                                                // will not resurrect the row -
+                                                // whereas dismissing running
+                                                // work would appear to succeed
+                                                // and then undo itself within
+                                                // seconds, the sidebar lying
+                                                // about state it does not own.
+                                                if status == "x" {
+                                                    Button("Dismiss") {
+                                                        cmux("workspace.action",
+                                                             workspace_id: w.id,
+                                                             action: "set-description",
+                                                             description: without(d, row))
+                                                    }
+                                                }
                                                 Button("Focus Session") {
                                                     cmux("workspace.select", workspace_id: w.id)
                                                     cmux("surface.focus", surface_id: t.id)

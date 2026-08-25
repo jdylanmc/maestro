@@ -377,6 +377,15 @@ whether it succeeded or never started. `retainFinished` chooses the window:
 tap-to-dismiss, and it does not survive the description clearing that happens at
 session end.
 
+**Failures age out too**, on the same window, and can be dismissed the same
+way. They were first shipped exempt from both, on the reasoning that a failure
+must never be quietly hidden — which turned out to mean six dead agents sitting
+on screen permanently with no way to clear them. Permanent and unclearable is
+not importance; it is noise that cannot be turned off, and it buries the
+failures that are still new. Choose a longer window if you want failures to
+linger. **Running** work is never hidden by either mechanism, which is the rule
+that actually matters.
+
 The default is **`15s`**, which is what Maestro has always done. Issue #56 asked
 for `15m`, describing the existing window as fifteen minutes - it is fifteen
 seconds. Since the same ticket also required that the published description stay

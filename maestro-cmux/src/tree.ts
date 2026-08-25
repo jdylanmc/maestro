@@ -1192,10 +1192,21 @@ export function encodeTree(
       // omitted rather than clamped onto the last visible depth, which would
       // draw a grandchild as a sibling of its own parent.
       .filter(([depth]) => depth < maxDepth)
-      .filter(([, s]) => s.status !== "ok" || s.doneAt === undefined || now - s.doneAt < retainMs)
-      // A dismissed agent stays dismissed. Only FINISHED work can be dismissed -
+      // Retention applies to every TERMINAL state, failures included.
+      //
+      // Failures were originally exempt, on the reasoning that a failure must
+      // never be quietly hidden. In use that was wrong: six failures from a
+      // finished Session sat on screen indefinitely with no way to clear them,
+      // because they were also exempt from dismissal. Permanent and
+      // unclearable is not the same as important - it is just noise that
+      // cannot be turned off, and it buries the failures that are still new.
+      //
+      // The retention window is the operator's own setting, so a longer one is
+      // available to anyone who wants failures to linger.
+      .filter(([, s]) => s.status === "run" || s.doneAt === undefined || now - s.doneAt < retainMs)
+      // A dismissed agent stays dismissed. Only TERMINAL work can be dismissed -
       // a running agent is never hidden, however emphatically it is clicked.
-      .filter(([, s]) => s.status !== "ok" || !dismissed.has(s.name))
+      .filter(([, s]) => s.status === "run" || !dismissed.has(s.name))
       .slice(0, 60)
       .map(
         ([depth, s]) =>
@@ -1217,7 +1228,7 @@ export function encodeTree(
 export function detectDismissed(subs: Map<string, Subagent>, published: string): string[] {
   const out: string[] = []
   for (const s of subs.values()) {
-    if (s.status !== "ok") continue
+    if (s.status === "run") continue
     if (!published.includes(s.name)) out.push(s.name)
   }
   return out
@@ -1319,9 +1330,15 @@ export function summarize(
     let failed = 0
     let nextExpiryAt: number | undefined
     for (const s of subs.values()) {
-      if (s.status === "run") running++
-      else if (s.status === "fail") failed++
-      else if (s.doneAt !== undefined && !dismissed.has(s.name)) {
+      if (s.status === "run") {
+        running++
+        continue
+      }
+      if (s.status === "fail") failed++
+      // Every terminal state schedules its own expiry, failures included -
+      // without this the watcher never wakes to retire them and they sit on
+      // screen until something else happens to trigger a recompute.
+      if (s.doneAt !== undefined && !dismissed.has(s.name)) {
         // `never` has no future moment to wake the watcher for, and an
         // infinite deadline would make the mtime gate believe an expiry is
         // always pending.

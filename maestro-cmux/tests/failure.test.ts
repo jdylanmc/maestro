@@ -197,3 +197,65 @@ test("the default depth publishes the tree exactly as before", () => {
     )
   })
 })
+
+test("a failure ages out on the retention clock like any other terminal state", () => {
+  // Failures were originally exempt from retention AND from dismissal, on the
+  // reasoning that a failure must never be quietly hidden. In use that was
+  // wrong: six failures from a finished Session sat on screen with no way to
+  // clear them. Permanent and unclearable is not importance, it is noise that
+  // cannot be turned off - and it buries the failures that are still new.
+  withLog([started("a", "dead-agent", "tc-a"), failed("a", "dead-agent")], (path) => {
+    const subs = buildTree(path)
+    const now = Date.now()
+    assert.match(encodeTree(subs, now, new Set(), 15_000), /dead-agent/)
+    const later = encodeTree(subs, now + 60_000, new Set(), 15_000)
+    assert.ok(!later.includes("dead-agent"), "a failure must age out like a completion")
+  })
+})
+
+test("a failure can be dismissed", () => {
+  withLog([started("a", "dead-agent", "tc-a"), failed("a", "dead-agent")], (path) => {
+    const subs = buildTree(path)
+    const encoded = encodeTree(subs, Date.now(), new Set(["dead-agent"]), 15_000)
+    assert.ok(!encoded.includes("dead-agent"))
+  })
+})
+
+test("a RUNNING agent is still never hidden by retention or dismissal", () => {
+  // The rule that matters: live work cannot be hidden, however emphatically it
+  // is clicked, because the plugin would republish it seconds later.
+  withLog([started("a", "live-agent", "tc-a")], (path) => {
+    const subs = buildTree(path)
+    assert.match(
+      encodeTree(subs, Date.now() + 86_400_000, new Set(["live-agent"]), 15_000),
+      /live-agent/,
+    )
+  })
+})
+
+test("a failure schedules an expiry so the watcher wakes to retire it", () => {
+  // Without this the row survives until something else happens to trigger a
+  // recompute, which for an idle Session may be never.
+  withLog([started("a", "dead-agent", "tc-a"), failed("a", "dead-agent")], (path) => {
+    const summary = summarize(
+      join(path, ".."),
+      undefined,
+      undefined,
+      new Set(),
+      undefined,
+      path,
+      Date.now(),
+      0,
+      15_000,
+    )
+    assert.equal(summary?.failed, 1)
+    assert.ok(summary?.nextExpiryAt !== undefined, "a failure must schedule its own expiry")
+  })
+})
+
+test("the failed row says 'failed' on the row, not only in a tooltip", () => {
+  const sidebar = readFileSync(join(import.meta.dirname, "../sidebars/maestro.swift"), "utf8")
+  assert.match(sidebar, /if status == "x" \{\s+Text\("failed"\)/)
+  // And it is clearable: dismissal covers failures, individually and in bulk.
+  assert.match(sidebar, /part\(\$0, 1\) == "v" \|\| part\(\$0, 1\) == "x"/)
+})
