@@ -197,6 +197,8 @@ presentation preferences:
   "maxDepth": 6,
   "attentionOnTurn": true,
   "markUnreadOnAttention": true,
+  "stallThresholdMs": 600000,
+  "stallBadge": false,
   "logPrompts": true,
   "logToolCalls": true,
   "logSessionLifecycle": true,
@@ -265,7 +267,61 @@ Environment variables override the file-backed values:
 | `MAESTRO_MAX_DEPTH` | `6` | Deepest subagent generation to publish, `1`-`6`. Deeper rows are omitted along with their descendants. |
 | `MAESTRO_ATTENTION_ON_TURN` | `true` | Raise attention when a turn ends. Permission and question prompts are unaffected. |
 | `MAESTRO_MARK_UNREAD` | `true` | Also mark the cmux workspace unread when attention is raised. |
+| `MAESTRO_STALL_THRESHOLD_MS` | `600000` | How long a Session may sit mid-turn with nothing running before it is recorded as stalled. |
+| `MAESTRO_STALL_BADGE` | `false` | Show the warning triangle for a stalled Session. Off until the detector has been validated against a real freeze. |
 | `COPILOT_CMUX_DEBUG` | `false` | Verbose diagnostics on stderr. |
+
+## Detecting a frozen Session
+
+A Session sometimes hangs: the terminal stops accepting input and the interface
+waits forever, and the only way out is to close the window and resume. That is a
+**different failure** from the health badge above, which reports Maestro going
+deaf rather than the Session going still.
+
+No single signal identifies it. Measured across every session log on disk before
+designing the check:
+
+- **"No clean shutdown" is not it.** Of 401 sessions, 37 ended without a
+  `session.shutdown`, but 19 of those ended on `assistant.turn_end` — a window
+  closed while idle.
+- **Silence is not it.** Across 62,212 gaps between events inside an open turn:
+  p50 0s, p90 6.2s, p99 62s, p99.9 546s, max 38,795s. Long silences are routine.
+- **What separates them is whether a tool is running.** Of the 44 gaps longer
+  than ten minutes inside an open turn, 28 had a tool in flight and 16 did not.
+
+So the rule is a conjunction, and every clause is load-bearing: the session's
+process is **alive** (its pid comes from `inuse.<pid>.lock`), a turn is **open**,
+**no tool is in flight** anywhere including subagents, and it has been **silent**
+past `stallThresholdMs`.
+
+Turn state uses "last boundary wins" rather than a count, because a turn can end
+without its end event — `session.error` and an abort both do. Counting drifted,
+and that drift was the single largest source of false positives.
+
+### Why the badge is off by default
+
+Replayed across 121 session logs, the detector fires **15 times, and every one
+recovered** — after 12 to 100 minutes. All of them share a shape: the turn
+started and the model produced nothing for a long time, then answered. In the
+event log that is *indistinguishable* from a frozen interface, because nothing
+records a model request as being in flight.
+
+So the verdict is split. `awaiting-model` — the last event is
+`assistant.turn_start` — is recorded and never badged. `stalled` — the turn had
+already produced something and then everything stopped — occurred **zero** times
+across the same 121 logs, so it has no known false positives, and that is the
+one the triangle is wired to.
+
+Either way a single line goes to the diagnostic log on **transition only**:
+
+```
+session-stall {"state":"entered","kind":"stalled","pid":23463,"silentForMs":612000,...}
+session-stall {"state":"recovered","stalledForMs":934000,"resumedWith":"assistant.message"}
+```
+
+The `recovered` half is the point. It is the only way to learn whether a stall is
+fatal or merely slow, and that is what the badge default is waiting on. Set
+`"stallBadge": true` to turn the triangle on now.
 
 ## Quieting push notifications
 

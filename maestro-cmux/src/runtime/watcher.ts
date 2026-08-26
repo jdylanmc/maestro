@@ -2,6 +2,7 @@ import { statSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { detectStall, STALL_THRESHOLD_MS, type StallVerdict } from "../stall.js"
 import {
   countStalledCompletions,
   mergeOwnedRows,
@@ -123,6 +124,28 @@ export interface WatchMemo {
   logMtimeMs: number
   encoded: string
   nextExpiryAt: number | undefined
+  /** When this Session was first seen quiet, so a transition can be detected
+   *  and a duration reported when it recovers. */
+  stallSince?: number | undefined
+  stallKind?: StallVerdict["kind"] | undefined
+}
+
+/** What is written to the diagnostic log when a Session enters or leaves a
+ *  stall. The `recovered` half is the point: it is the only way to learn
+ *  whether a stall is fatal or merely slow. */
+export interface StallRecord {
+  state: "entered" | "recovered"
+  kind: StallVerdict["kind"]
+  surfaceID: string
+  sessionId: string | undefined
+  pid: number | undefined
+  silentForMs: number
+  lastEventType: string | undefined
+  toolsInFlight: number
+  /** Only on `recovered`. */
+  stalledForMs?: number | undefined
+  /** Only on `recovered`: the event that broke the silence. */
+  resumedWith?: string | undefined
 }
 
 /**
@@ -188,6 +211,15 @@ export interface WatchDeps {
   /** The deepest generation to publish (#43). Re-read every tick, like
    *  retention, because the watcher is the publisher for an idle Session. */
   maxDepth?: number
+  /** How long a Session may sit mid-turn with nothing running before it is
+   *  reported. Re-read every tick like the others. */
+  stallThresholdMs?: number
+  /** Whether a stalled Session is BADGED, as opposed to only recorded. The
+   *  observation is always recorded; this gates the wire field. */
+  stallBadge?: boolean
+  /** Called once per transition, never per tick, so the diagnostic log stays
+   *  bounded and each entry means something changed. */
+  onStall?(record: StallRecord): void
   /**
    * When THIS watcher started, and the floor under every health judgement.
    *
@@ -248,6 +280,43 @@ export async function watchTick(
     const completions = since === undefined ? 0 : countStalledCompletions(logPath, since)
     const stalled = completions >= STALLED_COMPLETIONS ? completions : 0
 
+    // Has this Session HUNG? Only the watcher may ask: a Session that has hung
+    // fires no hooks, so a hook could never be the thing that noticed.
+    const verdict = detectStall(logPath, now, deps.stallThresholdMs ?? STALL_THRESHOLD_MS)
+    const wasStalled = memo?.stallKind !== undefined && memo.stallKind !== "none"
+    const isStalled = verdict.kind !== "none"
+    if (isStalled && !wasStalled) {
+      deps.onStall?.({
+        state: "entered",
+        kind: verdict.kind,
+        surfaceID: target.surfaceID,
+        sessionId: target.sessionId,
+        pid: verdict.pid,
+        silentForMs: verdict.silentForMs,
+        lastEventType: verdict.lastEventType,
+        toolsInFlight: verdict.toolsInFlight,
+      })
+    } else if (!isStalled && wasStalled) {
+      deps.onStall?.({
+        state: "recovered",
+        kind: memo?.stallKind ?? "none",
+        surfaceID: target.surfaceID,
+        sessionId: target.sessionId,
+        pid: verdict.pid,
+        silentForMs: verdict.silentForMs,
+        lastEventType: verdict.lastEventType,
+        toolsInFlight: verdict.toolsInFlight,
+        stalledForMs: memo?.stallSince === undefined ? undefined : now - memo.stallSince,
+        resumedWith: verdict.lastEventType,
+      })
+    }
+    // Badged only when the verdict is the one with no known false positives,
+    // and only when the operator has asked for it.
+    const stalledMinutes =
+      deps.stallBadge && verdict.stalled
+        ? Math.max(1, Math.floor(verdict.silentForMs / 60_000))
+        : undefined
+
     const tree = summarize(
       target.cwd,
       undefined,
@@ -259,6 +328,7 @@ export async function watchTick(
       stalled,
       deps.retainFinishedMs,
       deps.maxDepth,
+      stalledMinutes,
     )
     // `summarize` returns null only when it could not compute at all. Leaving
     // the description alone is right then - the same fail-open the hook uses.
@@ -269,6 +339,8 @@ export async function watchTick(
         logMtimeMs: mtimeMs,
         encoded: tree.encoded,
         nextExpiryAt: tree.nextExpiryAt,
+        stallSince: isStalled ? (memo?.stallSince ?? now) : undefined,
+        stallKind: verdict.kind,
       })
       continue
     }
@@ -284,6 +356,8 @@ export async function watchTick(
         logMtimeMs: mtimeMs,
         encoded: tree.encoded,
         nextExpiryAt: tree.nextExpiryAt,
+        stallSince: isStalled ? (memo?.stallSince ?? now) : undefined,
+        stallKind: verdict.kind,
       })
     } catch {
       /* never let one workspace's failure stop the others */

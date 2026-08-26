@@ -11,6 +11,8 @@
   "maxDepth": 6,
   "attentionOnTurn": true,
   "markUnreadOnAttention": true,
+  "stallThresholdMs": 600000,
+  "stallBadge": false,
   "logPrompts": true,
   "logToolCalls": true,
   "logSessionLifecycle": true,

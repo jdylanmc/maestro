@@ -194,6 +194,8 @@ test("the shipped example lists every file-settable key", () => {
     "maxDepth",
     "attentionOnTurn",
     "markUnreadOnAttention",
+    "stallThresholdMs",
+    "stallBadge",
     "logPrompts",
     "logToolCalls",
     "logSessionLifecycle",

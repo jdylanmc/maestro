@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { STALL_THRESHOLD_MS } from "./stall.js"
 import { MAX_WIRE_DEPTH, RETAIN_MS, RETENTION_CHOICES } from "./tree.js"
 import type { PluginConfig, TransportMode } from "./types.js"
 
@@ -33,6 +34,8 @@ interface MaestroFileConfig {
   maxDepth: number | undefined
   attentionOnTurn: boolean | undefined
   markUnreadOnAttention: boolean | undefined
+  stallThresholdMs: number | undefined
+  stallBadge: boolean | undefined
   logPrompts: boolean | undefined
   logToolCalls: boolean | undefined
   logSessionLifecycle: boolean | undefined
@@ -189,6 +192,8 @@ const EMPTY_FILE_CONFIG: MaestroFileConfig = {
   maxDepth: undefined,
   attentionOnTurn: undefined,
   markUnreadOnAttention: undefined,
+  stallThresholdMs: undefined,
+  stallBadge: undefined,
   logPrompts: undefined,
   logToolCalls: undefined,
   logSessionLifecycle: undefined,
@@ -232,6 +237,8 @@ function readFileConfig(env: NodeJS.ProcessEnv): MaestroFileConfig {
     maxDepth: optionalDepth(source, path),
     attentionOnTurn: optionalBoolean(source, "attentionOnTurn", path),
     markUnreadOnAttention: optionalBoolean(source, "markUnreadOnAttention", path),
+    stallThresholdMs: optionalInterval(source, "stallThresholdMs", path),
+    stallBadge: optionalBoolean(source, "stallBadge", path),
     logPrompts: optionalBoolean(source, "logPrompts", path),
     logToolCalls: optionalBoolean(source, "logToolCalls", path),
     logSessionLifecycle: optionalBoolean(source, "logSessionLifecycle", path),
@@ -281,6 +288,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PluginConfig {
       env.MAESTRO_MARK_UNREAD,
       file.markUnreadOnAttention ?? true,
     ),
+    stallThresholdMs: parseInterval(
+      env.MAESTRO_STALL_THRESHOLD_MS,
+      file.stallThresholdMs ?? STALL_THRESHOLD_MS,
+    ),
+    stallBadge: parseBoolean(env.MAESTRO_STALL_BADGE, file.stallBadge ?? false),
     debug: parseBoolean(env.COPILOT_CMUX_DEBUG, file.debug ?? false),
     watcherEnabled: parseBoolean(env.MAESTRO_WATCHER, file.watcherEnabled ?? true),
     watcherIntervalMs: parseInterval(

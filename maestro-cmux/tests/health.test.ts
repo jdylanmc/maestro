@@ -155,7 +155,7 @@ test("an unhealthy owner row appends the count as field 3", () => {
   // The tail is all-or-nothing: the fields after it are positional, so a health
   // count means the worktree and model slots are emitted as sentinels rather
   // than omitted.
-  assert.equal(encodeOwner(SURFACE, 7), `@ o ${SURFACE} 7 - - -`)
+  assert.equal(encodeOwner(SURFACE, 7), `@ o ${SURFACE} 7 - - - -`)
 })
 
 test("block ownership is keyed on the surface alone", () => {
@@ -255,11 +255,11 @@ test("the owner row carries the Session's worktree and model", () => {
   // and every reader here and in the sidebar takes them by index.
   assert.equal(
     encodeOwner(SURFACE, 0, { worktree: "as-wt-19", model: "claude-opus-5", activity: undefined }),
-    `@ o ${SURFACE} - as-wt-19 claude-opus-5 -`,
+    `@ o ${SURFACE} - as-wt-19 claude-opus-5 - -`,
   )
   assert.equal(
     encodeOwner(SURFACE, 4, { worktree: undefined, model: "gpt-5.6-luna", activity: undefined }),
-    `@ o ${SURFACE} 4 - gpt-5.6-luna -`,
+    `@ o ${SURFACE} 4 - gpt-5.6-luna - -`,
   )
 })
 
@@ -304,7 +304,7 @@ test("a long worktree name cannot widen the sidebar", () => {
 
 test("a worktree name with spaces cannot break the field split", () => {
   const row = encodeOwner(SURFACE, 0, { worktree: "two words", model: "a b", activity: undefined })
-  assert.equal(row.split(" ").length, 7, "every field must stay a single token")
+  assert.equal(row.split(" ").length, 8, "every field must stay a single token")
 })
 
 test("the Session model is the last ROOT event that names one", () => {
@@ -451,7 +451,7 @@ test("the activity field is bounded and space-free", () => {
   })
   const activity = row.split(" ")[6] ?? ""
   assert.equal(activity.length, 14)
-  assert.equal(row.split(" ").length, 7)
+  assert.equal(row.split(" ").length, 8)
 })
 
 test("an unreadable log reports no activity rather than throwing", () => {

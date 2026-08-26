@@ -179,7 +179,7 @@ export function detectAttention(logPath: string): Attention | undefined {
     >()
     const toolOf = new Map<string, string>()
     const asks = new Map<string, number>()
-    for (const line of readLines(logPath)) {
+    for (const line of readSessionLines(logPath)) {
       if (!line) continue
       let e: { type?: string; data?: Record<string, unknown>; timestamp?: string }
       try {
@@ -317,8 +317,12 @@ export function findSessionDir(cwd: string, sessionsRoot = SESSIONS): string | n
 
 const READ_CHUNK_BYTES = 64 * 1024
 
-/** Iterate a JSONL file without retaining the whole session log in memory. */
-function* readLines(path: string): Generator<string> {
+/** Iterate a JSONL file without retaining the whole session log in memory.
+ *
+ *  Exported as `readSessionLines` for `stall.ts`, which needs the same
+ *  whole-file walk: a turn balance computed over a tail would miss the
+ *  `assistant.turn_start` and report every long turn as closed. */
+export function* readSessionLines(path: string): Generator<string> {
   const fd = openSync(path, "r")
   const decoder = new StringDecoder("utf8")
   const buffer = Buffer.allocUnsafe(READ_CHUNK_BYTES)
@@ -428,7 +432,7 @@ export function buildTree(logPath: string): Map<string, Subagent> {
   // subagent itself emitted, never borrowed from its parent or the Session.
   const agentModels = new Map<string, string>()
   try {
-    for (const line of readLines(logPath)) {
+    for (const line of readSessionLines(logPath)) {
       if (!line) continue
       let e: {
         type?: string
@@ -867,7 +871,7 @@ function scanRoot(logPath: string): { model?: string | undefined; activity?: str
     // Insertion-ordered, so the last surviving entry is the most recently
     // started root call that never completed.
     const openRoot = new Map<string, string>()
-    for (const line of readLines(logPath)) {
+    for (const line of readSessionLines(logPath)) {
       if (!line) continue
       let e: { type?: string; agentId?: string | null; data?: Record<string, unknown> }
       try {
@@ -910,15 +914,25 @@ export function encodeOwner(surfaceID: string, stalled = 0, session?: SessionFac
   const worktree = fieldToken(session?.worktree, 20)
   const model = fieldToken(session?.model, 18)
   const activity = fieldToken(session?.activity, 14)
+  const frozen =
+    session?.stalledMinutes !== undefined && session.stalledMinutes > 0
+      ? String(session.stalledMinutes)
+      : FIELD_NONE
   // The tail is omitted entirely when there is nothing in it, so a healthy
   // Session in a normal checkout encodes exactly as it did before any of these
   // fields existed. When any one is present all of them are emitted, because
   // they are POSITIONAL - a reader takes field 4 by index, and a field that
   // sometimes disappears would shift the ones after it.
-  if (stalled <= 0 && worktree === FIELD_NONE && model === FIELD_NONE && activity === FIELD_NONE) {
+  if (
+    stalled <= 0 &&
+    worktree === FIELD_NONE &&
+    model === FIELD_NONE &&
+    activity === FIELD_NONE &&
+    frozen === FIELD_NONE
+  ) {
     return `${OWNER_MARK} o ${id}`
   }
-  return `${OWNER_MARK} o ${id} ${stalled > 0 ? stalled : FIELD_NONE} ${worktree} ${model} ${activity}`
+  return `${OWNER_MARK} o ${id} ${stalled > 0 ? stalled : FIELD_NONE} ${worktree} ${model} ${activity} ${frozen}`
 }
 
 /** What the owner row says about the Session itself, rather than its tree. */
@@ -926,6 +940,16 @@ export interface SessionFacts {
   worktree: string | undefined
   model: string | undefined
   activity: string | undefined
+  /**
+   * Whole minutes this Session has been stalled, or undefined.
+   *
+   * Only the WATCHER may set this, for the same reason it owns the health
+   * signal: a Session that has hung fires no hooks, so a hook can never be the
+   * thing that reports it. Unlike health this needs no carry-forward - a
+   * stalled Session publishes nothing of its own, so there is no hook to erase
+   * the field between watcher ticks.
+   */
+  stalledMinutes: number | undefined
 }
 
 /**
@@ -978,7 +1002,7 @@ export const STALLED_COMPLETIONS = 3
 export function countStalledCompletions(logPath: string, sinceMs: number): number {
   try {
     let count = 0
-    for (const line of readLines(logPath)) {
+    for (const line of readSessionLines(logPath)) {
       if (!line) continue
       let e: { type?: string; timestamp?: string; agentId?: string | null }
       try {
@@ -1291,6 +1315,7 @@ export function summarize(
   stalled = 0,
   retainMs: number = RETAIN_MS,
   maxDepth: number = MAX_WIRE_DEPTH,
+  stalledMinutes: number | undefined = undefined,
 ): TreeSummary | null {
   try {
     const log = resolveSessionLog(cwd, sessionId, transcriptPath) ?? undefined
@@ -1307,6 +1332,7 @@ export function summarize(
       worktree: resolveWorktree(cwd),
       model: root.model,
       activity: root.activity,
+      stalledMinutes,
     }
 
     // Derived Attention wins over anything a hook stored. A blocking prompt that

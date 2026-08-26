@@ -236,6 +236,25 @@ func sessionModelOf(_ d: String, _ id: String) -> String {
  *  was doing. Absent on an idle Session, which is the common case: the plugin
  *  clears it at `assistant.turn_end` rather than letting an abandoned
  *  background call linger. */
+/** Minutes this Session has been stalled - owner row field 7, "" when healthy.
+ *
+ *  DISTINCT from `stalledFor`, which is field 3 and reports on MAESTRO going
+ *  deaf. This one reports on the SESSION going still: mid-turn, nothing
+ *  running, and silent past the threshold, with its process still alive.
+ *
+ *  Rendered as a RED triangle with the word "stalled", where the health badge
+ *  is an orange triangle with none. Two warnings that mean different things
+ *  must not look identical - the first question ever asked of the red crosses
+ *  was "not sure what they are". */
+func stalledSessionFor(_ d: String, _ id: String) -> String {
+    let hits = rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }
+    if hits.count == 0 {
+        return ""
+    }
+    let raw = part(hits[0], 7)
+    return raw == "-" ? "" : raw
+}
+
 func sessionActivityOf(_ d: String, _ id: String) -> String {
     let hits = rowsOf(d).filter { part($0, 0) == "@" && part($0, 2) == id }
     if hits.count == 0 {
@@ -1161,6 +1180,23 @@ VStack(alignment: .leading, spacing: 0) {
                                 // not on the work, and must never outshout an
                                 // agent actually asking for something.
                                 if let d = w.description {
+                                    // The SESSION has hung: mid-turn, nothing
+                                    // running, silent past the threshold, and
+                                    // its process still alive. Off by default -
+                                    // see PluginConfig.stallBadge for why the
+                                    // evidence does not yet support badging.
+                                    let hung = stalledSessionFor(d, t.id)
+                                    if hung != "" {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .font(.system(size: 10))
+                                            Text("stalled")
+                                                .font(.system(size: 10)).bold()
+                                        }
+                                        .foregroundColor(.red)
+                                        .fixedSize()
+                                        .help("This Session appears frozen - mid-turn with nothing running for " + hung + " min. Its process is still alive.")
+                                    }
                                     let stalled = stalledFor(d, t.id)
                                     if stalled != "" {
                                         Image(systemName: "exclamationmark.triangle.fill")

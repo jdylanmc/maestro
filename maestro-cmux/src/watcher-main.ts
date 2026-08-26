@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { loadConfig } from "./config.js"
 import { writeDiagnostic } from "./logger.js"
+import type { StallRecord } from "./runtime/watcher.js"
 import {
   readWatchTargets,
   shouldKeepRunning,
@@ -104,6 +105,15 @@ async function main(): Promise<void> {
     // setting would appear not to work until the watcher happened to restart.
     retainFinishedMs: config.retainFinishedMs,
     maxDepth: config.maxDepth,
+    stallThresholdMs: config.stallThresholdMs,
+    stallBadge: config.stallBadge,
+    // Recorded on TRANSITION only, so the log stays bounded and every entry
+    // means something changed. The `recovered` half is the point: it is the
+    // only way to learn whether a stall is fatal or merely slow, which is the
+    // question the badge is waiting on.
+    onStall: (record: StallRecord) => {
+      writeDiagnostic(`session-stall ${JSON.stringify(record)}`)
+    },
     readDescription: (workspaceID: string) => readDescription(config.cmuxBin, workspaceID),
     setDescription: async (workspaceID: string, description: string) => {
       await run(config.cmuxBin, [
@@ -140,6 +150,8 @@ async function main(): Promise<void> {
       }
       deps.retainFinishedMs = current.retainFinishedMs
       deps.maxDepth = current.maxDepth
+      deps.stallThresholdMs = current.stallThresholdMs
+      deps.stallBadge = current.stallBadge
       idleMs = current.watcherIdleMs
       intervalMs = current.watcherIntervalMs
     } catch {

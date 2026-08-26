@@ -120,6 +120,23 @@ export interface PluginConfig {
    * will find it noisy.
    */
   markUnreadOnAttention: boolean
+  /**
+   * How long a Session may sit mid-turn with nothing running before Maestro
+   * records it as stalled. Ten minutes is just above the p99.9 of measured
+   * intra-turn gaps.
+   */
+  stallThresholdMs: number
+  /**
+   * Whether a stalled Session gets the warning triangle, as opposed to only a
+   * diagnostic record.
+   *
+   * OFF by default, and deliberately. The observation is always recorded; the
+   * badge waits for evidence. Replayed across 121 session logs the detector
+   * fired 15 times and every one RECOVERED, all of them a slow first token
+   * rather than a hang - so a badge today would cry wolf about once every eight
+   * sessions, which is precisely how the health badge lost its credibility.
+   */
+  stallBadge: boolean
   debug: boolean
   /**
    * The watcher recomputes attention on a timer, because a blocked Session
